@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCOP, formatDate } from '@/lib/utils'
 import { Plus, Receipt, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { Skeleton, EmptyState } from '@/components/ui/Skeleton'
 import { PAYMENT_METHODS, EXPENSE_CATEGORIES, type PaymentMethod } from '@/lib/types'
 import type { Expense } from '@/lib/types'
 
@@ -140,11 +141,11 @@ export default function ExpensesPage() {
             {loading ? (
                 <div className="flex flex-col gap-2">{[1, 2, 3].map(n => <div key={n} className="skeleton h-16 rounded-2xl" />)}</div>
             ) : expenses.length === 0 ? (
-                <div className="toul-card text-center py-12">
-                    <Receipt size={36} className="mx-auto mb-2 text-slate-700" />
-                    <p className="text-white font-semibold mb-1">Sin gastos registrados</p>
-                    <p className="text-slate-400 text-sm">Toca "Nuevo" para registrar un gasto</p>
-                </div>
+                <EmptyState
+                    icon={Receipt}
+                    title="Sin gastos registrados"
+                    description="Toca 'Nuevo' para registrar tu primer gasto y mantener tus cuentas al día."
+                />
             ) : (
                 <div className="flex flex-col gap-2">
                     {expenses.map(expense => {

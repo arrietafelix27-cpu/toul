@@ -7,7 +7,7 @@ import Link from 'next/link'
 import type { Product } from '@/lib/types'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
-import { Skeleton } from '@/components/ui/Skeleton'
+import { Skeleton, EmptyState } from '@/components/ui/Skeleton'
 import { useStore } from '@/lib/hooks/useData'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
@@ -116,6 +116,19 @@ export default function InventoryPage() {
                 <div className="flex flex-col gap-3">
                     {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height="80px" className="rounded-2xl" />)}
                 </div>
+            ) : (products || []).length === 0 ? (
+                <EmptyState
+                    icon={Package}
+                    title="Sin productos"
+                    description={searchQuery ? 'No hay resultados para tu búsqueda.' : 'Parece que aún no tienes productos en tu inventario.'}
+                    action={!searchQuery && (
+                        <Link href="/products/new"
+                            className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all active:scale-95"
+                            style={{ background: 'var(--toul-accent)', textDecoration: 'none', boxShadow: '0 4px 16px var(--toul-accent-glow)' }}>
+                            <Plus size={16} /> Crear mi primer producto
+                        </Link>
+                    )}
+                />
             ) : (
                 <>
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="flex flex-col gap-3">

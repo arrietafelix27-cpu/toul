@@ -1,0 +1,21 @@
+{
+    "name": "TOUL — Sistema Operativo para Emprendedores",
+    "short_name": "TOUL",
+    "description": "Controla tu negocio en tiempo real. Ventas, inventario, caja y gastos en una sola app.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0F172A",
+    "theme_color": "#0F172A",
+    "icons": [
+        {
+            "src": "/window.svg",
+            "sizes": "192x192",
+            "type": "image/svg+xml"
+        },
+        {
+            "src": "/window.svg",
+            "sizes": "512x512",
+            "type": "image/svg+xml"
+        }
+    ]
+}

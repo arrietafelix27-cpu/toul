@@ -9,12 +9,18 @@ export const metadata: Metadata = {
   title: 'TOUL — Sistema Operativo para Emprendedores',
   description: 'Controla tu negocio en tiempo real. Ventas, inventario, caja y gastos en una sola app.',
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'TOUL',
+  },
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false,
   themeColor: '#0F172A',
 }
 

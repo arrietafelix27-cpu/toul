@@ -43,3 +43,33 @@ export function GridSkeleton({ count = 6, children }: { count?: number, children
         </div>
     )
 }
+
+/**
+ * EmptyState — standardized view for empty modules.
+ */
+export function EmptyState({ icon: Icon, title, description, action }: {
+    icon: any,
+    title: string,
+    description: string,
+    action?: React.ReactNode
+}) {
+    return (
+        <div className="toul-card text-center py-16 flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-3xl flex items-center justify-center mb-2"
+                style={{ background: 'var(--toul-surface-2)', color: 'var(--toul-text-muted)' }}>
+                <Icon size={32} strokeWidth={1.5} />
+            </div>
+            <div>
+                <h3 className="font-bold text-lg mb-1" style={{ color: 'var(--toul-text)' }}>{title}</h3>
+                <p className="text-sm max-w-[240px] mx-auto text-balance" style={{ color: 'var(--toul-text-muted)' }}>
+                    {description}
+                </p>
+            </div>
+            {action && (
+                <div className="mt-2">
+                    {action}
+                </div>
+            )}
+        </div>
+    )
+}

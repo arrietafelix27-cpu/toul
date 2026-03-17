@@ -6,7 +6,7 @@ import { Clock, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PAYMENT_METHODS } from '@/lib/types'
 import { staggerContainer, staggerItem, fadeUp, t, panelVariants, backdropVariants } from '@/lib/motion'
-import { Skeleton } from '@/components/ui/Skeleton'
+import { Skeleton, EmptyState } from '@/components/ui/Skeleton'
 import { useStore } from '@/lib/hooks/useData'
 import useSWR from 'swr'
 import type { Sale } from '@/lib/types'
@@ -169,11 +169,11 @@ export default function VentasPage() {
                     {[1, 2, 3, 4, 5, 6].map(n => <Skeleton key={n} height="68px" className="rounded-2xl" />)}
                 </div>
             ) : sales?.length === 0 ? (
-                <div className="toul-card text-center py-12">
-                    <Clock size={30} className="mx-auto mb-2" style={{ color: 'var(--toul-border-2)' }} />
-                    <p className="font-semibold mb-1" style={{ color: 'var(--toul-text)' }}>Sin ventas en este período</p>
-                    <p className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Cambia el filtro o registra una venta nueva</p>
-                </div>
+                <EmptyState
+                    icon={Clock}
+                    title="Sin ventas en este período"
+                    description="Cambia el filtro o registra una venta nueva para ver resultados aquí."
+                />
             ) : (
                 <>
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible"
