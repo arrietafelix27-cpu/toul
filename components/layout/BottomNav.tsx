@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Package, Wallet, Receipt, Users, Zap, Settings, BarChart2, Clock, Menu, X, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, Package, Wallet, Receipt, Users, Zap, Settings, BarChart2, Clock, Menu, X, ChevronRight, ShoppingCart, Plus } from 'lucide-react'
 import { usePOS } from '@/components/pos/POSContext'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -98,16 +98,17 @@ export function Sidebar() {
     )
 }
 
-// ── MOBILE BOTTOM NAV (curved, hero POS button) ────────────────────────────
-const MOBILE_LEFT = [
-    { href: '/', icon: LayoutDashboard, label: 'Inicio' },
-    { href: '/products', icon: Package, label: 'Productos' },
+// ── MOBILE BOTTOM NAV (mountain style, convex peak) ──────────────────────────
+const MOBILE_NAV_ITEMS = [
+    { href: '/', icon: LayoutDashboard, label: 'inicio' },
+    { href: '/cash', icon: Wallet, label: 'caja' },
+    { type: 'pos' }, // Placeholder for the hero button
+    { href: '/products', icon: Package, label: 'productos' },
+    { type: 'menu', icon: Menu, label: 'más' }, // Hamburger menu as in sketch
 ]
-const MOBILE_RIGHT = [
-    { href: '/inventory', icon: Package, label: 'Inventario' },
-    { href: '/cash', icon: Wallet, label: 'Caja' },
-]
+
 const MENU_ITEMS = [
+    { href: '/inventory', icon: Package, label: 'Inventario' },
     { href: '/ventas', icon: Clock, label: 'Historial de ventas' },
     { href: '/reportes', icon: BarChart2, label: 'Reportes' },
     { href: '/expenses', icon: Receipt, label: 'Gastos' },
@@ -128,111 +129,132 @@ export function BottomNav() {
                 {menuOpen && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-40 md:hidden"
-                        style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}
+                        className="fixed inset-0 z-50 md:hidden"
+                        style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
                         onClick={() => setMenuOpen(false)}
                     />
                 )}
             </AnimatePresence>
 
-            {/* Floating menu drawer */}
+            {/* Modern Bottom Sheet for "Más" */}
             <AnimatePresence>
                 {menuOpen && (
                     <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 16, scale: 0.95 }}
-                        transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-                        className="fixed z-50 md:hidden rounded-3xl overflow-hidden shadow-2xl"
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%' }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                        className="fixed bottom-0 left-0 right-0 z-50 md:hidden rounded-t-[32px] overflow-hidden shadow-2xl pb-safe"
                         style={{
-                            bottom: 92, right: 16,
                             background: 'var(--toul-surface)',
-                            border: '1px solid var(--toul-border)',
-                            minWidth: 220,
+                            borderTop: '1px solid var(--toul-border)',
                         }}>
-                        {MENU_ITEMS.map(({ href, icon: Icon, label }, i) => (
-                            <Link key={href} href={href} onClick={() => setMenuOpen(false)}
-                                className="flex items-center gap-3 px-4 py-3.5 transition-colors"
-                                style={{
-                                    color: pathname === href ? 'var(--toul-accent)' : 'var(--toul-text)',
-                                    borderBottom: i < MENU_ITEMS.length - 1 ? '1px solid var(--toul-border)' : 'none',
-                                    background: pathname === href ? 'var(--toul-accent-dim)' : 'transparent',
-                                }}>
-                                <Icon size={18} />
-                                <span className="text-sm font-medium">{label}</span>
-                                <ChevronRight size={14} className="ml-auto opacity-30" />
-                            </Link>
-                        ))}
+                        {/* Drag Handle */}
+                        <div className="flex justify-center py-3">
+                            <div className="w-12 h-1 rounded-full bg-slate-700/50" />
+                        </div>
+
+                        <div className="px-4 pb-8 pt-2 grid grid-cols-1 gap-1">
+                            {MENU_ITEMS.map(({ href, icon: Icon, label }, i) => (
+                                <Link key={href} href={href} onClick={() => setMenuOpen(false)}
+                                    className="flex items-center gap-4 px-5 py-4 rounded-2xl transition-colors active:bg-slate-800/50"
+                                    style={{
+                                        color: pathname === href ? 'var(--toul-accent)' : 'var(--toul-text)',
+                                        background: pathname === href ? 'var(--toul-accent-dim)' : 'transparent',
+                                    }}>
+                                    <div className={`p-2 rounded-xl ${pathname === href ? 'bg-indigo-500/10' : 'bg-slate-800/30'}`}>
+                                        <Icon size={20} />
+                                    </div>
+                                    <span className="text-[15px] font-medium">{label}</span>
+                                    <ChevronRight size={16} className="ml-auto opacity-30" />
+                                </Link>
+                            ))}
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
 
             {/* Bottom bar */}
-            <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-                {/* Curved SVG background */}
-                <div className="relative">
-                    <svg viewBox="0 0 390 70" preserveAspectRatio="none" className="w-full block"
-                        style={{ height: 70, position: 'absolute', bottom: 0, left: 0 }}>
-                        <path d="M0,70 L0,20 Q80,0 160,18 Q185,28 195,28 Q205,28 230,18 Q310,0 390,20 L390,70 Z"
-                            fill="var(--toul-surface)" />
-                        <path d="M0,20 Q80,0 160,18 Q185,28 195,28 Q205,28 230,18 Q310,0 390,20"
-                            fill="none" stroke="var(--toul-border)" strokeWidth="1" />
-                    </svg>
+            <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
+                <div className="mx-0 relative">
+                    {/* Shadow for the whole bar */}
+                    <div className="absolute inset-x-0 bottom-0 h-14 shadow-[0_-12px_40px_rgba(0,0,0,0.3)]" />
 
-                    <div className="relative flex items-end justify-around px-2"
-                        style={{ height: 70, zIndex: 1 }}>
-                        {/* LEFT ITEMS */}
-                        {MOBILE_LEFT.map(({ href, icon: Icon, label }) => {
-                            const active = pathname === href
-                            return (
-                                <Link key={href} href={href}
-                                    className="flex flex-col items-center gap-0.5 pb-2 px-3 flex-1 transition-all"
-                                    style={{ color: active ? 'var(--toul-accent)' : 'var(--toul-text-subtle)' }}>
-                                    <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
-                                    <span className="text-[9px] font-semibold">{label}</span>
-                                </Link>
-                            )
-                        })}
+                    {/* Mountain SVG background - Optical Centering (x=176) */}
+                    <div className="relative overflow-visible">
+                        <svg viewBox="0 0 360 80" preserveAspectRatio="none" className="w-full block"
+                            style={{ height: 80, marginBottom: -2 }}>
+                            {/* Optically centered peak at x=176 to balance lateral visual weights */}
+                            <path d="M0,80 L0,45 C60,45 100,45 126,45 C141,45 151,30 176,30 C201,30 211,45 226,45 C256,45 296,45 360,45 L360,80 Z"
+                                fill="var(--toul-surface)" />
+                            {/* Symmetric top stroke aligned to peak at 176 */}
+                            <path d="M0,45 C60,45 100,45 126,45 C141,45 151,30 176,30 C201,30 211,45 226,45 C256,45 296,45 360,45"
+                                fill="none" stroke="var(--toul-border)" strokeWidth="0.5" />
+                        </svg>
 
-                        {/* CENTER: POS hero button */}
-                        <div className="flex flex-col items-center pb-1 px-1" style={{ flex: '0 0 72px' }}>
-                            <motion.button
-                                onClick={openPOS}
-                                whileTap={{ scale: 0.92 }}
-                                className="w-16 h-16 rounded-full flex items-center justify-center text-white shadow-xl -mt-8"
-                                style={{
-                                    background: 'var(--toul-accent)',
-                                    boxShadow: '0 0 0 4px var(--toul-surface), 0 4px 24px var(--toul-accent-glow)',
-                                }}>
-                                <ClipboardDollarIcon size={26} />
-                            </motion.button>
-                        </div>
+                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-1"
+                            style={{ height: 60, zIndex: 1 }}>
 
-                        {/* RIGHT ITEMS */}
-                        {MOBILE_RIGHT.map(({ href, icon: Icon, label }) => {
-                            const active = pathname === href
-                            return (
-                                <Link key={href} href={href}
-                                    className="flex flex-col items-center gap-0.5 pb-2 px-3 flex-1 transition-all"
-                                    style={{ color: active ? 'var(--toul-accent)' : 'var(--toul-text-subtle)' }}>
-                                    <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
-                                    <span className="text-[9px] font-semibold">{label}</span>
-                                </Link>
-                            )
-                        })}
-
-                        {/* MENU button */}
-                        <button onClick={() => setMenuOpen(v => !v)}
-                            className="flex flex-col items-center gap-0.5 pb-2 px-3 flex-1 transition-all"
-                            style={{ color: menuOpen ? 'var(--toul-accent)' : 'var(--toul-text-subtle)' }}>
-                            <AnimatePresence mode="wait">
-                                {menuOpen
-                                    ? <motion.div key="x" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}><X size={22} strokeWidth={1.8} /></motion.div>
-                                    : <motion.div key="menu" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}><Menu size={22} strokeWidth={1.8} /></motion.div>
+                            {MOBILE_NAV_ITEMS.map((item, idx) => {
+                                if (item.type === 'pos') {
+                                    return (
+                                        <div key="pos-spacer" className="w-[72px] h-20 flex items-center justify-center relative translate-x-[-4px]">
+                                            <motion.button
+                                                onClick={openPOS}
+                                                whileTap={{ scale: 0.94 }}
+                                                className="absolute -top-1 w-[60px] h-[60px] rounded-full flex items-center justify-center text-white overflow-hidden shadow-2xl"
+                                                animate={{
+                                                    boxShadow: [
+                                                        '0 8px 30px rgba(0, 0, 0, 0.15), 0 0 10px rgba(74, 222, 128, 0.1)',
+                                                        '0 8px 35px rgba(0, 0, 0, 0.2), 0 0 15px rgba(74, 222, 128, 0.2)',
+                                                        '0 8px 30px rgba(0, 0, 0, 0.15), 0 0 10px rgba(74, 222, 128, 0.1)'
+                                                    ]
+                                                }}
+                                                transition={{
+                                                    duration: 4,
+                                                    repeat: Infinity,
+                                                    ease: "easeInOut"
+                                                }}
+                                                style={{
+                                                    background: '#4ade80',
+                                                }}>
+                                                {/* Phase 1: Soft Radial Halo Feedback */}
+                                                <motion.div
+                                                    initial={{ opacity: 0, scale: 1 }}
+                                                    whileTap={{ opacity: [0, 0.5, 0], scale: [1, 1.2] }}
+                                                    transition={{ duration: 0.16, ease: "easeOut" }}
+                                                    className="absolute inset-0 bg-white/30 rounded-full blur-[2px]"
+                                                />
+                                                <div className="text-white relative z-10 flex items-center justify-center">
+                                                    <Plus size={28} strokeWidth={3} />
+                                                </div>
+                                            </motion.button>
+                                        </div>
+                                    )
                                 }
-                            </AnimatePresence>
-                            <span className="text-[9px] font-semibold">Más</span>
-                        </button>
+
+                                if (item.type === 'menu') {
+                                    return (
+                                        <button key="menu-btn" onClick={() => setMenuOpen(true)}
+                                            className="flex flex-col items-center justify-center flex-1 gap-1 h-full py-1">
+                                            <Menu size={20} strokeWidth={2} className="text-white/60" />
+                                            <span className="text-[10px] font-bold text-white/50 uppercase tracking-tighter">{item.label}</span>
+                                        </button>
+                                    )
+                                }
+
+                                const active = pathname === item.href
+                                const Icon = item.icon!
+                                return (
+                                    <Link key={item.href} href={item.href!}
+                                        className="flex flex-col items-center justify-center flex-1 gap-1 h-full py-1 transition-all"
+                                        style={{ color: active ? 'var(--toul-accent)' : 'rgba(255,255,255,0.5)' }}>
+                                        <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+                                        <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
+                                    </Link>
+                                )
+                            })}
+                        </div>
                     </div>
                 </div>
             </nav>

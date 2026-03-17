@@ -59,8 +59,8 @@ const ProductCard = memo(({ product, qty, onAdd }: { product: Product, qty: numb
             whileTap={{ scale: isOutOfStock ? 1 : 0.98 }}
             onClick={() => !isOutOfStock && onAdd(product.id, product.stock)}
             className={`group relative overflow-hidden rounded-2xl border transition-all duration-200 cursor-pointer ${qty > 0
-                    ? 'bg-emerald-500/10 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
-                    : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'
+                ? 'bg-emerald-500/10 border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+                : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'
                 }`}
         >
             <div className="aspect-square w-full bg-slate-800/50 overflow-hidden">
@@ -711,16 +711,27 @@ export default function POSDrawer() {
         <AnimatePresence>
             {isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center">
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={closePOS} />
+                    {/* Phase 2: Context Transition (Dark Overlay) */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 0.4 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+                        onClick={closePOS}
+                    />
 
                     <AnimatePresence>
                         {flashGreen && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[110] pointer-events-none bg-emerald-500/20" />}
                     </AnimatePresence>
 
+                    {/* Phase 3: POS Container Appearance ("Born" from bottom) */}
                     <motion.div
-                        initial={{ y: 20, opacity: 0, scale: 0.98 }}
-                        animate={{ y: 0, opacity: 1, scale: 1 }}
-                        exit={{ y: 20, opacity: 0, scale: 0.98 }}
+                        initial={{ opacity: 0, y: 32, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 32, scale: 0.96 }}
+                        transition={{ duration: 0.22, ease: "easeOut" }}
+                        style={{ transformOrigin: "bottom center" }}
                         className="relative z-[105] w-full h-[95vh] lg:h-[90vh] lg:max-w-[1240px] bg-slate-950 lg:border border-slate-800 lg:rounded-[40px] rounded-t-[40px] shadow-3xl flex flex-col overflow-hidden"
                     >
                         {/* Drag/Close for mobile */}
@@ -741,16 +752,29 @@ export default function POSDrawer() {
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col px-6 lg:px-10 pb-6 lg:pb-10 overflow-hidden">
-                                <header className="lg:py-8 py-4 flex justify-between items-center flex-shrink-0">
+                                {/* Phase 4: Staggered Content Entry (Header first) */}
+                                <motion.header
+                                    initial={{ opacity: 0, y: 12 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.15, delay: 0.05 }}
+                                    className="lg:py-8 py-4 flex justify-between items-center flex-shrink-0"
+                                >
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg"><DollarSign className="text-slate-950" size={20} /></div>
                                         {isMobile && step > 1 && <button onClick={() => setStep(step - 1 as any)} className="p-2 bg-slate-900 rounded-full text-slate-500"><ChevronLeft size={18} /></button>}
                                     </div>
                                     <button onClick={closePOS} className="p-2 hover:bg-slate-900 rounded-full text-slate-500 transition-colors"><X size={24} /></button>
-                                </header>
-                                <div className="flex-1 overflow-hidden relative">
+                                </motion.header>
+
+                                {/* Content Body with slight delay */}
+                                <motion.div
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.2, delay: 0.12 }}
+                                    className="flex-1 overflow-hidden relative"
+                                >
                                     {isMobile ? <MobileLayout /> : <WebLayout />}
-                                </div>
+                                </motion.div>
                             </div>
                         )}
                     </motion.div>
