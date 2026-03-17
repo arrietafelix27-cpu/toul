@@ -1,26 +1,345 @@
 @import "tailwindcss";
 
+/* ============================================================
+   TOUL — Design Token System v3.1 (Fixed Layout)
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Default Theme (Dark) — Original TOUL Look */
+  --toul-bg: #020617;
+  /* Slate 950 */
+  --toul-surface: #0B0F1A;
+  --toul-surface-2: #131A2B;
+  --toul-border: #1E293B;
+  --toul-border-2: #334155;
+
+  /* Basic Text */
+  --toul-text: #F8FAFC;
+  --toul-text-muted: #94A3B8;
+  --toul-text-subtle: #64748B;
+
+  /* Custom Colors (Dynamic) - Emerald Default */
+  --toul-primary: #10B981;
+  --toul-primary-hover: #059669;
+  --toul-primary-dim: rgba(16, 185, 129, 0.12);
+  --toul-primary-glow: rgba(16, 185, 129, 0.25);
+
+  --toul-secondary: #A855F7;
+  --toul-accent: #10B981;
+  /* Restored Emerald */
+
+  /* Semantic (Internal) */
+  --toul-error: #EF4444;
+  --toul-error-dim: rgba(239, 68, 68, 0.12);
+  --toul-warning: #F59E0B;
+  --toul-warning-dim: rgba(245, 158, 11, 0.12);
+  --toul-success: #10B981;
+  --toul-info: #3B82F6;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Light Theme Overrides */
+.theme-light {
+  --toul-bg: #FFFFFF;
+  --toul-surface: #F8FAFC;
+  --toul-surface-2: #F1F5F9;
+  --toul-border: #E2E8F0;
+  --toul-border-2: #CBD5E1;
+
+  --toul-text: #0F172A;
+  --toul-text-muted: #64748B;
+  --toul-text-subtle: #94A3B8;
+
+  --toul-primary-dim: rgba(16, 185, 129, 0.12);
+  --toul-primary-glow: rgba(16, 185, 129, 0.25);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Compatibility & Alias */
+:root {
+  --toul-accent-hover: var(--toul-primary-hover);
+  --toul-accent-dim: var(--toul-primary-dim);
+  --toul-accent-glow: var(--toul-primary-glow);
+}
+
+/* ============================================================
+   Base Reset
+   ============================================================ */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--toul-bg);
+  color: var(--toul-text);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* ============================================================
+   Scrollbar
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--toul-border-2);
+  border-radius: 4px;
+}
+
+/* ============================================================
+   Core Utility Classes
+   ============================================================ */
+
+/* Cards / Panels */
+.toul-card {
+  background: var(--toul-surface);
+  border: 1px solid var(--toul-border);
+  border-radius: 16px;
+  padding: 1rem;
+}
+
+/* Inputs */
+.toul-input {
+  width: 100%;
+  background: var(--toul-bg);
+  border: 1px solid var(--toul-border);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  color: var(--toul-text);
+  font-size: 0.9375rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  appearance: none;
+}
+
+.toul-input:focus {
+  border-color: var(--toul-accent);
+  box-shadow: 0 0 0 3px var(--toul-accent-glow);
+}
+
+.toul-input::placeholder {
+  color: var(--toul-text-subtle);
+}
+
+/* Select arrow */
+select.toul-input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238A8A8A' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 2rem;
+}
+
+/* Primary Button */
+.toul-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: var(--toul-accent);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px var(--toul-accent-glow);
+}
+
+.toul-btn-primary:hover {
+  background: var(--toul-accent-hover);
+  transform: translateY(-1px);
+}
+
+.toul-btn-primary:active {
+  transform: translateY(0);
+}
+
+.toul-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Secondary Button */
+.toul-btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: transparent;
+  color: var(--toul-accent);
+  border: 1px solid var(--toul-accent);
+  border-radius: 12px;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.toul-btn-secondary:hover {
+  background: var(--toul-accent-dim);
+}
+
+/* Ghost Button */
+.toul-btn-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: var(--toul-text-muted);
+  border: 1px solid var(--toul-border);
+  border-radius: 10px;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.toul-btn-ghost:hover {
+  border-color: var(--toul-border-2);
+  color: var(--toul-text);
+}
+
+/* ============================================================
+   Gradient text
+   ============================================================ */
+.gradient-text {
+  background: linear-gradient(135deg, var(--toul-accent), #34D399);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================================
+   Skeleton Loader
+   ============================================================ */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+      var(--toul-surface) 25%,
+      var(--toul-surface-2) 50%,
+      var(--toul-surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* ============================================================
+   Animations
+   ============================================================ */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.25s ease-out;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+/* ============================================================
+   Focus visible
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--toul-accent);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Motion Standard — CSS micro-animations
+   (Framer Motion handles complex ones, CSS handles the rest)
+   ============================================================ */
+
+/* Button hover + press */
+.toul-btn-primary:hover:not(:disabled) {
+  background: var(--toul-accent-hover) !important;
+}
+
+/* Card hover elevation */
+.toul-card {
+  transition: border-color 0.18s ease-out;
+}
+
+.toul-card-interactive {
+  cursor: pointer;
+}
+
+.toul-card-interactive:hover {
+  border-color: var(--toul-border-2) !important;
+}
+
+.toul-card-interactive:active {
+  opacity: 0.8;
+}
+
+/* Sidebar link active glow pulse */
+@keyframes activePulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0px var(--toul-accent-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px var(--toul-accent-glow);
+  }
+}
+
+/* ============================================================
+   Prefers-reduced-motion overrides
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
