@@ -45,7 +45,6 @@ export async function POST(request: Request) {
             store_id: store.id,
             product_id: productId,
             quantity: -quantity,
-            type: 'reduction',
             reason: reason,
             notes: notes?.trim() || null
         })

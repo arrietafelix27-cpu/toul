@@ -27,7 +27,7 @@ TOUL reemplaza el cuaderno, el Excel y el desorden.
 - **Estilos:** CSS con tokens globales en `globals.css`
 - **Componentes UI:** propios, sin librerías de UI externas
 - **Autenticación:** Supabase Auth
-- **IA:** integración con Claude API (Anthropic) vía Vercel AI SDK — frontend usa `useChat`, backend en `app/api/toul-ai/`
+- **IA:** hoy usa OpenAI (`gpt-4o-mini`) vía Vercel AI SDK — frontend usa `useChat`, backend en `app/api/toul-ai/`. Migración a Claude pendiente
 
 ---
 
@@ -98,7 +98,7 @@ Directorio de proveedores con historial de compras y cuentas por pagar.
 - Registro de abonos
 
 ### TOUL AI
-Copiloto inteligente integrado con Claude API.
+Copiloto inteligente (hoy OpenAI `gpt-4o-mini`; migración a Claude pendiente).
 - Insights accionables basados en los datos reales del negocio
 - Chat directo con contexto del negocio cargado
 - Acceso rápido desde el dashboard
@@ -168,7 +168,8 @@ app/
     reports/              — Reportes financieros
     settings/             — Configuración
   api/
-    sales/route.ts        — Transacción atómica de ventas (NO TOCAR sin autorización)
+    sales/route.ts        — Llama al RPC `process_sale` (NO TOCAR sin autorización)
+    purchases/route.ts    — Llama al RPC `process_purchase`
     pos-data/route.ts     — Datos para el POS
     payment-methods/      — CRUD métodos de pago
 components/
@@ -185,7 +186,7 @@ app/
 
 ## Archivos que NUNCA se tocan sin autorización explícita
 
-- `app/api/sales/route.ts` — lógica de transacción atómica de ventas
+- `app/api/sales/route.ts` — wrapper del RPC atómico de ventas (`supabase/rpc/process_sale.sql`)
 - `app/globals.css` — tokens de diseño globales
 - `middleware.ts` — autenticación y rutas protegidas
 
@@ -201,6 +202,18 @@ app/
 6. **Si algo no está claro:** preguntar antes de asumir
 
 ---
+
+## Caso de uso actual: isla de perfumes en centro comercial
+
+TOUL se está preparando para operar como sistema de una isla de perfumes (negocio nuevo, apertura aprox. mediados de noviembre de 2026).
+
+- **Equipo:** computador POS táctil + impresora de tirilla 80 mm
+- **Productos:** solo frascos completos (TOUL = reventa de productos físicos, sin decants)
+- **Pagos:** efectivo, datáfono, Nequi, transferencias (ya configurable)
+- **Facturación DIAN:** el dueño la emite desde el portal de la DIAN cuando el cliente la pide. La tirilla de TOUL no es factura electrónica y debe decirlo
+- **Dos roles:** administrador (ve todo) y vendedor (solo caja). Cada uno con su propia cuenta; al inicio habrá un solo vendedor
+- **Requieren aprobación del administrador** (notificación al celular): anular/devolver una venta y vender a crédito
+- **Descuentos:** el vendedor puede darlos; quedan registrados y visibles en el historial como venta con descuento
 
 ## Visión a futuro
 

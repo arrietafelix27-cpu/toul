@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 14 de mayo de 2026 (sesión 6 — rediseño TOUL completo aplicado a toda la app)*
+*Última actualización: 16 de septiembre de 2026 (sesión 7 — Fase 0 del modo isla: compras atómicas y correcciones)*
 
 ---
 
@@ -23,7 +23,7 @@ MVP funcional en desarrollo activo. Un usuario real (negocio de perfumes) está 
 - Multi-selección de métodos de pago con splits editables
 - En modo crédito, el split toma el valor del abono inicial, no el total
 - Descuento por % o $ oculto por defecto
-- Transacción atómica en `app/api/sales/route.ts`
+- Transacción atómica vía RPC `process_sale` (`supabase/rpc/process_sale.sql`, desplegado en Supabase)
 - Manejo de errores con carrito intacto si falla
 - Ventas a crédito aparecen en historial con badge "Crédito"
 - **Crear cliente durante la venta** — mini-form inline en Step2 y DesktopPOS: nombre obligatorio, teléfono opcional, auto-selección al guardar
@@ -256,7 +256,7 @@ Después: tabla real `product_categories` en Supabase con CRUD completo.
 - `products/page.tsx` — query con join `category:product_categories(id, name)`
 - `products/CatalogExportModal.tsx` — filtra por `category_id`, muestra `category.name`
 
-⚠️ **Pendiente de ejecutar**: `migration_v7.sql` en Supabase SQL Editor antes de probar.
+✅ `migration_v7.sql` aplicada en Supabase (verificado 16 sep 2026).
 
 ### Sesión 6 — 14 de mayo de 2026 ✅
 
@@ -364,6 +364,31 @@ Modals base rediseñados:
 - `app/(app)/layout.tsx` (prohibido por CLAUDE.md)
 - `middleware.ts`, `app/api/sales/route.ts`
 
+### Sesión 7 — 16 de septiembre de 2026 ✅
+
+**Contexto:** TOUL se prepara para operar una isla de perfumes en centro comercial (ver `toul-context.md`). Esta sesión es la Fase 0: proteger y corregir antes de construir.
+
+**Respaldo:** todo el trabajo previo quedó en la rama `respaldo/pre-isla` (GitHub). El trabajo nuevo va en `feat/modo-isla`. `main` no se tocó para no publicar en producción cambios que dependen de la base de datos.
+
+**Verificado contra la base de datos real (solo lectura):**
+- `process_sale` desplegado y funcionando
+- `migration_v7` (categorías) y `migration_v9` (`sale_items.combo_id`) aplicadas
+- Hay **una sola base de datos** para desarrollo y producción → todo cambio de schema afecta al usuario real
+
+**Bugs encontrados y corregidos:**
+- **Compras no atómicas y con errores ignorados** — `app/api/purchases/route.ts` hacía ~10 escrituras sueltas sin revisar errores; podía decir "compra exitosa" con datos a medias. Ahora llama al RPC nuevo `supabase/rpc/process_purchase.sql` (todo o nada). El RPC además calcula el total en el servidor, valida pagos vs total y exige proveedor en compras a crédito
+- **`purchase_payments` nunca se guardaba** — el código enviaba `method_id`/`is_capital`, columnas que no existen (la tabla real tiene `payment_method`). Corregido en el RPC
+- **CPP de variantes nunca se actualizaba en compras** — la utilidad de ventas de variantes salía mal. El RPC ahora recalcula `product_variants.cpp`
+- **Ajuste/merma de inventario siempre fallaba** — `app/api/inventory/adjust/route.ts` enviaba columna `type` inexistente. Eliminada
+- **Pantalla `/reset` borraba todo el negocio** con un `confirm()` del navegador. Desactivada: ahora redirige al inicio
+- **`inventory/catalog/page.tsx` estaba vacío (0 bytes)** — rompía el typecheck. Ahora redirige a `/products`
+
+**Bug detectado, pendiente:** "Olvidé mi contraseña" redirige a `/reset-password`, que no existe → recuperación de contraseña rota.
+
+⚠️ **Acción requerida antes de publicar:** ejecutar `supabase/rpc/process_purchase.sql` en el SQL Editor de Supabase. Sin eso, las compras fallan con la versión nueva del código.
+
+`npm run build` pasa sin errores.
+
 ### Schema migrations aplicadas en Supabase ✅
 
 **Migration v5** — Tablas para variantes y combos:
@@ -382,6 +407,26 @@ Modals base rediseñados:
 ---
 
 ## Pendiente 🔄
+
+### Modo isla — plan de trabajo
+
+**Fase 0 — Proteger** ✅ (sesión 7, falta ejecutar `process_purchase.sql` en Supabase)
+
+**Fase 1 — Para abrir la isla (apertura aprox. mediados de noviembre 2026)**
+1. Roles: administrador y vendedor, cada uno con cuenta propia. Vendedor solo ve caja, sus ventas del turno y cierre de turno (sin costos, utilidades, proveedores ni reportes)
+2. Turnos de caja: apertura con base en efectivo, cierre con conteo, faltante/sobrante y responsable
+3. Cada venta registra vendedor y turno
+4. Tirilla 80 mm imprimible (con leyenda "no es factura electrónica")
+5. Anular y devolver venta — solicitada por el vendedor, aprobada por el admin
+6. Venta a crédito — requiere aprobación del admin
+7. Aprobaciones con notificación push al celular del admin (PWA instalada)
+8. Descuentos del vendedor visibles en historial como venta con descuento
+9. Detalle de cada venta
+10. POS táctil a pantalla completa
+11. Arreglar recuperación de contraseña
+
+**Fase 2 — Después de abrir:** ventas por vendedor, alertas de stock bajo, exportar datos
+
 
 ### Prompt 5 — Animaciones móvil + Consistencia visual
 
