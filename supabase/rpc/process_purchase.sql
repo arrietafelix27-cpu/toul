@@ -63,9 +63,10 @@ BEGIN
         RAISE EXCEPTION 'Unauthorized';
     END IF;
 
+    -- Solo administradores registran compras
     SELECT id INTO v_store_id FROM stores WHERE owner_id = v_user_id;
     IF v_store_id IS NULL THEN
-        RAISE EXCEPTION 'Store not found';
+        RAISE EXCEPTION 'Solo el administrador puede registrar compras';
     END IF;
 
     IF jsonb_array_length(COALESCE(payload->'items', '[]'::jsonb)) = 0 THEN

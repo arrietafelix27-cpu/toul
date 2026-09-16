@@ -16,6 +16,12 @@
 --   4. Por cada PaymentSplit: INSERT sale_payments + INSERT payments (ledger legacy)
 --   5. Si crédito: INSERT credits + UPDATE customers.total_debt
 --
+-- Modo isla (migration_v10):
+--   - Resuelve el negocio también para vendedores (store_members)
+--   - Registra vendedor (seller_id, seller_name) y turno (cash_session_id)
+--   - Vendedor: requiere turno abierto propio; crédito requiere aprobación
+--   - inventory_adjustments.reference_id = sale_id (permite anular la venta)
+--
 -- Cualquier RAISE EXCEPTION revierte TODO automáticamente.
 --
 -- SECURITY INVOKER + verificación explícita de auth.uid() — respeta RLS del caller.
@@ -58,6 +64,14 @@ DECLARE
     v_variant_name   text;
     v_total_qty      integer;
     v_short_id       text;
+
+    -- modo isla
+    v_role           text;
+    v_seller_name    text;
+    v_session_id     uuid;
+    v_session_owner  uuid;
+    v_session_name   text;
+    v_approval_id    uuid;
 BEGIN
     -- ─── 1. Auth & store ─────────────────────────────────────────
     v_user_id := auth.uid();
@@ -65,9 +79,28 @@ BEGIN
         RAISE EXCEPTION 'Unauthorized';
     END IF;
 
-    SELECT id INTO v_store_id FROM stores WHERE owner_id = v_user_id;
+    v_store_id := toul_current_store_id();
     IF v_store_id IS NULL THEN
         RAISE EXCEPTION 'Store not found';
+    END IF;
+
+    v_role        := toul_current_role();
+    v_seller_name := toul_current_member_name();
+
+    -- Turno de caja abierto (el vendedor solo vende dentro de su turno)
+    SELECT id, opened_by, opened_by_name
+      INTO v_session_id, v_session_owner, v_session_name
+      FROM cash_sessions
+     WHERE store_id = v_store_id AND status = 'open';
+
+    IF v_role <> 'admin' THEN
+        IF v_session_id IS NULL THEN
+            RAISE EXCEPTION 'Abre tu turno de caja antes de vender';
+        END IF;
+        IF v_session_owner <> v_user_id THEN
+            RAISE EXCEPTION 'Hay un turno abierto por %. Pide al administrador que lo cierre.',
+                COALESCE(v_session_name, 'otra persona');
+        END IF;
     END IF;
 
     -- Detect whether migration_v9 (combo_id on sale_items) has been applied.
@@ -108,10 +141,24 @@ BEGIN
     v_total     := round(COALESCE((payload->>'total')::numeric, 0));
     v_due_date  := payload->>'dueDate';
 
+    IF v_is_credit AND v_customer_id IS NULL THEN
+        RAISE EXCEPTION 'Selecciona un cliente para vender a crédito';
+    END IF;
+
+    -- Crédito de un vendedor: requiere aprobación vigente del administrador
+    -- (se valida y consume en toul_consume_credit_approval, después del INSERT)
+    IF v_is_credit AND v_role <> 'admin' THEN
+        v_approval_id := NULLIF(payload->>'approvalId', '')::uuid;
+        IF v_approval_id IS NULL THEN
+            RAISE EXCEPTION 'Esta venta a crédito necesita aprobación del administrador';
+        END IF;
+    END IF;
+
     INSERT INTO sales (
         store_id, customer_id, customer_name, customer_phone,
         subtotal, discount, total,
-        payment_method, is_credit, initial_payment, notes
+        payment_method, is_credit, initial_payment, notes,
+        seller_id, seller_name, cash_session_id
     ) VALUES (
         v_store_id,
         v_customer_id,
@@ -123,9 +170,16 @@ BEGIN
         v_primary_method,
         v_is_credit,
         round(COALESCE((payload->>'initialPayment')::numeric, 0)),
-        payload->>'notes'
+        payload->>'notes',
+        v_user_id,
+        v_seller_name,
+        v_session_id
     )
     RETURNING id INTO v_sale_id;
+
+    IF v_approval_id IS NOT NULL THEN
+        PERFORM toul_consume_credit_approval(v_approval_id, v_total, v_sale_id);
+    END IF;
 
     v_short_id := substr(v_sale_id::text, 1, 8);
 
@@ -160,17 +214,19 @@ BEGIN
                     IF v_variant_stock < v_total_qty THEN
                         RAISE EXCEPTION 'Stock insuficiente en componente del combo: %', v_product_name;
                     END IF;
-                    INSERT INTO inventory_adjustments (store_id, product_id, variant_id, quantity, reason, notes)
-                    VALUES (v_store_id, NULL, v_ci.variant_id, -v_total_qty, 'sale',
-                            format('Combo: %s · Venta #%s', v_product_name, v_short_id));
+                    INSERT INTO inventory_adjustments (store_id, product_id, variant_id, quantity, reason, notes, reference_id)
+                    VALUES (v_store_id,
+                            (SELECT product_id FROM product_variants WHERE id = v_ci.variant_id),
+                            v_ci.variant_id, -v_total_qty, 'sale',
+                            format('Combo: %s · Venta #%s', v_product_name, v_short_id), v_sale_id);
                 ELSIF v_ci.product_id IS NOT NULL THEN
                     SELECT stock INTO v_product_stock FROM products WHERE id = v_ci.product_id;
                     IF v_product_stock IS NULL OR v_product_stock < v_total_qty THEN
                         RAISE EXCEPTION 'Stock insuficiente en componente del combo: %', v_product_name;
                     END IF;
-                    INSERT INTO inventory_adjustments (store_id, product_id, variant_id, quantity, reason, notes)
+                    INSERT INTO inventory_adjustments (store_id, product_id, variant_id, quantity, reason, notes, reference_id)
                     VALUES (v_store_id, v_ci.product_id, NULL, -v_total_qty, 'sale',
-                            format('Combo: %s · Venta #%s', v_product_name, v_short_id));
+                            format('Combo: %s · Venta #%s', v_product_name, v_short_id), v_sale_id);
                 END IF;
             END LOOP;
 
@@ -239,9 +295,9 @@ BEGIN
             round(v_unit_price * v_quantity)
         );
 
-        INSERT INTO inventory_adjustments (store_id, product_id, variant_id, quantity, reason, notes)
+        INSERT INTO inventory_adjustments (store_id, product_id, variant_id, quantity, reason, notes, reference_id)
         VALUES (v_store_id, v_product_id, v_variant_id, -v_quantity, 'sale',
-                format('Venta #%s', v_short_id));
+                format('Venta #%s', v_short_id), v_sale_id);
     END LOOP;
 
     -- ─── 6. Payment splits ───────────────────────────────────────
@@ -259,7 +315,7 @@ BEGIN
             round((v_pay->>'amount')::numeric)
         );
 
-        INSERT INTO payments (store_id, type, method, amount, reference_id, notes)
+        INSERT INTO payments (store_id, type, method, amount, reference_id, notes, cash_session_id)
         VALUES (
             v_store_id,
             'sale',
@@ -270,7 +326,8 @@ BEGIN
                 CASE WHEN payload->>'customerName' IS NOT NULL AND length(trim(payload->>'customerName')) > 0
                      THEN ' - ' || trim(payload->>'customerName')
                      ELSE '' END,
-                v_short_id)
+                v_short_id),
+            v_session_id
         );
     END LOOP;
 
