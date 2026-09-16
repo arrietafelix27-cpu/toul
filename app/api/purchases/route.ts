@@ -25,7 +25,7 @@ export async function POST(request: Request) {
             isCredit,
             dueDate,
             payments, // Array of { methodId, methodName, amount, isCapital }
-            items // Array of { productId, quantity, unitCost }
+            items // Array of { productId, variantId?, quantity, unitCost }
         } = body
 
         if (!items || items.length === 0) {
@@ -90,9 +90,10 @@ export async function POST(request: Request) {
             await supabase.from('purchase_items').insert({
                 purchase_id: purchase.id,
                 product_id: item.productId,
+                variant_id: item.variantId ?? null,
                 quantity: item.quantity,
                 unit_cost: item.unitCost,
-                total_cost: item.quantity * item.unitCost
+                total_cost: Math.round(item.quantity * item.unitCost)
             })
 
             // B. Get current product state for CPP calculation
@@ -112,23 +113,31 @@ export async function POST(request: Request) {
                 // If stock is 0 or less, new CPP is just the new cost
                 let nuevoCPP = newCost
                 if (currentStock > 0) {
-                    nuevoCPP = ((currentStock * currentCPP) + (newQty * newCost)) / (currentStock + newQty)
+                    nuevoCPP = Math.round(((currentStock * currentCPP) + (newQty * newCost)) / (currentStock + newQty))
                 }
 
-                // C. Update Stock and CPP
+                // C. Update CPP only — stock handled via inventory_adjustments + trigger
                 await supabase.from('products').update({
-                    stock: currentStock + newQty,
                     cpp: nuevoCPP,
                     updated_at: new Date().toISOString()
                 }).eq('id', item.productId)
+
+                await supabase.from('inventory_adjustments').insert({
+                    store_id: storeId,
+                    product_id: item.productId,
+                    variant_id: item.variantId ?? null,
+                    quantity: item.quantity,
+                    reason: 'purchase',
+                    notes: `Compra #${purchase.id.slice(0, 8)}`,
+                })
             }
         }
 
         // 5. Handle Payments/Debts
         if (isCredit) {
             // Create Provider Debt
-            const totalAbonos = payments.reduce((sum: number, p: any) => sum + p.amount, 0)
-            const remainingAmount = total - totalAbonos
+            const totalAbonos = Math.round(payments.reduce((sum: number, p: any) => sum + p.amount, 0))
+            const remainingAmount = Math.round(total - totalAbonos)
 
             await supabase.from('provider_debts').insert({
                 store_id: storeId,

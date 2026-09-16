@@ -13,13 +13,11 @@ function AppInner({ children }: { children: React.ReactNode }) {
             <Sidebar />
             {/* Main content: padded left on desktop for sidebar */}
             <div className="md:ml-60 pb-20 md:pb-8">
-                <div className="max-w-4xl mx-auto">
-                    <AnimatePresence mode="wait">
-                        <PageWrapper key={typeof window !== 'undefined' ? window.location.pathname : 'page'}>
-                            {children}
-                        </PageWrapper>
-                    </AnimatePresence>
-                </div>
+                <AnimatePresence mode="wait">
+                    <PageWrapper key={typeof window !== 'undefined' ? window.location.pathname : 'page'}>
+                        {children}
+                    </PageWrapper>
+                </AnimatePresence>
             </div>
             {/* Bottom nav handles mobile POS button */}
             <BottomNav />

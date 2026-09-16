@@ -10,6 +10,14 @@ async function getStoreId(supabase: Awaited<ReturnType<typeof createClient>>) {
 }
 
 async function seedDefaultMethods(supabase: Awaited<ReturnType<typeof createClient>>, storeId: string) {
+    // Race-safe: re-check existence right before insert in case a concurrent
+    // request already seeded between our initial SELECT and now.
+    const { data: existing } = await supabase
+        .from('payment_methods')
+        .select('id')
+        .eq('store_id', storeId)
+        .limit(1)
+    if (existing && existing.length > 0) return
     const inserts = DEFAULT_PAYMENT_METHODS.map(m => ({ ...m, store_id: storeId }))
     await supabase.from('payment_methods').insert(inserts)
 }

@@ -3,8 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { LogOut, Store, User, Palette, ChevronRight } from 'lucide-react'
-import Link from 'next/link'
+import { LogOut, Store, User } from 'lucide-react'
 
 const CATEGORIES = [
     { value: 'ropa', label: '👗 Ropa y accesorios' },
@@ -53,10 +52,11 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-8 fade-in">
-            <div className="mb-6">
-                <p className="text-xs uppercase tracking-widest font-medium mb-0.5" style={{ color: 'var(--toul-text-subtle)' }}>Configuración</p>
-                <h1 className="text-2xl font-bold" style={{ color: 'var(--toul-text)' }}>Mi negocio</h1>
+        <div className="px-4 md:px-8 pt-6 pb-8 fade-in" style={{ position: 'relative' }}>
+            <div className="toul-ambient" />
+            <div className="mb-6" style={{ position: 'relative' }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px 0' }}>Sistema</p>
+                <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Mi negocio</h1>
             </div>
 
             {/* Account */}
@@ -71,22 +71,6 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </div>
-
-            {/* Appearance Link */}
-            <Link href="/settings/appearance" className="block toul-card mb-4 toul-card-interactive" style={{ textDecoration: 'none' }}>
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--toul-accent-dim)', color: 'var(--toul-accent)' }}>
-                            <Palette size={18} />
-                        </div>
-                        <div>
-                            <p className="text-sm font-semibold" style={{ color: 'var(--toul-text)' }}>Apariencia</p>
-                            <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>Personaliza temas y colores</p>
-                        </div>
-                    </div>
-                    <ChevronRight size={18} style={{ color: 'var(--toul-text-subtle)' }} />
-                </div>
-            </Link>
 
             {/* Store */}
             <div className="toul-card mb-4">

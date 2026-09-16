@@ -15,13 +15,30 @@ export async function GET() {
 
     if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
 
-    const { data: products } = await supabase
-        .from('products')
-        .select('id, name, sale_price, cpp, stock, image_url, images, reference')
-        .eq('store_id', store.id)
-        .eq('is_active', true)
-        .gt('stock', 0)
-        .order('name')
+    const [productsRes, variantsRes, adjRes, combosRes] = await Promise.all([
+        supabase.from('products').select('id, name, sale_price, cpp, stock, image_url, images, reference').eq('store_id', store.id).eq('is_active', true).order('name'),
+        supabase.from('product_variants').select('id, product_id, name, sale_price, cpp').eq('store_id', store.id).eq('is_active', true),
+        supabase.from('inventory_adjustments').select('variant_id, quantity').eq('store_id', store.id).not('variant_id', 'is', null),
+        supabase.from('combos')
+            .select(`id, name, sale_price, image_url,
+                combo_items(product_id, variant_id, quantity,
+                    products!product_id(id, name, cpp),
+                    product_variants!variant_id(id, name, cpp)
+                )`)
+            .eq('store_id', store.id)
+            .eq('is_active', true)
+            .order('name'),
+    ])
 
-    return NextResponse.json({ products: products || [] })
+    const stockByVariant: Record<string, number> = {}
+    for (const adj of (adjRes.data || [])) {
+        if (adj.variant_id) stockByVariant[adj.variant_id] = (stockByVariant[adj.variant_id] || 0) + adj.quantity
+    }
+
+    const variants = (variantsRes.data || []).map((v: any) => ({
+        ...v,
+        stock: Math.max(0, stockByVariant[v.id] || 0),
+    }))
+
+    return NextResponse.json({ products: productsRes.data || [], variants, combos: combosRes.data || [] })
 }

@@ -40,28 +40,17 @@ export async function POST(request: Request) {
 
         // 3. Perform atomic-like operations (Sequentially on server)
 
-        // A. Insert adjustment record
+        // A. Insert adjustment record (negative = stock out) — trigger updates products.stock
         const { error: adjError } = await supabase.from('inventory_adjustments').insert({
             store_id: store.id,
             product_id: productId,
-            quantity: quantity,
+            quantity: -quantity,
             type: 'reduction',
             reason: reason,
             notes: notes?.trim() || null
         })
 
         if (adjError) throw adjError
-
-        // B. Update Product Stock
-        const { error: prodError } = await supabase
-            .from('products')
-            .update({
-                stock: product.stock - quantity,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', productId)
-
-        if (prodError) throw prodError
 
         return NextResponse.json({ success: true })
 

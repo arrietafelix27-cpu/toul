@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { ArrowRightLeft, TrendingUp, TrendingDown, Plus, Pencil, Trash2, Check, X, Filter, Package } from 'lucide-react'
+import Link from 'next/link'
 import toast from 'react-hot-toast'
 import type { PaymentMethodConfig } from '@/lib/types'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -193,18 +194,45 @@ export default function CashPage() {
     const [showCapitalModal, setShowCapitalModal] = useState(false)
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-8">
+        <div className="px-4 md:px-8 pt-6 pb-8" style={{ position: 'relative' }}>
+            <div className="toul-ambient" />
             {/* Header */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex items-center justify-between mb-5">
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex items-center justify-between mb-5" style={{ position: 'relative' }}>
                 <div>
-                    <p className="text-xs uppercase tracking-widest font-medium mb-0.5" style={{ color: 'var(--toul-text-subtle)' }}>Caja</p>
-                    <h1 className="text-2xl font-bold" style={{ color: 'var(--toul-text)' }}>Tu dinero</h1>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px 0' }}>Operaciones</p>
+                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Mi caja</h1>
                 </div>
-                <button onClick={() => setShowCapitalModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
-                    style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
-                    <Package size={14} /> Capital Propio
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setShowCapitalModal(true)}
+                        className="flex items-center gap-1.5 transition-all active:scale-95"
+                        style={{
+                            padding: '7px 12px',
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            letterSpacing: '-0.01em',
+                            background: 'rgba(191,90,242,0.12)',
+                            color: '#bf5af2',
+                            border: '1px solid rgba(191,90,242,0.2)',
+                        }}>
+                        <Package size={13} /> Capital propio
+                    </button>
+                    <Link href="/expenses"
+                        className="flex items-center gap-1.5 transition-all active:scale-95"
+                        style={{
+                            padding: '9px 14px',
+                            borderRadius: 12,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            letterSpacing: '-0.01em',
+                            color: '#000',
+                            background: 'var(--toul-accent)',
+                            boxShadow: '0 4px 16px var(--toul-accent-glow)',
+                            textDecoration: 'none',
+                        }}>
+                        <Plus size={16} strokeWidth={2.6} /> Nuevo gasto
+                    </Link>
+                </div>
             </motion.div>
 
             {/* Total hero */}

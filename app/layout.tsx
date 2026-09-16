@@ -21,32 +21,28 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#0F172A',
+  themeColor: '#060B18',
 }
-
-import { ThemeProvider } from '@/components/ui/ThemeProvider'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className="dark">
       <body className={`${inter.className} bg-slate-950 text-white antialiased`}>
-        <ThemeProvider>
-          {children}
-          <Toaster
-            position="top-center"
-            toastOptions={{
-              style: {
-                background: 'var(--toul-surface)',
-                color: 'var(--toul-text)',
-                border: '1px solid var(--toul-border)',
-                borderRadius: '12px',
-                fontSize: '14px',
-              },
-              success: { iconTheme: { primary: 'var(--toul-accent)', secondary: '#fff' } },
-              error: { iconTheme: { primary: 'var(--toul-error)', secondary: '#fff' } },
-            }}
-          />
-        </ThemeProvider>
+        {children}
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: 'var(--toul-surface)',
+              color: 'var(--toul-text)',
+              border: '1px solid var(--toul-border)',
+              borderRadius: '12px',
+              fontSize: '14px',
+            },
+            success: { iconTheme: { primary: 'var(--toul-accent)', secondary: '#fff' } },
+            error: { iconTheme: { primary: 'var(--toul-error)', secondary: '#fff' } },
+          }}
+        />
       </body>
     </html>
   )

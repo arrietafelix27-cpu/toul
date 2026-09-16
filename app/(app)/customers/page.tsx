@@ -65,17 +65,28 @@ export default function CustomersPage() {
     const totalDebt = (customers || []).reduce((s, c) => s + c.total_debt, 0)
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-4">
+        <div className="px-4 md:px-8 pt-6 pb-4" style={{ position: 'relative' }}>
+            <div className="toul-ambient" />
             {/* Header */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex items-center justify-between mb-5">
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex items-center justify-between mb-5" style={{ position: 'relative' }}>
                 <div>
-                    <p className="text-xs uppercase tracking-widest font-medium mb-0.5" style={{ color: 'var(--toul-text-subtle)' }}>Clientes</p>
-                    <h1 className="text-2xl font-bold" style={{ color: 'var(--toul-text)' }}>Tu cartera</h1>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px 0' }}>Personas</p>
+                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Tu cartera</h1>
                 </div>
                 <button onClick={() => setShowForm(v => !v)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 text-white"
-                    style={{ background: 'var(--toul-accent)' }}>
-                    {showForm ? <X size={16} /> : <Plus size={16} />}
+                    className="flex items-center gap-1.5 transition-all active:scale-95"
+                    style={{
+                        padding: '9px 14px',
+                        borderRadius: 12,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        letterSpacing: '-0.01em',
+                        color: showForm ? 'var(--toul-text)' : '#000',
+                        background: showForm ? 'rgba(255,255,255,0.07)' : 'var(--toul-accent)',
+                        boxShadow: showForm ? 'none' : '0 4px 16px var(--toul-accent-glow)',
+                        border: 'none',
+                    }}>
+                    {showForm ? <X size={15} strokeWidth={2.4} /> : <Plus size={15} strokeWidth={2.4} />}
                     {showForm ? 'Cancelar' : 'Nuevo'}
                 </button>
             </motion.div>
@@ -110,8 +121,8 @@ export default function CustomersPage() {
 
             {/* Search */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" className="relative mb-4">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--toul-text-subtle)' }} />
-                <input className="toul-input pl-9 text-sm" placeholder="Buscar cliente..." value={search} onChange={e => setSearch(e.target.value)} />
+                <Search size={16} strokeWidth={2} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)', pointerEvents: 'none' }} />
+                <input className="toul-input" style={{ paddingLeft: 42 }} placeholder="Buscar cliente..." value={search} onChange={e => setSearch(e.target.value)} />
             </motion.div>
 
             {/* List */}

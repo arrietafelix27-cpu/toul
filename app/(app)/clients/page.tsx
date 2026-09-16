@@ -111,11 +111,12 @@ export default function ClientsPage() {
 
             {/* Search */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" className="relative mb-6">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={18} style={{ color: 'var(--toul-text-muted)' }} />
+                <Search size={16} strokeWidth={2} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)', pointerEvents: 'none' }} />
                 <input
                     type="text"
                     placeholder="Buscar cliente por nombre o teléfono..."
-                    className="toul-input w-full pl-10 pr-10"
+                    className="toul-input w-full pr-10"
+                    style={{ paddingLeft: 42 }}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                 />

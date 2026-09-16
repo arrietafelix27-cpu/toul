@@ -39,7 +39,13 @@ export default function BatchPage() {
         })
         if (batchErr) { toast.error('Error al registrar el lote'); setLoading(false); return }
 
-        await supabase.from('products').update({ stock: newStock, cpp: newCpp, updated_at: new Date().toISOString() }).eq('id', id)
+        // Update CPP only — stock handled via inventory_adjustments + trigger
+        await supabase.from('products').update({ cpp: newCpp, updated_at: new Date().toISOString() }).eq('id', id)
+        const { error: adjErr } = await supabase.from('inventory_adjustments').insert({
+            store_id: store.id, product_id: id, quantity: qty,
+            reason: 'batch_entry', notes: notes || supplier || null,
+        })
+        if (adjErr) { toast.error('Error al actualizar el inventario'); setLoading(false); return }
         toast.success(`¡Lote registrado! Nuevo stock: ${newStock} unidades`)
         router.push(`/inventory/${id}`)
     }
@@ -47,13 +53,24 @@ export default function BatchPage() {
     const totalCost = Number(quantity) * Number(unitCost)
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-8 fade-in">
-            <div className="flex items-center gap-3 mb-6">
-                <Link href={`/inventory/${id}`} className="w-8 h-8 rounded-full flex items-center justify-center"
-                    style={{ background: 'var(--toul-surface)', color: 'var(--toul-text-muted)' }}>
-                    <ArrowLeft size={18} />
+        <div className="px-4 md:px-8 pt-6 pb-8 fade-in" style={{ position: 'relative' }}>
+            <div className="toul-ambient" />
+            <div className="flex items-center gap-3 mb-6" style={{ position: 'relative' }}>
+                <Link href={`/inventory/${id}`}
+                    className="flex items-center justify-center transition-all active:scale-90"
+                    style={{
+                        width: 36, height: 36, borderRadius: 12,
+                        background: 'rgba(255,255,255,0.07)',
+                        color: 'rgba(255,255,255,0.7)',
+                    }}>
+                    <ArrowLeft size={17} strokeWidth={2} />
                 </Link>
-                <h1 className="text-lg font-bold" style={{ color: 'var(--toul-text)' }}>Entrada de inventario</h1>
+                <h1 style={{
+                    fontSize: 17, fontWeight: 600,
+                    color: 'var(--toul-text)', letterSpacing: '-0.02em', margin: 0,
+                }}>
+                    Entrada de inventario
+                </h1>
             </div>
 
             <form onSubmit={handleSave} className="flex flex-col gap-4">

@@ -17,6 +17,17 @@ export interface Database {
                 Insert: Omit<Database['public']['Tables']['stores']['Row'], 'id' | 'created_at' | 'updated_at'>
                 Update: Partial<Database['public']['Tables']['stores']['Insert']>
             }
+            product_categories: {
+                Row: {
+                    id: string
+                    store_id: string
+                    name: string
+                    sort_order: number
+                    created_at: string
+                }
+                Insert: Omit<Database['public']['Tables']['product_categories']['Row'], 'id' | 'created_at'>
+                Update: Partial<Database['public']['Tables']['product_categories']['Insert']>
+            }
             products: {
                 Row: {
                     id: string
@@ -27,8 +38,7 @@ export interface Database {
                     sale_price: number
                     cost_price: number
                     cpp: number
-                    average_cost: number
-                    category: string | null
+                    category_id: string | null
                     stock: number
                     low_stock_threshold: number | null
                     image_url: string | null
@@ -36,8 +46,10 @@ export interface Database {
                     is_active: boolean
                     created_at: string
                     updated_at: string
+                    // joined field — present only when queried with category:product_categories(*)
+                    category?: Database['public']['Tables']['product_categories']['Row'] | null
                 }
-                Insert: Omit<Database['public']['Tables']['products']['Row'], 'id' | 'created_at' | 'updated_at'>
+                Insert: Omit<Database['public']['Tables']['products']['Row'], 'id' | 'created_at' | 'updated_at' | 'category'>
                 Update: Partial<Database['public']['Tables']['products']['Insert']>
             }
             inventory_batches: {
@@ -257,6 +269,7 @@ export interface Database {
 }
 
 export type Store = Database['public']['Tables']['stores']['Row']
+export type ProductCategory = Database['public']['Tables']['product_categories']['Row']
 export type Product = Database['public']['Tables']['products']['Row']
 export type Sale = Database['public']['Tables']['sales']['Row']
 export type SaleItem = Database['public']['Tables']['sale_items']['Row']
@@ -293,17 +306,25 @@ export const EXPENSE_CATEGORIES = [
 
 export interface AIInsight {
     id: string
-    type: 'star_product' | 'low_rotation' | 'low_stock' | 'trapped_capital' | 'best_day' | 'sales_goal'
-    title: string
-    context: string
-    explanation: string
-    suggestion: string
+    status_label: string // e.g. "Negocio saludable", "En crecimiento", "En riesgo"
+    severity: 'health' | 'attention' | 'alert' | 'info'
+    category: 'status' | 'opportunity' | 'dependency' | 'alert'
+    interpretation: string // What is happening
+    implication: string // Why it matters
+    suggestion: string // What to do
+    confidence?: 'high' | 'medium' | 'low'
+    supporting_metric?: string
     icon: string
 }
 
 export interface CartItem {
     product: Product
+    variantId?: string
+    variantName?: string
+    unitPrice?: number
     quantity: number
+    isCombo?: boolean
+    comboId?: string
 }
 
 // Cart payment split entry

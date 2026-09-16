@@ -5,6 +5,19 @@ import { PackageMinus, X, Search, Package, AlertCircle } from 'lucide-react'
 import type { Product } from '@/lib/types'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
+import { Field, CategoryPicker } from '@/components/ui'
+
+const SPRING_SOFT = { type: 'spring' as const, stiffness: 240, damping: 26 }
+const SPRING_PRESS = { type: 'spring' as const, stiffness: 420, damping: 26 }
+const EASE_OUT_EXPO: [number, number, number, number] = [0.4, 0, 0.2, 1]
+
+const REASONS = [
+    { id: 'damage', name: 'Daño / Avería' },
+    { id: 'loss', name: 'Pérdida' },
+    { id: 'theft', name: 'Robo' },
+    { id: 'expired', name: 'Vencimiento' },
+    { id: 'other', name: 'Otro' },
+]
 
 interface AdjustInventoryModalProps {
     storeId: string
@@ -14,15 +27,15 @@ interface AdjustInventoryModalProps {
 
 export function AdjustInventoryModal({ storeId, onClose, onSuccess }: AdjustInventoryModalProps) {
     const supabase = createClient()
+    const [isVisible, setIsVisible] = useState(true)
     const [step, setStep] = useState<1 | 2>(1)
 
-    // Step 1
     const [products, setProducts] = useState<Product[]>([])
     const [searchQuery, setSearchQuery] = useState('')
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
     const [loadingProducts, setLoadingProducts] = useState(true)
+    const [searchFocused, setSearchFocused] = useState(false)
 
-    // Step 2
     const [quantity, setQuantity] = useState('')
     const [reason, setReason] = useState('damage')
     const [notes, setNotes] = useState('')
@@ -34,7 +47,7 @@ export function AdjustInventoryModal({ storeId, onClose, onSuccess }: AdjustInve
                 .from('products')
                 .select('*')
                 .eq('store_id', storeId)
-                .gt('stock', 0) // Only products with stock
+                .gt('stock', 0)
                 .order('name')
 
             if (data) setProducts(data)
@@ -43,10 +56,21 @@ export function AdjustInventoryModal({ storeId, onClose, onSuccess }: AdjustInve
         fetchProducts()
     }, [supabase, storeId])
 
+    useEffect(() => {
+        const prev = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+        return () => { document.body.style.overflow = prev }
+    }, [])
+
     const filteredProducts = products.filter(p =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (p.reference && p.reference.toLowerCase().includes(searchQuery.toLowerCase()))
     ).slice(0, 10)
+
+    function handleClose() {
+        setIsVisible(false)
+        setTimeout(onClose, 320)
+    }
 
     const handleConfirm = async () => {
         if (!selectedProduct) return
@@ -74,7 +98,7 @@ export function AdjustInventoryModal({ storeId, onClose, onSuccess }: AdjustInve
 
             toast.success('Inventario ajustado correctamente')
             onSuccess()
-            onClose()
+            handleClose()
         } catch (e: any) {
             console.error(e)
             toast.error(e.message || 'Error al ajustar inventario')
@@ -82,161 +106,434 @@ export function AdjustInventoryModal({ storeId, onClose, onSuccess }: AdjustInve
         }
     }
 
+    const exceedsStock = Number(quantity) > (selectedProduct?.stock || 0)
+    const canSubmit = !saving && !!quantity && Number(quantity) > 0 && !exceedsStock
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-md bg-white dark:bg-[#111] rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <AnimatePresence>
+            {isVisible && (
+                <div
+                    className="fixed inset-0 z-50 flex items-end"
+                    onClick={handleClose}>
 
-                {/* Header */}
-                <div className="px-6 py-4 border-b flex items-center justify-between sticky top-0 bg-white/80 dark:bg-[#111]/80 backdrop-blur-md z-10"
-                    style={{ borderColor: 'var(--toul-border)' }}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--toul-error)' }}>
-                            <PackageMinus size={16} />
+                    {/* Backdrop */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2, ease: EASE_OUT_EXPO }}
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'rgba(0,0,0,0.5)',
+                            backdropFilter: 'blur(20px)',
+                            WebkitBackdropFilter: 'blur(20px)',
+                        }}
+                    />
+
+                    {/* Bottom sheet */}
+                    <motion.div
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%' }}
+                        transition={{ type: 'spring', damping: 30, stiffness: 280 }}
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            position: 'relative',
+                            width: '100%',
+                            maxHeight: '90vh',
+                            background: 'var(--toul-surface-overlay)',
+                            borderTop: '1px solid rgba(255,255,255,0.08)',
+                            borderTopLeftRadius: 28,
+                            borderTopRightRadius: 28,
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 -20px 60px rgba(0,0,0,0.5)',
+                            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                        }}>
+
+                        {/* Drag handle */}
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            paddingTop: 12,
+                        }}>
+                            <div style={{
+                                width: 36,
+                                height: 4,
+                                borderRadius: 999,
+                                background: 'rgba(255,255,255,0.18)',
+                            }} />
                         </div>
-                        <h2 className="font-bold text-lg" style={{ color: 'var(--toul-text)' }}>Ajuste de Inventario</h2>
-                    </div>
-                    <button onClick={onClose} className="p-2 -mr-2 rounded-full transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" style={{ color: 'var(--toul-text-muted)' }}>
-                        <X size={20} />
-                    </button>
-                </div>
 
-                {/* Body */}
-                <div className="p-6 overflow-y-auto">
-                    {step === 1 ? (
-                        <div className="space-y-4">
-                            <p className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Selecciona el producto del que deseas descontar unidades.</p>
-
-                            <div className="relative">
-                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={18} style={{ color: 'var(--toul-text-muted)' }} />
-                                <input
-                                    type="text"
-                                    placeholder="Buscar producto con stock..."
-                                    className="toul-input w-full pl-10"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                />
-                            </div>
-
-                            {loadingProducts ? (
-                                <div className="space-y-3">
-                                    {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />)}
+                        {/* Header */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '16px 20px 14px',
+                            borderBottom: '1px solid rgba(255,255,255,0.06)',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 32, height: 32,
+                                    borderRadius: 9,
+                                    background: 'rgba(255,69,58,0.12)',
+                                    border: '1px solid rgba(255,69,58,0.2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}>
+                                    <PackageMinus size={14} color="var(--toul-error)" strokeWidth={2} />
                                 </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {filteredProducts.map(product => (
-                                        <button key={product.id}
-                                            onClick={() => {
-                                                setSelectedProduct(product)
-                                                setStep(2)
+                                <span style={{
+                                    fontSize: 17,
+                                    fontWeight: 600,
+                                    color: 'var(--toul-text)',
+                                    letterSpacing: '-0.02em',
+                                }}>
+                                    Ajuste de inventario
+                                </span>
+                            </div>
+                            <motion.button
+                                onClick={handleClose}
+                                whileTap={{ scale: 0.92 }}
+                                transition={SPRING_PRESS}
+                                style={{
+                                    width: 32, height: 32,
+                                    borderRadius: 10,
+                                    background: 'rgba(255,255,255,0.07)',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}>
+                                <X size={14} color="rgba(255,255,255,0.7)" strokeWidth={2.2} />
+                            </motion.button>
+                        </div>
+
+                        {/* Body */}
+                        <div style={{
+                            flex: 1,
+                            overflowY: 'auto',
+                            padding: '18px 18px 16px',
+                        }}>
+                            {step === 1 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                    <p style={{
+                                        fontSize: 14,
+                                        color: 'var(--toul-text-muted)',
+                                        margin: 0,
+                                        lineHeight: 1.45,
+                                    }}>
+                                        Selecciona el producto del que deseas descontar unidades.
+                                    </p>
+
+                                    {/* Search input — active container pattern */}
+                                    <div style={{
+                                        position: 'relative',
+                                        borderRadius: 14,
+                                        background: searchFocused ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                        border: `1px solid ${searchFocused ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                        transition: 'background var(--toul-transition), border-color var(--toul-transition)',
+                                    }}>
+                                        <Search
+                                            size={16}
+                                            style={{
+                                                position: 'absolute',
+                                                left: 14,
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                color: searchFocused ? 'var(--toul-accent)' : 'rgba(255,255,255,0.4)',
+                                                transition: 'color var(--toul-transition)',
+                                                pointerEvents: 'none',
                                             }}
-                                            className="w-full p-3 text-left flex items-center gap-3 rounded-xl transition-all active:scale-[0.98] border border-transparent hover:border-gray-200 dark:hover:border-gray-800"
-                                            style={{ background: 'var(--toul-surface-2)' }}>
-                                            <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                                                {product.image_url ? <img src={product.image_url} alt="" className="w-full h-full object-cover" /> : <Package size={16} />}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-bold truncate" style={{ color: 'var(--toul-text)' }}>{product.name}</p>
-                                                <p className="text-xs truncate font-medium" style={{ color: 'var(--toul-accent)' }}>Stock disponible: {product.stock}</p>
-                                            </div>
-                                        </button>
-                                    ))}
-                                    {filteredProducts.length === 0 && (
-                                        <div className="text-center py-6 text-sm" style={{ color: 'var(--toul-text-muted)' }}>
-                                            No se encontraron productos con stock.
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar producto con stock..."
+                                            value={searchQuery}
+                                            onChange={e => setSearchQuery(e.target.value)}
+                                            onFocus={() => setSearchFocused(true)}
+                                            onBlur={() => setSearchFocused(false)}
+                                            style={{
+                                                width: '100%',
+                                                background: 'transparent',
+                                                border: 'none',
+                                                outline: 'none',
+                                                padding: '14px 16px 14px 40px',
+                                                fontSize: 15,
+                                                color: 'var(--toul-text)',
+                                                fontFamily: 'inherit',
+                                            }}
+                                        />
+                                    </div>
+
+                                    {loadingProducts ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                            {[1, 2, 3].map(i => (
+                                                <div
+                                                    key={i}
+                                                    className="skeleton"
+                                                    style={{ height: 64, borderRadius: 14 }}
+                                                />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            {filteredProducts.map(product => (
+                                                <motion.button
+                                                    key={product.id}
+                                                    onClick={() => {
+                                                        setSelectedProduct(product)
+                                                        setStep(2)
+                                                    }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    transition={SPRING_PRESS}
+                                                    style={{
+                                                        width: '100%',
+                                                        textAlign: 'left',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 12,
+                                                        padding: 12,
+                                                        borderRadius: 14,
+                                                        background: 'var(--toul-surface)',
+                                                        border: '1px solid var(--toul-border)',
+                                                        cursor: 'pointer',
+                                                        fontFamily: 'inherit',
+                                                    }}>
+                                                    <div style={{
+                                                        width: 40, height: 40,
+                                                        borderRadius: 10,
+                                                        background: 'rgba(255,255,255,0.05)',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        flexShrink: 0,
+                                                        overflow: 'hidden',
+                                                    }}>
+                                                        {product.image_url
+                                                            ? <img src={product.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                            : <Package size={16} color="rgba(255,255,255,0.4)" />
+                                                        }
+                                                    </div>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <p style={{
+                                                            fontSize: 14,
+                                                            fontWeight: 600,
+                                                            color: 'var(--toul-text)',
+                                                            margin: 0,
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                            letterSpacing: '-0.01em',
+                                                        }}>
+                                                            {product.name}
+                                                        </p>
+                                                        <p style={{
+                                                            fontSize: 12,
+                                                            color: 'var(--toul-accent)',
+                                                            margin: '2px 0 0',
+                                                            fontWeight: 500,
+                                                            fontVariantNumeric: 'tabular-nums',
+                                                        }}>
+                                                            Stock disponible: {Math.round(product.stock)}
+                                                        </p>
+                                                    </div>
+                                                </motion.button>
+                                            ))}
+                                            {filteredProducts.length === 0 && (
+                                                <div style={{
+                                                    textAlign: 'center',
+                                                    padding: '32px 16px',
+                                                    fontSize: 14,
+                                                    color: 'var(--toul-text-subtle)',
+                                                }}>
+                                                    No se encontraron productos con stock.
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="space-y-5">
-                            {/* Selected Product Card */}
-                            <div className="p-4 rounded-xl flex items-center gap-3" style={{ background: 'var(--toul-surface-2)' }}>
-                                <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                                    {selectedProduct?.image_url ? <img src={selectedProduct.image_url} alt="" className="w-full h-full object-cover" /> : <Package size={16} />}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs uppercase tracking-wider mb-0.5" style={{ color: 'var(--toul-text-subtle)' }}>Paso 2 de 2</p>
-                                    <p className="font-bold text-sm truncate" style={{ color: 'var(--toul-text)' }}>{selectedProduct?.name}</p>
-                                </div>
-                                <button onClick={() => setStep(1)} className="text-xs font-bold underline" style={{ color: 'var(--toul-text-muted)' }}>Cambiar</button>
-                            </div>
+                            ) : (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={SPRING_SOFT}
+                                    style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="col-span-2">
-                                    <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
-                                        Cantidad a reducir <span style={{ color: 'var(--toul-error)' }}>*</span>
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max={selectedProduct?.stock}
+                                    {/* Selected product summary */}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 12,
+                                        padding: 14,
+                                        borderRadius: 14,
+                                        background: 'var(--toul-surface)',
+                                        border: '1px solid var(--toul-border)',
+                                    }}>
+                                        <div style={{
+                                            width: 40, height: 40,
+                                            borderRadius: 10,
+                                            background: 'rgba(255,255,255,0.05)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexShrink: 0,
+                                            overflow: 'hidden',
+                                        }}>
+                                            {selectedProduct?.image_url
+                                                ? <img src={selectedProduct.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                : <Package size={16} color="rgba(255,255,255,0.4)" />
+                                            }
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <p style={{
+                                                fontSize: 10,
+                                                fontWeight: 600,
+                                                color: 'var(--toul-text-dim)',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.1em',
+                                                margin: 0,
+                                            }}>
+                                                Paso 2 de 2
+                                            </p>
+                                            <p style={{
+                                                fontSize: 14,
+                                                fontWeight: 600,
+                                                color: 'var(--toul-text)',
+                                                margin: '3px 0 0',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                letterSpacing: '-0.01em',
+                                            }}>
+                                                {selectedProduct?.name}
+                                            </p>
+                                        </div>
+                                        <motion.button
+                                            onClick={() => setStep(1)}
+                                            whileTap={{ scale: 0.95 }}
+                                            transition={SPRING_PRESS}
+                                            style={{
+                                                background: 'rgba(255,255,255,0.07)',
+                                                color: 'var(--toul-text)',
+                                                border: 'none',
+                                                borderRadius: 10,
+                                                padding: '7px 12px',
+                                                fontSize: 12,
+                                                fontWeight: 500,
+                                                cursor: 'pointer',
+                                                fontFamily: 'inherit',
+                                            }}>
+                                            Cambiar
+                                        </motion.button>
+                                    </div>
+
+                                    {/* Quantity field */}
+                                    <Field
+                                        label="Cantidad a reducir"
+                                        required
+                                        type="text"
+                                        inputMode="numeric"
                                         value={quantity}
-                                        onChange={(e) => setQuantity(e.target.value)}
-                                        className="toul-input w-full"
-                                        placeholder={`Max: ${selectedProduct?.stock}`}
+                                        onChange={setQuantity}
+                                        placeholder={`Máx ${selectedProduct?.stock || 0}`}
                                     />
-                                    {Number(quantity) > (selectedProduct?.stock || 0) && (
-                                        <p className="text-xs mt-1" style={{ color: 'var(--toul-error)' }}>Supera el stock actual ({selectedProduct?.stock})</p>
+                                    {exceedsStock && (
+                                        <p style={{
+                                            fontSize: 12,
+                                            color: 'var(--toul-error)',
+                                            margin: '-6px 0 0 4px',
+                                            fontWeight: 500,
+                                        }}>
+                                            Supera el stock actual ({Math.round(selectedProduct?.stock || 0)})
+                                        </p>
                                     )}
-                                </div>
 
-                                <div className="col-span-2">
-                                    <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
-                                        Razón <span style={{ color: 'var(--toul-error)' }}>*</span>
-                                    </label>
-                                    <select
-                                        className="toul-input w-full"
+                                    {/* Reason picker */}
+                                    <CategoryPicker
+                                        items={REASONS}
                                         value={reason}
-                                        onChange={(e) => setReason(e.target.value)}
-                                    >
-                                        <option value="damage">Daño / Avería</option>
-                                        <option value="loss">Pérdida</option>
-                                        <option value="theft">Robo</option>
-                                        <option value="expired">Vencimiento</option>
-                                        <option value="other">Otro</option>
-                                    </select>
-                                </div>
+                                        onChange={setReason}
+                                        label="Razón"
+                                        required
+                                    />
 
-                                <div className="col-span-2">
-                                    <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
-                                        Notas <span className="font-normal text-xs" style={{ color: 'var(--toul-text-subtle)' }}>(opcional)</span>
-                                    </label>
-                                    <textarea
-                                        className="toul-input w-full resize-none"
-                                        rows={2}
+                                    {/* Notes */}
+                                    <Field
+                                        label="Notas"
+                                        hint="opcional"
                                         value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
+                                        onChange={setNotes}
                                         placeholder="Detalles adicionales sobre el ajuste..."
                                     />
-                                </div>
-                            </div>
 
-                            <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--toul-error)' }}>
-                                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-                                <p>Esta acción descontará el stock inmediatamente y no puede deshacerse. Asegúrate de los datos.</p>
-                            </div>
+                                    {/* Warning */}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 10,
+                                        padding: '12px 14px',
+                                        borderRadius: 12,
+                                        background: 'rgba(255,69,58,0.08)',
+                                        border: '1px solid rgba(255,69,58,0.2)',
+                                    }}>
+                                        <AlertCircle
+                                            size={14}
+                                            color="var(--toul-error)"
+                                            strokeWidth={2.2}
+                                            style={{ marginTop: 2, flexShrink: 0 }}
+                                        />
+                                        <p style={{
+                                            fontSize: 12,
+                                            color: 'var(--toul-error)',
+                                            margin: 0,
+                                            lineHeight: 1.45,
+                                        }}>
+                                            Esta acción descontará el stock inmediatamente y no puede deshacerse. Asegúrate de los datos.
+                                        </p>
+                                    </div>
+                                </motion.div>
+                            )}
                         </div>
-                    )}
-                </div>
 
-                {/* Footer */}
-                {step === 2 && (
-                    <div className="p-4 border-t bg-gray-50 dark:bg-gray-900/50" style={{ borderColor: 'var(--toul-border)' }}>
-                        <button
-                            disabled={saving || !quantity || Number(quantity) <= 0 || Number(quantity) > (selectedProduct?.stock || 0)}
-                            onClick={handleConfirm}
-                            className="toul-btn-primary w-full flex items-center justify-center gap-2"
-                            style={{ background: 'var(--toul-error)', boxShadow: '0 4px 16px rgba(239,68,68,0.3)' }}>
-                            {saving ? 'Registrando...' : 'Confirmar Ajuste'}
-                        </button>
-                    </div>
-                )}
-            </motion.div>
-        </div>
+                        {/* Footer — confirm button (only step 2) */}
+                        {step === 2 && (
+                            <div style={{
+                                padding: '12px 18px 16px',
+                                borderTop: '1px solid rgba(255,255,255,0.06)',
+                            }}>
+                                <motion.button
+                                    onClick={handleConfirm}
+                                    disabled={!canSubmit}
+                                    whileTap={canSubmit ? { scale: 0.97 } : undefined}
+                                    transition={SPRING_PRESS}
+                                    style={{
+                                        width: '100%',
+                                        height: 54,
+                                        borderRadius: 16,
+                                        border: 'none',
+                                        background: canSubmit ? 'var(--toul-error)' : 'rgba(255,255,255,0.07)',
+                                        color: canSubmit ? '#fff' : 'rgba(255,255,255,0.2)',
+                                        fontSize: 16,
+                                        fontWeight: 600,
+                                        letterSpacing: '-0.01em',
+                                        cursor: canSubmit ? 'pointer' : 'not-allowed',
+                                        boxShadow: canSubmit ? '0 4px 24px rgba(255,69,58,0.25)' : 'none',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        fontFamily: 'inherit',
+                                    }}>
+                                    {saving ? 'Registrando...' : 'Confirmar ajuste'}
+                                </motion.button>
+                            </div>
+                        )}
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
     )
 }

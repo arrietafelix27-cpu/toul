@@ -43,6 +43,8 @@ interface VentaData {
     total: number
     discount: number
     payment_method: string
+    is_credit: boolean
+    customer_name: string | null
     sale_items: SaleItem[]
 }
 
@@ -64,9 +66,8 @@ export default function VentasPage() {
         async () => {
             const range = getRange(period, fromDate, toDate)
             const { data, error } = await supabase.from('sales')
-                .select('id, created_at, total, discount, payment_method, sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url))')
+                .select('id, created_at, total, discount, payment_method, is_credit, customer_name, sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url))')
                 .eq('store_id', storeId)
-                .eq('is_credit', false)
                 .order('created_at', { ascending: false })
                 .gte('created_at', range.from || '1970-01-01')
                 .lte('created_at', range.to || '9999-12-31')
@@ -89,8 +90,8 @@ export default function VentasPage() {
     const totals = useMemo(() => {
         const list = sales || []
         return {
-            revenue: list.reduce((s, v) => s + v.total, 0),
-            profit: list.reduce((s, v) => s + v.sale_items.reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0),
+            revenue: Math.round(list.reduce((s, v) => s + v.total, 0)),
+            profit: Math.round(list.reduce((s, v) => s + v.sale_items.reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0)),
             count: list.length,
         }
     }, [sales])
@@ -104,24 +105,38 @@ export default function VentasPage() {
     ]
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-8">
+        <div className="px-4 md:px-8 pt-6 pb-8" style={{ position: 'relative' }}>
+            <div className="toul-ambient" />
             {/* Header */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="mb-5">
-                <p className="text-xs uppercase tracking-widest font-medium mb-0.5" style={{ color: 'var(--toul-text-subtle)' }}>Analytics</p>
-                <h1 className="text-2xl font-bold" style={{ color: 'var(--toul-text)' }}>Historial de ventas</h1>
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="mb-5" style={{ position: 'relative' }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px 0' }}>Operaciones</p>
+                <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Historial de ventas</h1>
             </motion.div>
 
             {/* Period tabs */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ ...t.base, delay: 0.04 }}
                 className="flex gap-1.5 mb-4 flex-wrap">
                 {PERIODS.map(p => (
-                    <button key={p.value} onClick={() => { setPeriod(p.value); setLimit(PAGE_SIZE) }}
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border"
-                        style={period === p.value
-                            ? { background: 'var(--toul-accent)', color: '#fff', borderColor: 'var(--toul-accent)' }
-                            : { color: 'var(--toul-text-muted)', borderColor: 'var(--toul-border)', background: 'var(--toul-surface)' }}>
+                    <motion.button
+                        key={p.value}
+                        onClick={() => { setPeriod(p.value); setLimit(PAGE_SIZE) }}
+                        whileTap={{ scale: 0.96 }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                        style={{
+                            padding: '8px 14px',
+                            borderRadius: 12,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            letterSpacing: '-0.01em',
+                            border: `1px solid ${period === p.value ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                            background: period === p.value ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                            color: period === p.value ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
+                            transition: 'background var(--toul-transition), border-color var(--toul-transition), color var(--toul-transition)',
+                            fontFamily: 'inherit',
+                            cursor: 'pointer',
+                        }}>
                         {p.label}
-                    </button>
+                    </motion.button>
                 ))}
             </motion.div>
 
@@ -196,6 +211,8 @@ export default function VentasPage() {
                                         <p className="font-semibold text-sm truncate" style={{ color: 'var(--toul-text)' }}>{summary}{more}</p>
                                         <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>
                                             {formatDateTime(sale.created_at)} · {pm?.label || sale.payment_method}
+                                            {sale.is_credit && <span style={{ color: '#00E5A0', fontWeight: 600 }}> · Crédito</span>}
+                                            {sale.is_credit && sale.customer_name && <span style={{ color: 'var(--toul-text-muted)' }}> — {sale.customer_name}</span>}
                                             {sale.discount > 0 && <span style={{ color: '#F59E0B' }}> · Dto. {formatCOP(sale.discount)}</span>}
                                         </p>
                                     </div>

@@ -1,120 +1,217 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Package, Wallet, Receipt, Users, Zap, Settings, BarChart2, Clock, Menu, X, ChevronRight, ShoppingCart, Plus } from 'lucide-react'
+import { LayoutDashboard, Package, Wallet, Users, Settings, BarChart2, Clock, Menu, ChevronRight, Plus, Sparkles } from 'lucide-react'
 import { usePOS } from '@/components/pos/POSContext'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-function ClipboardDollarIcon({ size = 22 }: { size?: number }) {
-    return (
-        <svg viewBox="0 0 512 512" width={size} height={size} fill="currentColor">
-            <path d="M416 64h-64V48c0-26.51-21.49-48-48-48h-96c-26.51 0-48 21.49-48 48v16h-64c-35.35 0-64 28.65-64 64v320c0 35.35 28.65 64 64 64h256c35.35 0 64-28.65 64-64V128c0-35.35-28.65-64-64-64zm-160-32c8.84 0 16 7.16 16 16v16h-32V48c0-8.84 7.16-16 16-16zm160 416H160V128h256v320z" />
-            <path d="M256 181c-29.74 0-54 24.26-54 54s24.26 54 54 54h18c8.84 0 16 7.16 16 16s-7.16 16-16 16h-42c-8.84 0-16 7.16-16 16s7.16 16 16 16h18v16c0 8.84 7.16 16 16 16s16-7.16 16-16v-16c29.74 0 54-24.26 54-54s-24.26-54-54-54h-18c-8.84 0-16-7.16-16-16s7.16-16 16-16h42c8.84 0 16-7.16 16-16s-7.16-16-16-16h-18v-16c0-8.84-7.16-16-16-16s-16 7.16-16 16v16z" />
-        </svg>
-    )
-}
+const SPRING_PRESS = { type: 'spring' as const, stiffness: 420, damping: 26 }
+
+// ── SIDEBAR SECTIONS ────────────────────────────────────────────────────────
+const NAV_SECTIONS = [
+    {
+        label: 'Mi negocio',
+        items: [
+            { href: '/', icon: LayoutDashboard, label: 'Inicio' },
+        ]
+    },
+    {
+        label: 'Operaciones',
+        items: [
+            { href: '/products', icon: Package, label: 'Productos' },
+            { href: '/inventory', icon: Package, label: 'Inventario' },
+            { href: '/cash', icon: Wallet, label: 'Caja' },
+            { href: '/ventas', icon: Clock, label: 'Ventas' },
+        ]
+    },
+    {
+        label: 'Personas',
+        items: [
+            { href: '/customers', icon: Users, label: 'Clientes' },
+            { href: '/providers', icon: Users, label: 'Proveedores' },
+        ]
+    },
+    {
+        label: 'Inteligencia',
+        items: [
+            { href: '/toul-ai', icon: Sparkles, label: 'TOUL AI' },
+            { href: '/reportes', icon: BarChart2, label: 'Reportes' },
+        ]
+    },
+]
 
 // ── SIDEBAR (desktop) ──────────────────────────────────────────────────────
-const NAV_MAIN = [
-    { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { href: '/products', icon: Package, label: 'Productos' },
-    { href: '/inventory', icon: Package, label: 'Inventario' },
-    { href: '/cash', icon: Wallet, label: 'Caja' },
-    { href: '/providers', icon: Users, label: 'Proveedores' },
-    { href: '/customers', icon: Users, label: 'Clientes' },
-]
-const NAV_ANALYTICS = [
-    { href: '/ventas', icon: Clock, label: 'Historial' },
-    { href: '/reportes', icon: BarChart2, label: 'Reportes' },
-]
-
 export function Sidebar() {
     const pathname = usePathname()
     const { openPOS } = usePOS()
     const isActive = (href: string) => pathname === href
 
     return (
-        <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-60 z-40"
-            style={{ background: 'var(--toul-surface)', borderRight: '1px solid var(--toul-border)' }}>
+        <aside
+            className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-60 z-40"
+            style={{
+                background: 'rgba(255,255,255,0.03)',
+                borderRight: '1px solid var(--toul-border)',
+                backdropFilter: 'blur(40px) saturate(1.4)',
+                WebkitBackdropFilter: 'blur(40px) saturate(1.4)',
+            }}>
 
             {/* Logo */}
-            <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: '1px solid var(--toul-border)' }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                    style={{ background: 'var(--toul-accent)', boxShadow: '0 4px 16px var(--toul-accent-glow)' }}>
-                    <Zap size={18} className="text-white" fill="white" />
+            <div
+                className="flex items-center gap-3 px-5 py-5"
+                style={{ borderBottom: '1px solid var(--toul-border)' }}>
+                <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center"
+                    style={{
+                        background: 'var(--toul-accent)',
+                        boxShadow: '0 4px 16px var(--toul-accent-glow)',
+                    }}>
+                    <span style={{ color: '#000', fontWeight: 800, fontSize: 14 }}>T</span>
                 </div>
-                <span className="text-xl font-bold gradient-text">TOUL</span>
+                <span
+                    className="gradient-text"
+                    style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                    TOUL
+                </span>
             </div>
 
-            {/* CTA */}
+            {/* CTA: Nueva venta */}
             <div className="px-3 pt-4 pb-2">
-                <button onClick={openPOS}
-                    className="w-full flex items-center justify-center gap-2.5 py-2.5 rounded-2xl text-white text-sm font-bold transition-all hover:opacity-90 active:scale-[0.98]"
-                    style={{ background: 'var(--toul-accent)', boxShadow: '0 4px 24px var(--toul-accent-glow)' }}>
-                    <ClipboardDollarIcon size={18} />
+                <motion.button
+                    onClick={openPOS}
+                    whileTap={{ scale: 0.97 }}
+                    transition={SPRING_PRESS}
+                    className="w-full flex items-center justify-center gap-2"
+                    style={{
+                        background: 'var(--toul-accent)',
+                        color: '#000',
+                        height: 44,
+                        borderRadius: 14,
+                        border: 'none',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        letterSpacing: '-0.01em',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 24px var(--toul-accent-glow)',
+                        fontFamily: 'inherit',
+                    }}>
+                    <Plus size={16} strokeWidth={2.6} />
                     Nueva venta
-                </button>
+                </motion.button>
             </div>
 
-            {/* Nav */}
-            <nav className="flex-1 px-3 py-1 flex flex-col gap-0.5 overflow-y-auto">
-                {NAV_MAIN.map(({ href, icon: Icon, label }) => (
-                    <Link key={href} href={href}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl transition-all text-sm font-medium"
-                        style={isActive(href)
-                            ? { background: 'var(--toul-accent-dim)', color: 'var(--toul-accent)', border: '1px solid var(--toul-accent-glow)' }
-                            : { color: 'var(--toul-text-muted)', border: '1px solid transparent' }}>
-                        <Icon size={17} strokeWidth={isActive(href) ? 2.5 : 2} />
-                        {label}
-                    </Link>
-                ))}
-                <div className="my-2" style={{ borderTop: '1px solid var(--toul-border)' }} />
-                <p className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-1" style={{ color: 'var(--toul-text-subtle)' }}>Analytics</p>
-                {NAV_ANALYTICS.map(({ href, icon: Icon, label }) => (
-                    <Link key={href} href={href}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl transition-all text-sm font-medium"
-                        style={isActive(href)
-                            ? { background: 'var(--toul-accent-dim)', color: 'var(--toul-accent)', border: '1px solid var(--toul-accent-glow)' }
-                            : { color: 'var(--toul-text-muted)', border: '1px solid transparent' }}>
-                        <Icon size={17} strokeWidth={isActive(href) ? 2.5 : 2} />
-                        {label}
-                    </Link>
+            {/* Nav: Grouped sections */}
+            <nav className="flex-1 px-3 py-2 flex flex-col gap-1 overflow-y-auto">
+                {NAV_SECTIONS.map((section, si) => (
+                    <div key={section.label}>
+                        {si > 0 && (
+                            <div
+                                style={{
+                                    height: 1,
+                                    background: 'var(--toul-divider)',
+                                    margin: '8px 0',
+                                }}
+                            />
+                        )}
+                        <p style={{
+                            fontSize: 11,
+                            fontWeight: 500,
+                            color: 'var(--toul-text-dim)',
+                            margin: '6px 0 4px 8px',
+                            letterSpacing: '0.01em',
+                        }}>
+                            {section.label}
+                        </p>
+                        {section.items.map(({ href, icon: Icon, label }) => {
+                            const active = isActive(href)
+                            return (
+                                <Link
+                                    key={href}
+                                    href={href}
+                                    className="flex items-center gap-3 px-3 py-2 rounded-xl"
+                                    style={{
+                                        transition: 'background var(--toul-transition), color var(--toul-transition)',
+                                        background: active ? 'var(--toul-accent-dim)' : 'transparent',
+                                        color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
+                                        fontSize: 14,
+                                        fontWeight: active ? 600 : 500,
+                                        textDecoration: 'none',
+                                    }}>
+                                    <Icon size={17} strokeWidth={active ? 2.4 : 2} />
+                                    {label}
+                                </Link>
+                            )
+                        })}
+                    </div>
                 ))}
             </nav>
 
             {/* Settings */}
             <div className="px-3 pb-5 pt-2" style={{ borderTop: '1px solid var(--toul-border)' }}>
-                <Link href="/settings"
-                    className="flex items-center gap-3 px-3 py-2 rounded-xl transition-all text-sm font-medium"
-                    style={isActive('/settings')
-                        ? { background: 'var(--toul-accent-dim)', color: 'var(--toul-accent)', border: '1px solid var(--toul-accent-glow)' }
-                        : { color: 'var(--toul-text-muted)', border: '1px solid transparent' }}>
-                    <Settings size={17} />
-                    Configuración
-                </Link>
+                {(() => {
+                    const active = isActive('/settings')
+                    return (
+                        <Link
+                            href="/settings"
+                            className="flex items-center gap-3 px-3 py-2 rounded-xl"
+                            style={{
+                                transition: 'background var(--toul-transition), color var(--toul-transition)',
+                                background: active ? 'var(--toul-accent-dim)' : 'transparent',
+                                color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
+                                fontSize: 14,
+                                fontWeight: active ? 600 : 500,
+                                textDecoration: 'none',
+                            }}>
+                            <Settings size={17} strokeWidth={active ? 2.4 : 2} />
+                            Ajustes
+                        </Link>
+                    )
+                })()}
             </div>
         </aside>
     )
 }
 
-// ── MOBILE BOTTOM NAV (mountain style, convex peak) ──────────────────────────
-const MOBILE_NAV_ITEMS = [
-    { href: '/', icon: LayoutDashboard, label: 'inicio' },
-    { href: '/cash', icon: Wallet, label: 'caja' },
-    { type: 'pos' }, // Placeholder for the hero button
-    { href: '/products', icon: Package, label: 'productos' },
-    { type: 'menu', icon: Menu, label: 'más' }, // Hamburger menu as in sketch
+// ── MOBILE BOTTOM NAV ──────────────────────────────────────────────────────
+
+const MOBILE_NAV = [
+    { href: '/', icon: LayoutDashboard, label: 'Inicio' },
+    { href: '/products', icon: Package, label: 'Productos' },
+    { type: 'pos' as const },
+    { href: '/cash', icon: Wallet, label: 'Caja' },
+    { type: 'menu' as const, icon: Menu, label: 'Más' },
 ]
 
-const MENU_ITEMS = [
-    { href: '/inventory', icon: Package, label: 'Inventario' },
-    { href: '/ventas', icon: Clock, label: 'Historial de ventas' },
-    { href: '/reportes', icon: BarChart2, label: 'Reportes' },
-    { href: '/expenses', icon: Receipt, label: 'Gastos' },
-    { href: '/providers', icon: Users, label: 'Proveedores' },
-    { href: '/customers', icon: Users, label: 'Clientes' },
-    { href: '/settings', icon: Settings, label: 'Configuración' },
+const MENU_SECTIONS = [
+    {
+        label: 'Operaciones',
+        items: [
+            { href: '/inventory', icon: Package, label: 'Inventario' },
+            { href: '/ventas', icon: Clock, label: 'Ventas' },
+            { href: '/expenses', icon: Wallet, label: 'Gastos' },
+        ]
+    },
+    {
+        label: 'Personas',
+        items: [
+            { href: '/customers', icon: Users, label: 'Clientes' },
+            { href: '/providers', icon: Users, label: 'Proveedores' },
+        ]
+    },
+    {
+        label: 'Inteligencia',
+        items: [
+            { href: '/toul-ai', icon: Sparkles, label: 'TOUL AI' },
+            { href: '/reportes', icon: BarChart2, label: 'Reportes' },
+        ]
+    },
+    {
+        label: 'Sistema',
+        items: [
+            { href: '/settings', icon: Settings, label: 'Ajustes' },
+        ]
+    },
 ]
 
 export function BottomNav() {
@@ -122,140 +219,278 @@ export function BottomNav() {
     const { openPOS } = usePOS()
     const [menuOpen, setMenuOpen] = useState(false)
 
+    const isActive = (href: string) => {
+        if (href === '/') return pathname === '/'
+        return pathname.startsWith(href)
+    }
+
+    // Lock body scroll while bottom sheet is open
+    useEffect(() => {
+        if (menuOpen) {
+            const prev = document.body.style.overflow
+            document.body.style.overflow = 'hidden'
+            return () => { document.body.style.overflow = prev }
+        }
+    }, [menuOpen])
+
     return (
         <>
-            {/* Overlay for menu */}
+            {/* ── Backdrop ─────────────────────────────────────── */}
             <AnimatePresence>
                 {menuOpen && (
                     <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
                         className="fixed inset-0 z-50 md:hidden"
-                        style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+                        style={{
+                            background: 'rgba(0,0,0,0.5)',
+                            backdropFilter: 'blur(20px)',
+                            WebkitBackdropFilter: 'blur(20px)',
+                        }}
                         onClick={() => setMenuOpen(false)}
                     />
                 )}
             </AnimatePresence>
 
-            {/* Modern Bottom Sheet for "Más" */}
+            {/* ── "Más" Bottom Sheet ─────────────────────────── */}
             <AnimatePresence>
                 {menuOpen && (
                     <motion.div
                         initial={{ y: '100%' }}
                         animate={{ y: 0 }}
                         exit={{ y: '100%' }}
-                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="fixed bottom-0 left-0 right-0 z-50 md:hidden rounded-t-[32px] overflow-hidden shadow-2xl pb-safe"
+                        transition={{ type: 'spring', damping: 30, stiffness: 280 }}
+                        className="fixed bottom-0 left-0 right-0 z-50 md:hidden overflow-hidden pb-safe"
                         style={{
-                            background: 'var(--toul-surface)',
-                            borderTop: '1px solid var(--toul-border)',
+                            background: 'var(--toul-surface-overlay)',
+                            borderTop: '1px solid rgba(255,255,255,0.08)',
+                            borderTopLeftRadius: 28,
+                            borderTopRightRadius: 28,
+                            boxShadow: '0 -20px 60px rgba(0,0,0,0.5)',
                         }}>
-                        {/* Drag Handle */}
-                        <div className="flex justify-center py-3">
-                            <div className="w-12 h-1 rounded-full bg-slate-700/50" />
+                        {/* Drag handle */}
+                        <div className="flex justify-center pt-3 pb-1">
+                            <div style={{
+                                width: 36,
+                                height: 4,
+                                borderRadius: 999,
+                                background: 'rgba(255,255,255,0.18)',
+                            }} />
                         </div>
 
-                        <div className="px-4 pb-8 pt-2 grid grid-cols-1 gap-1">
-                            {MENU_ITEMS.map(({ href, icon: Icon, label }, i) => (
-                                <Link key={href} href={href} onClick={() => setMenuOpen(false)}
-                                    className="flex items-center gap-4 px-5 py-4 rounded-2xl transition-colors active:bg-slate-800/50"
-                                    style={{
-                                        color: pathname === href ? 'var(--toul-accent)' : 'var(--toul-text)',
-                                        background: pathname === href ? 'var(--toul-accent-dim)' : 'transparent',
+                        <div className="px-4 pb-8 pt-3">
+                            {MENU_SECTIONS.map((section, si) => (
+                                <div key={section.label}>
+                                    {si > 0 && (
+                                        <div style={{
+                                            height: 1,
+                                            background: 'rgba(255,255,255,0.05)',
+                                            margin: '12px 0',
+                                        }} />
+                                    )}
+                                    <p style={{
+                                        fontSize: 13,
+                                        fontWeight: 500,
+                                        color: 'var(--toul-text-dim)',
+                                        margin: '4px 0 10px 4px',
                                     }}>
-                                    <div className={`p-2 rounded-xl ${pathname === href ? 'bg-indigo-500/10' : 'bg-slate-800/30'}`}>
-                                        <Icon size={20} />
+                                        {section.label}
+                                    </p>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {section.items.map(({ href, icon: Icon, label }) => {
+                                            const active = isActive(href)
+                                            return (
+                                                <motion.div
+                                                    key={href}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    transition={SPRING_PRESS}>
+                                                    <Link
+                                                        href={href}
+                                                        onClick={() => setMenuOpen(false)}
+                                                        className="flex items-center gap-3 px-3 py-3 rounded-2xl"
+                                                        style={{
+                                                            transition: 'background var(--toul-transition), border-color var(--toul-transition)',
+                                                            background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                                            border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                                            color: active ? 'var(--toul-accent)' : 'var(--toul-text)',
+                                                            textDecoration: 'none',
+                                                        }}>
+                                                        <div style={{
+                                                            width: 32,
+                                                            height: 32,
+                                                            borderRadius: 9,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            background: active ? 'rgba(50,215,75,0.12)' : 'rgba(255,255,255,0.05)',
+                                                        }}>
+                                                            <Icon
+                                                                size={17}
+                                                                strokeWidth={active ? 2.4 : 2}
+                                                                color={active ? 'var(--toul-accent)' : 'rgba(255,255,255,0.7)'}
+                                                            />
+                                                        </div>
+                                                        <span style={{
+                                                            fontSize: 15,
+                                                            fontWeight: active ? 600 : 500,
+                                                            letterSpacing: '-0.01em',
+                                                            flex: 1,
+                                                        }}>
+                                                            {label}
+                                                        </span>
+                                                        <ChevronRight
+                                                            size={14}
+                                                            color={active ? 'var(--toul-accent)' : 'rgba(255,255,255,0.2)'}
+                                                        />
+                                                    </Link>
+                                                </motion.div>
+                                            )
+                                        })}
                                     </div>
-                                    <span className="text-[15px] font-medium">{label}</span>
-                                    <ChevronRight size={16} className="ml-auto opacity-30" />
-                                </Link>
+                                </div>
                             ))}
                         </div>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* Bottom bar */}
-            <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
-                <div className="mx-0 relative">
-                    {/* Shadow for the whole bar */}
-                    <div className="absolute inset-x-0 bottom-0 h-14 shadow-[0_-12px_40px_rgba(0,0,0,0.3)]" />
+            {/* ── Bottom Bar (frosted glass) ───────────────────── */}
+            <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+                <div
+                    className="flex items-center justify-around px-2 relative"
+                    style={{
+                        height: 70,
+                        background: 'rgba(10, 10, 10, 0.78)',
+                        backdropFilter: 'blur(40px) saturate(1.8)',
+                        WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
+                        borderTop: '1px solid rgba(255,255,255,0.06)',
+                        borderTopLeftRadius: 22,
+                        borderTopRightRadius: 22,
+                    }}>
+                    {MOBILE_NAV.map(item => {
+                        // ── POS Center FAB ──
+                        if (item.type === 'pos') {
+                            return (
+                                <div key="pos-center" className="flex items-center justify-center" style={{ width: 64 }}>
+                                    <motion.button
+                                        onClick={openPOS}
+                                        whileTap={{ scale: 0.94 }}
+                                        transition={SPRING_PRESS}
+                                        className="flex items-center justify-center"
+                                        style={{
+                                            width: 56,
+                                            height: 56,
+                                            marginTop: -12,
+                                            borderRadius: '50%',
+                                            background: 'var(--toul-accent)',
+                                            color: '#000',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 8px 28px rgba(50,215,75,0.45), 0 2px 8px rgba(0,0,0,0.35)',
+                                        }}>
+                                        <Plus size={26} strokeWidth={2.8} color="#000" />
+                                    </motion.button>
+                                </div>
+                            )
+                        }
 
-                    {/* Mountain SVG background - Optical Centering (x=176) */}
-                    <div className="relative overflow-visible">
-                        <svg viewBox="0 0 360 80" preserveAspectRatio="none" className="w-full block"
-                            style={{ height: 80, marginBottom: -2 }}>
-                            {/* Optically centered peak at x=176 to balance lateral visual weights */}
-                            <path d="M0,80 L0,45 C60,45 100,45 126,45 C141,45 151,30 176,30 C201,30 211,45 226,45 C256,45 296,45 360,45 L360,80 Z"
-                                fill="var(--toul-surface)" />
-                            {/* Symmetric top stroke aligned to peak at 176 */}
-                            <path d="M0,45 C60,45 100,45 126,45 C141,45 151,30 176,30 C201,30 211,45 226,45 C256,45 296,45 360,45"
-                                fill="none" stroke="var(--toul-border)" strokeWidth="0.5" />
-                        </svg>
+                        // ── "Más" Button ──
+                        if (item.type === 'menu') {
+                            const Icon = item.icon!
+                            return (
+                                <motion.button
+                                    key="menu-btn"
+                                    onClick={() => setMenuOpen(true)}
+                                    whileTap={{ scale: 0.92 }}
+                                    transition={SPRING_PRESS}
+                                    className="flex flex-col items-center justify-center flex-1"
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        gap: 3,
+                                        padding: '8px 4px',
+                                    }}>
+                                    <div style={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 10,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: menuOpen ? 'rgba(50,215,75,0.12)' : 'transparent',
+                                        transition: 'background var(--toul-transition)',
+                                    }}>
+                                        <Icon
+                                            size={20}
+                                            strokeWidth={menuOpen ? 2.4 : 2}
+                                            color={menuOpen ? 'var(--toul-accent)' : 'rgba(255,255,255,0.45)'}
+                                            style={{ transition: 'color var(--toul-transition)' }}
+                                        />
+                                    </div>
+                                    <span style={{
+                                        fontSize: 10,
+                                        fontWeight: 500,
+                                        letterSpacing: '0.01em',
+                                        color: menuOpen ? 'var(--toul-accent)' : 'rgba(255,255,255,0.45)',
+                                        transition: 'color var(--toul-transition)',
+                                    }}>
+                                        {item.label}
+                                    </span>
+                                </motion.button>
+                            )
+                        }
 
-                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-1"
-                            style={{ height: 60, zIndex: 1 }}>
-
-                            {MOBILE_NAV_ITEMS.map((item, idx) => {
-                                if (item.type === 'pos') {
-                                    return (
-                                        <div key="pos-spacer" className="w-[72px] h-20 flex items-center justify-center relative translate-x-[-4px]">
-                                            <motion.button
-                                                onClick={openPOS}
-                                                whileTap={{ scale: 0.94 }}
-                                                className="absolute -top-1 w-[60px] h-[60px] rounded-full flex items-center justify-center text-white overflow-hidden shadow-2xl"
-                                                animate={{
-                                                    boxShadow: [
-                                                        '0 8px 30px rgba(0, 0, 0, 0.15), 0 0 10px rgba(74, 222, 128, 0.1)',
-                                                        '0 8px 35px rgba(0, 0, 0, 0.2), 0 0 15px rgba(74, 222, 128, 0.2)',
-                                                        '0 8px 30px rgba(0, 0, 0, 0.15), 0 0 10px rgba(74, 222, 128, 0.1)'
-                                                    ]
-                                                }}
-                                                transition={{
-                                                    duration: 4,
-                                                    repeat: Infinity,
-                                                    ease: "easeInOut"
-                                                }}
-                                                style={{
-                                                    background: '#4ade80',
-                                                }}>
-                                                {/* Phase 1: Soft Radial Halo Feedback */}
-                                                <motion.div
-                                                    initial={{ opacity: 0, scale: 1 }}
-                                                    whileTap={{ opacity: [0, 0.5, 0], scale: [1, 1.2] }}
-                                                    transition={{ duration: 0.16, ease: "easeOut" }}
-                                                    className="absolute inset-0 bg-white/30 rounded-full blur-[2px]"
-                                                />
-                                                <div className="text-white relative z-10 flex items-center justify-center">
-                                                    <Plus size={28} strokeWidth={3} />
-                                                </div>
-                                            </motion.button>
-                                        </div>
-                                    )
-                                }
-
-                                if (item.type === 'menu') {
-                                    return (
-                                        <button key="menu-btn" onClick={() => setMenuOpen(true)}
-                                            className="flex flex-col items-center justify-center flex-1 gap-1 h-full py-1">
-                                            <Menu size={20} strokeWidth={2} className="text-white/60" />
-                                            <span className="text-[10px] font-bold text-white/50 uppercase tracking-tighter">{item.label}</span>
-                                        </button>
-                                    )
-                                }
-
-                                const active = pathname === item.href
-                                const Icon = item.icon!
-                                return (
-                                    <Link key={item.href} href={item.href!}
-                                        className="flex flex-col items-center justify-center flex-1 gap-1 h-full py-1 transition-all"
-                                        style={{ color: active ? 'var(--toul-accent)' : 'rgba(255,255,255,0.5)' }}>
-                                        <Icon size={20} strokeWidth={active ? 2.5 : 2} />
-                                        <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
-                                    </Link>
-                                )
-                            })}
-                        </div>
-                    </div>
+                        // ── Regular Nav Tab ──
+                        const active = isActive(item.href!)
+                        const Icon = item.icon!
+                        return (
+                            <motion.div
+                                key={item.href}
+                                whileTap={{ scale: 0.92 }}
+                                transition={SPRING_PRESS}
+                                className="flex-1">
+                                <Link
+                                    href={item.href!}
+                                    className="flex flex-col items-center justify-center"
+                                    style={{
+                                        gap: 3,
+                                        padding: '8px 4px',
+                                        textDecoration: 'none',
+                                    }}>
+                                    <div style={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 10,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: active ? 'rgba(50,215,75,0.12)' : 'transparent',
+                                        transition: 'background var(--toul-transition)',
+                                    }}>
+                                        <Icon
+                                            size={20}
+                                            strokeWidth={active ? 2.4 : 2}
+                                            color={active ? 'var(--toul-accent)' : 'rgba(255,255,255,0.45)'}
+                                            style={{ transition: 'color var(--toul-transition)' }}
+                                        />
+                                    </div>
+                                    <span style={{
+                                        fontSize: 10,
+                                        fontWeight: 500,
+                                        letterSpacing: '0.01em',
+                                        color: active ? 'var(--toul-accent)' : 'rgba(255,255,255,0.45)',
+                                        transition: 'color var(--toul-transition)',
+                                    }}>
+                                        {item.label}
+                                    </span>
+                                </Link>
+                            </motion.div>
+                        )
+                    })}
                 </div>
             </nav>
         </>

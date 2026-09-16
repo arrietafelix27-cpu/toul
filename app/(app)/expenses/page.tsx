@@ -69,20 +69,32 @@ export default function ExpensesPage() {
         const d = new Date(e.created_at)
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
     })
-    const monthTotal = monthExpenses.reduce((s, e) => s + e.amount, 0)
-    const totalAll = expenses.reduce((s, e) => s + e.amount, 0)
+    const monthTotal = Math.round(monthExpenses.reduce((s, e) => s + e.amount, 0))
+    const totalAll = Math.round(expenses.reduce((s, e) => s + e.amount, 0))
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-4 fade-in">
+        <div className="px-4 md:px-8 pt-6 pb-4 fade-in" style={{ position: 'relative' }}>
+            <div className="toul-ambient" />
             {/* Header */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-5" style={{ position: 'relative' }}>
                 <div>
-                    <p className="text-slate-500 text-xs uppercase tracking-widest font-medium mb-0.5">Gastos</p>
-                    <h1 className="text-2xl font-bold text-white">Control de gastos</h1>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px 0' }}>Gastos</p>
+                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Control de gastos</h1>
                 </div>
                 <button onClick={() => setShowForm(v => !v)}
-                    className="toul-btn-secondary flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold">
-                    {showForm ? <X size={16} /> : <Plus size={16} />}
+                    className="flex items-center gap-1.5 transition-all active:scale-95"
+                    style={{
+                        padding: '9px 14px',
+                        borderRadius: 12,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        letterSpacing: '-0.01em',
+                        color: showForm ? 'var(--toul-text)' : '#000',
+                        background: showForm ? 'rgba(255,255,255,0.07)' : 'var(--toul-accent)',
+                        boxShadow: showForm ? 'none' : '0 4px 16px var(--toul-accent-glow)',
+                        border: 'none',
+                    }}>
+                    {showForm ? <X size={15} strokeWidth={2.4} /> : <Plus size={15} strokeWidth={2.4} />}
                     {showForm ? 'Cancelar' : 'Nuevo'}
                 </button>
             </div>

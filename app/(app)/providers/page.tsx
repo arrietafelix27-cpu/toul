@@ -51,18 +51,31 @@ export default function ProvidersPage() {
     const totalDebt = useMemo(() => (providers || []).reduce((sum, p) => sum + Number(p.total_debt), 0), [providers])
 
     return (
-        <div className="px-4 md:px-8 py-6 pb-24 max-w-2xl mx-auto">
+        <div className="px-4 md:px-8 py-6 pb-24 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+            <div className="toul-ambient" />
             {/* Header */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible"
-                className="flex items-center justify-between mb-5">
+                className="flex items-center justify-between mb-5"
+                style={{ position: 'relative' }}>
                 <div>
-                    <h1 className="text-2xl font-bold" style={{ color: 'var(--toul-text)' }}>Proveedores</h1>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px 0' }}>Personas</p>
+                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Proveedores</h1>
                 </div>
                 <button
                     onClick={() => setShowModal(true)}
-                    className="flex justify-center items-center gap-2 toul-btn-primary py-2 px-4 shadow-sm active:scale-95 transition-transform"
-                >
-                    <Plus size={16} /> <span className="text-sm font-semibold">Nuevo</span>
+                    className="flex justify-center items-center gap-2 active:scale-95 transition-transform"
+                    style={{
+                        padding: '9px 14px',
+                        borderRadius: 12,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        letterSpacing: '-0.01em',
+                        color: '#000',
+                        background: 'var(--toul-accent)',
+                        boxShadow: '0 4px 16px var(--toul-accent-glow)',
+                        border: 'none',
+                    }}>
+                    <Plus size={15} strokeWidth={2.4} /> Nuevo
                 </button>
             </motion.div>
 
@@ -91,11 +104,12 @@ export default function ProvidersPage() {
 
             {/* Search */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" className="relative mb-6">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={18} style={{ color: 'var(--toul-text-muted)' }} />
+                <Search size={16} strokeWidth={2} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)', pointerEvents: 'none' }} />
                 <input
                     type="text"
                     placeholder="Buscar proveedor..."
-                    className="toul-input w-full pl-10"
+                    className="toul-input w-full"
+                    style={{ paddingLeft: 42 }}
                     value={searchQuery}
                     onChange={(e) => { setSearchQuery(e.target.value); setLimit(PAGE_SIZE) }}
                 />
