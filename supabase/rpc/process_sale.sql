@@ -101,6 +101,9 @@ BEGIN
             RAISE EXCEPTION 'Hay un turno abierto por %. Pide al administrador que lo cierre.',
                 COALESCE(v_session_name, 'otra persona');
         END IF;
+    ELSIF v_session_owner IS DISTINCT FROM v_user_id THEN
+        -- Admin vendiendo fuera de la isla (ej. WhatsApp): no entra al turno de otra persona
+        v_session_id := NULL;
     END IF;
 
     -- Detect whether migration_v9 (combo_id on sale_items) has been applied.

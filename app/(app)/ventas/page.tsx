@@ -2,7 +2,11 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { Clock, X } from 'lucide-react'
+import { Clock, X, Printer, Ban } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
+import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
+import type { SaleVoid } from '@/lib/isla/types'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PAYMENT_METHODS } from '@/lib/types'
 import { staggerContainer, staggerItem, fadeUp, t, panelVariants, backdropVariants } from '@/lib/motion'
@@ -45,6 +49,7 @@ interface VentaData {
     payment_method: string
     is_credit: boolean
     customer_name: string | null
+    seller_name?: string | null
     sale_items: SaleItem[]
 }
 
@@ -59,20 +64,27 @@ export default function VentasPage() {
     const [selectedSale, setSelectedSale] = useState<VentaData | null>(null)
     const [limit, setLimit] = useState(PAGE_SIZE)
     const [hasMore, setHasMore] = useState(true)
+    const [view, setView] = useState<'ventas' | 'anuladas'>('ventas')
+    const [voidOpen, setVoidOpen] = useState(false)
+    const [printing, setPrinting] = useState(false)
 
     // Using SWR for caching and consistency
-    const { data: sales, isLoading, isValidating } = useSWR<VentaData[]>(
+    const { data: sales, isLoading, isValidating, mutate } = useSWR<VentaData[]>(
         storeId ? ['sales', storeId, period, fromDate, toDate, limit] : null,
         async () => {
             const range = getRange(period, fromDate, toDate)
-            const { data, error } = await supabase.from('sales')
-                .select('id, created_at, total, discount, payment_method, is_credit, customer_name, sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url))')
+            // seller_name existe desde migration_v10 (modo isla); si falta, se reintenta sin él
+            const baseSelect = 'id, created_at, total, discount, payment_method, is_credit, customer_name, sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url))'
+            const run = (select: string) => supabase.from('sales')
+                .select(select)
                 .eq('store_id', storeId)
                 .order('created_at', { ascending: false })
                 .gte('created_at', range.from || '1970-01-01')
                 .lte('created_at', range.to || '9999-12-31')
                 .limit(limit + 1)
 
+            let { data, error } = await run(`${baseSelect}, seller_name`)
+            if (error) ({ data, error } = await run(baseSelect))
             if (error) throw error
 
             const results = (data || []) as unknown as VentaData[]
@@ -86,6 +98,31 @@ export default function VentasPage() {
         },
         { revalidateOnFocus: false, dedupingInterval: 30000 }
     )
+
+    const { data: voids } = useSWR<SaleVoid[]>(
+        storeId && view === 'anuladas' ? ['sale-voids', storeId, period, fromDate, toDate] : null,
+        async () => {
+            const range = getRange(period, fromDate, toDate)
+            const { data } = await supabase.from('sale_voids').select('*')
+                .eq('store_id', storeId)
+                .gte('voided_at', range.from || '1970-01-01')
+                .lte('voided_at', range.to || '9999-12-31')
+                .order('voided_at', { ascending: false })
+            return (data ?? []) as SaleVoid[]
+        },
+        { revalidateOnFocus: false }
+    )
+
+    const handlePrint = async (saleId: string) => {
+        setPrinting(true)
+        try {
+            printReceipt(await loadReceiptData(supabase, saleId))
+        } catch {
+            toast.error('No se pudo preparar la tirilla')
+        } finally {
+            setPrinting(false)
+        }
+    }
 
     const totals = useMemo(() => {
         const list = sales || []
@@ -140,6 +177,49 @@ export default function VentasPage() {
                 ))}
             </motion.div>
 
+            {/* Ventas / Anuladas */}
+            <div className="flex gap-1.5 mb-4">
+                {([['ventas', 'Ventas'], ['anuladas', 'Anuladas']] as const).map(([value, label]) => (
+                    <button key={value} onClick={() => setView(value)}
+                        style={{
+                            padding: '6px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            border: '1px solid transparent',
+                            background: view === value ? 'var(--toul-surface-2)' : 'transparent',
+                            color: view === value ? 'var(--toul-text)' : 'var(--toul-text-dim)',
+                            transition: 'background var(--toul-transition), color var(--toul-transition)',
+                        }}>
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {view === 'anuladas' && (
+                (voids ?? []).length === 0 ? (
+                    <EmptyState icon={Ban} title="Sin ventas anuladas" description="Las ventas anuladas en este período aparecen aquí, con el motivo y quién aprobó." />
+                ) : (
+                    <div className="flex flex-col gap-2">
+                        {voids!.map(v => (
+                            <div key={v.id} className="toul-card flex items-center gap-3 py-3">
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'var(--toul-error-dim)' }}>
+                                    <Ban size={18} style={{ color: 'var(--toul-error)' }} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-sm truncate" style={{ color: 'var(--toul-text)' }}>
+                                        {v.snapshot.items.map(i => `${i.quantity}× ${i.name}`).join(', ')}
+                                    </p>
+                                    <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>
+                                        {formatDateTime(v.voided_at)} · {v.reason}
+                                        {v.requested_by_name && v.requested_by_name !== v.approved_by_name ? ` · pidió ${v.requested_by_name}` : ''}
+                                        {v.approved_by_name ? ` · aprobó ${v.approved_by_name}` : ''}
+                                    </p>
+                                </div>
+                                <p className="font-bold text-sm" style={{ color: 'var(--toul-error)', textDecoration: 'line-through' }}>{formatCOP(v.total)}</p>
+                            </div>
+                        ))}
+                    </div>
+                )
+            )}
+
             {/* Custom date range */}
             {period === 'custom' && (
                 <motion.div variants={fadeUp} initial="hidden" animate="visible"
@@ -156,7 +236,7 @@ export default function VentasPage() {
             )}
 
             {/* Summary chips */}
-            {(isLoading || storeLoading) ? (
+            {view === 'anuladas' ? null : (isLoading || storeLoading) ? (
                 <div className="grid grid-cols-3 gap-2 mb-5">
                     {[1, 2, 3].map(i => <Skeleton key={i} height="52px" className="rounded-xl" />)}
                 </div>
@@ -179,7 +259,7 @@ export default function VentasPage() {
             )}
 
             {/* Sales list */}
-            {(isLoading || storeLoading) ? (
+            {view === 'anuladas' ? null : (isLoading || storeLoading) ? (
                 <div className="flex flex-col gap-2">
                     {[1, 2, 3, 4, 5, 6].map(n => <Skeleton key={n} height="68px" className="rounded-2xl" />)}
                 </div>
@@ -211,6 +291,7 @@ export default function VentasPage() {
                                         <p className="font-semibold text-sm truncate" style={{ color: 'var(--toul-text)' }}>{summary}{more}</p>
                                         <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>
                                             {formatDateTime(sale.created_at)} · {pm?.label || sale.payment_method}
+                                            {sale.seller_name && sale.seller_name !== 'Administrador' && <span> · {sale.seller_name}</span>}
                                             {sale.is_credit && <span style={{ color: '#00E5A0', fontWeight: 600 }}> · Crédito</span>}
                                             {sale.is_credit && sale.customer_name && <span style={{ color: 'var(--toul-text-muted)' }}> — {sale.customer_name}</span>}
                                             {sale.discount > 0 && <span style={{ color: '#F59E0B' }}> · Dto. {formatCOP(sale.discount)}</span>}
@@ -303,11 +384,38 @@ export default function VentasPage() {
                                         {formatCOP(selectedSale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0))}
                                     </span>
                                 </div>
+                                {selectedSale.seller_name && (
+                                    <div className="flex justify-between">
+                                        <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Vendedor</span>
+                                        <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>{selectedSale.seller_name}</span>
+                                    </div>
+                                )}
+                                <div className="flex gap-2 pt-3">
+                                    <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-text)' }}
+                                        disabled={printing} onClick={() => handlePrint(selectedSale.id)}>
+                                        <Printer size={16} /> {printing ? 'Preparando…' : 'Tirilla'}
+                                    </button>
+                                    <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-error)' }}
+                                        onClick={() => setVoidOpen(true)}>
+                                        <Ban size={16} /> Anular
+                                    </button>
+                                </div>
                             </div>
                         </motion.div>
                     </div>
                 )}
             </AnimatePresence>
+
+            {selectedSale && (
+                <VoidSaleDialog
+                    open={voidOpen}
+                    onClose={() => setVoidOpen(false)}
+                    saleId={selectedSale.id}
+                    total={selectedSale.total}
+                    isAdmin
+                    onDone={() => { setVoidOpen(false); setSelectedSale(null); mutate() }}
+                />
+            )}
         </div>
     )
 }

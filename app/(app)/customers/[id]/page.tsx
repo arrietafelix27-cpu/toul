@@ -129,7 +129,7 @@ export default function CustomerDetailPage() {
                                 {credit.type === 'debt' ? '−' : '+'}
                             </div>
                             <div className="flex-1">
-                                <p className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>{credit.type === 'debt' ? 'Venta a crédito' : 'Abono'}</p>
+                                <p className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>{credit.type === 'debt' ? 'Venta a crédito' : (credit.type as string) === 'void' ? 'Venta anulada' : 'Abono'}</p>
                                 <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>{formatDate(credit.created_at)}</p>
                                 {credit.notes && <p className="text-xs" style={{ color: 'var(--toul-text-subtle)' }}>{credit.notes}</p>}
                             </div>

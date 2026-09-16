@@ -145,7 +145,12 @@ Estas reglas no se negocian. Antes de tocar cualquier lógica relacionada, confi
 | `provider_debts` | Movimientos de cuentas por pagar |
 | `payments` | Movimientos de caja por método de pago |
 | `payment_methods` | Métodos de pago configurados por el usuario |
-| `stores` | Datos del negocio del usuario |
+| `stores` | Datos del negocio del usuario (+ `nit`, `address`, `phone`, `receipt_footer` para la tirilla) |
+| `store_members` / `store_invites` | Equipo (admin/vendedor) e invitaciones por código |
+| `cash_sessions` | Turnos de caja |
+| `approval_requests` | Solicitudes de anulación y crédito |
+| `sale_voids` | Ventas anuladas (foto completa) |
+| `push_subscriptions` | Dispositivos que reciben notificaciones |
 
 **Regla de stock:** `products.stock` es un caché mantenido automáticamente por el trigger `trg_sync_product_stock`. El frontend lee siempre `products.stock` directamente — el trigger lo mantiene al día. Las variantes NO tienen columna `stock`: su stock se calcula como `SUM(quantity) FROM inventory_adjustments WHERE product_id = X AND variant_id = Y`.
 
@@ -214,6 +219,15 @@ TOUL se está preparando para operar como sistema de una isla de perfumes (negoc
 - **Dos roles:** administrador (ve todo) y vendedor (solo caja). Cada uno con su propia cuenta; al inicio habrá un solo vendedor
 - **Requieren aprobación del administrador** (notificación al celular): anular/devolver una venta y vender a crédito
 - **Descuentos:** el vendedor puede darlos; quedan registrados y visibles en el historial como venta con descuento
+
+### Cómo funciona el modo isla (implementado)
+
+- **Roles:** `toul_session_context()` devuelve `{ storeId, role, displayName }`. Dueño = admin. Vendedores en `store_members`, invitados con código (`store_invites`)
+- **Vendedor** solo accede a `/caja` (middleware). Vende con turno propio abierto (`cash_sessions`)
+- **Anulación**: la venta se borra de `sales` y queda en `sale_voids`; inventario vuelve con `reason = 'void'`, dinero sale con `payments.type = 'sale_refund'` (negativo)
+- **Aprobaciones** (`approval_requests`): anular y crédito de vendedor. Aviso push al admin (`POST /api/approvals`)
+- **Turnos**: cada movimiento de `payments` entra al turno abierto de quien lo registra. Cierre a ciegas con diferencia
+- Todo SQL del modo isla: `supabase/migration_v10_isla.sql`; despliegue en un solo archivo: `supabase/deploy_isla.sql`
 
 ## Visión a futuro
 

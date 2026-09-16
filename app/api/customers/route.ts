@@ -1,18 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getSessionContext } from '@/lib/isla/context'
 
 export async function GET() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: store } = await supabase
-        .from('stores')
-        .select('id')
-        .eq('owner_id', user.id)
-        .single()
-
-    if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    const context = await getSessionContext(supabase)
+    if (!context) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    const store = { id: context.storeId }
 
     const { data: customers } = await supabase
         .from('customers')
@@ -31,13 +28,9 @@ export async function POST(req: Request) {
     const { name, phone } = await req.json()
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 })
 
-    const { data: store } = await supabase
-        .from('stores')
-        .select('id')
-        .eq('owner_id', user.id)
-        .single()
-
-    if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    const context = await getSessionContext(supabase)
+    if (!context) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    const store = { id: context.storeId }
 
     const { data: customer, error } = await supabase
         .from('customers')

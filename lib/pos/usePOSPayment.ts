@@ -53,6 +53,8 @@ export interface POSPaymentState {
 export interface SalePayload {
     cartItems: CartItem[]
     subtotal: number
+    /** Modo isla: aprobación del administrador para ventas a crédito de un vendedor */
+    approvalId?: string | null
 }
 
 export function usePOSPayment(
@@ -197,6 +199,7 @@ export function usePOSPayment(
                 dueDate: isCredit ? dueDate : null,
                 initialPayment: paymentTarget,
                 notes: null,
+                approvalId: payload.approvalId ?? null,
             }
 
             const res = await fetch('/api/sales', {

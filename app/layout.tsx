@@ -9,9 +9,13 @@ export const metadata: Metadata = {
   title: 'TOUL — Sistema Operativo para Emprendedores',
   description: 'Controla tu negocio en tiempo real. Ventas, inventario, caja y gastos en una sola app.',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/icons/icon-192.png',
+    apple: '/icons/apple-touch-icon.png',
+  },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'TOUL',
   },
 }
@@ -21,7 +25,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#060B18',
+  themeColor: '#0a0a0a',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

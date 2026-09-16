@@ -234,17 +234,19 @@ CREATE INDEX IF NOT EXISTS idx_payments_cash_session_id ON payments(cash_session
 ALTER TABLE inventory_adjustments ADD COLUMN IF NOT EXISTS reference_id UUID;
 CREATE INDEX IF NOT EXISTS idx_ia_reference_id ON inventory_adjustments(reference_id);
 
--- Todo movimiento de caja queda en el turno abierto del momento
+-- Los movimientos de caja quedan en el turno abierto de QUIEN los registra.
+-- Así, si el dueño vende por WhatsApp desde su celular mientras la vendedora
+-- tiene el turno abierto en la isla, esa plata no descuadra la caja de la isla.
 CREATE OR REPLACE FUNCTION public.toul_attach_cash_session()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 BEGIN
-  IF NEW.cash_session_id IS NULL THEN
+  IF NEW.cash_session_id IS NULL AND auth.uid() IS NOT NULL THEN
     SELECT id INTO NEW.cash_session_id
       FROM cash_sessions
-     WHERE store_id = NEW.store_id AND status = 'open'
+     WHERE store_id = NEW.store_id AND status = 'open' AND opened_by = auth.uid()
      LIMIT 1;
   END IF;
   RETURN NEW;
@@ -732,7 +734,15 @@ BEGIN
   END IF;
 
   v_short_id := substr(v_sale.id::text, 1, 8);
-  SELECT id INTO v_session FROM cash_sessions WHERE store_id = v_store_id AND status = 'open';
+
+  -- El dinero se devuelve desde la caja donde se hizo la venta (si el turno sigue abierto);
+  -- si ya cerró, desde el turno abierto de quien pidió la anulación.
+  SELECT id INTO v_session FROM cash_sessions
+   WHERE id = v_sale.cash_session_id AND status = 'open';
+  IF v_session IS NULL THEN
+    SELECT id INTO v_session FROM cash_sessions
+     WHERE store_id = v_store_id AND status = 'open' AND opened_by = p_requested_by;
+  END IF;
 
   -- Deuda del cliente (ventas a crédito)
   SELECT COALESCE(SUM(amount), 0) INTO v_debt

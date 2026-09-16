@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
     Search, Plus, Minus, Trash2, SlidersHorizontal, Package, Check,
     ShoppingBag, UserPlus, ChevronRight, AlertTriangle, RefreshCw, X, Layers,
+    Printer, ShieldCheck, Clock,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useSWRConfig } from 'swr'
@@ -12,6 +13,13 @@ import { usePOS } from '../POSContext'
 import { usePOSFlow } from '../POSFlowProvider'
 import type { SaleSnapshot } from '../mobile/Step3Confirmation'
 import type { Customer } from '@/lib/types'
+import { usePOSMode } from '../POSMode'
+import { useCreditApproval, type CreditApprovalState } from '@/lib/isla/useCreditApproval'
+import { createClient } from '@/lib/supabase/client'
+import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
+import toast from 'react-hot-toast'
+
+type DesktopSaleSnapshot = SaleSnapshot & { saleId?: string }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Desktop POS v2 — Built from mobile visual DNA
@@ -48,6 +56,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
    ══════════════════════════════════════════════════════════════ */
 function ProductList() {
     const { closePOS } = usePOS()
+    const { mode } = usePOSMode()
     const { data, cart } = usePOSFlow()
     const searchRef = useRef<HTMLInputElement>(null)
     const [search, setSearch] = useState('')
@@ -91,7 +100,7 @@ function ProductList() {
                 <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--toul-pos-text-main)', margin: 0, letterSpacing: '-0.02em' }}>
                     Nueva venta
                 </h2>
-                <button
+                {mode === 'drawer' && <button
                     onClick={closePOS}
                     style={{
                         width: 32, height: 32, borderRadius: 8, border: 'none',
@@ -103,7 +112,7 @@ function ProductList() {
                     onMouseLeave={e => (e.currentTarget.style.color = 'var(--toul-pos-text-sec)')}
                 >
                     <X size={16} />
-                </button>
+                </button>}
             </div>
 
             {/* Toolbar — identical structure to mobile */}
@@ -540,8 +549,9 @@ function ProductList() {
 /* ══════════════════════════════════════════════════════════════
    RIGHT COLUMN — Cart + Payment (mirrors mobile Step2 exactly)
    ══════════════════════════════════════════════════════════════ */
-function RightPanel({ onConfirm, submitting, error, onClearError }: {
+function RightPanel({ onConfirm, submitting, error, onClearError, approval, needsApproval }: {
     onConfirm: () => void; submitting: boolean; error: string | null; onClearError: () => void
+    approval: CreditApprovalState; needsApproval: boolean
 }) {
     const { data, cart, payment } = usePOSFlow()
     const [showDiscount, setShowDiscount] = useState(false)
@@ -821,6 +831,7 @@ function RightPanel({ onConfirm, submitting, error, onClearError }: {
                                     {formatCOP(Math.max(0, payment.total - (Number(payment.initialPayment) || 0)))}
                                 </span>
                             </div>
+                            {needsApproval && <ApprovalBanner approval={approval} />}
                         </Section>
                     )}
 
@@ -943,22 +954,79 @@ function RightPanel({ onConfirm, submitting, error, onClearError }: {
                     )}
                     <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--toul-pos-text-main)', margin: 0 }}>{formatCOP(payment.total)}</p>
                 </div>
-                <button
-                    onClick={onConfirm}
-                    disabled={!payment.canConfirm || cart.isEmpty || submitting}
-                    style={{
-                        background: (!payment.canConfirm || cart.isEmpty || submitting) ? 'var(--toul-pos-btn-disabled-bg)' : 'var(--toul-primary)',
-                        color: (!payment.canConfirm || cart.isEmpty || submitting) ? 'var(--toul-pos-text-dim)' : 'var(--toul-pos-bg-main)',
-                        border: 'none', borderRadius: 10, padding: '12px 18px',
-                        fontSize: 13, fontWeight: 700, cursor: (!payment.canConfirm || cart.isEmpty || submitting) ? 'default' : 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 6,
-                    }}
-                >
-                    {submitting ? (
-                        <div style={{ width: 16, height: 16, border: `2px solid ${'var(--toul-pos-bg-main)'}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
-                    ) : 'Confirmar venta'}
-                </button>
+                {(() => {
+                    // Vendedor + crédito: primero pedir aprobación, luego confirmar
+                    const awaitingApproval = needsApproval && approval.status !== 'approved'
+                    const busy = submitting || approval.status === 'requesting' || approval.status === 'pending'
+                    const disabled = !payment.canConfirm || cart.isEmpty || busy
+                    const label = !awaitingApproval ? 'Confirmar venta'
+                        : approval.status === 'pending' ? 'Esperando aprobación'
+                        : 'Pedir aprobación'
+                    return (
+                        <button
+                            onClick={awaitingApproval ? approval.request : onConfirm}
+                            disabled={disabled}
+                            style={{
+                                background: disabled ? 'var(--toul-pos-btn-disabled-bg)' : 'var(--toul-primary)',
+                                color: disabled ? 'var(--toul-pos-text-dim)' : 'var(--toul-pos-bg-main)',
+                                border: 'none', borderRadius: 12, padding: '14px 22px', minHeight: 50,
+                                fontSize: 15, fontWeight: 700, cursor: disabled ? 'default' : 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                transition: 'transform 120ms var(--toul-ease), background 150ms var(--toul-ease)',
+                            }}
+                            onPointerDown={e => { if (!disabled) e.currentTarget.style.transform = 'scale(0.97)' }}
+                            onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                            onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                        >
+                            {(submitting || approval.status === 'requesting') ? (
+                                <div style={{ width: 16, height: 16, border: `2px solid ${'var(--toul-pos-bg-main)'}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+                            ) : (
+                                <>
+                                    {awaitingApproval && approval.status === 'pending' && <Clock size={16} />}
+                                    {awaitingApproval && approval.status !== 'pending' && <ShieldCheck size={16} />}
+                                    {label}
+                                </>
+                            )}
+                        </button>
+                    )
+                })()}
             </div>
+        </div>
+    )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   APPROVAL BANNER — crédito de vendedor (modo isla)
+   ══════════════════════════════════════════════════════════════ */
+function ApprovalBanner({ approval }: { approval: CreditApprovalState }) {
+    const tone = approval.status === 'approved' ? 'ok'
+        : approval.status === 'rejected' ? 'error'
+        : 'wait'
+    const colors = {
+        ok: { bg: 'var(--toul-pos-green-surface)', fg: 'var(--toul-primary)' },
+        error: { bg: 'var(--toul-pos-error-dim)', fg: 'var(--toul-pos-error)' },
+        wait: { bg: 'var(--toul-pos-warning-dim)', fg: 'var(--toul-pos-warning)' },
+    }[tone]
+
+    const text = approval.status === 'pending' ? 'Esperando que el administrador apruebe el crédito…'
+        : approval.status === 'approved' ? (approval.message || 'Crédito aprobado')
+        : approval.status === 'rejected' ? (approval.message || 'Crédito rechazado')
+        : approval.message || 'Este crédito necesita aprobación del administrador.'
+
+    return (
+        <div style={{
+            marginTop: 8, padding: '10px 12px', borderRadius: 10, background: colors.bg,
+            display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+            {approval.status === 'pending'
+                ? <div style={{ width: 12, height: 12, border: `2px solid ${colors.fg}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                : <ShieldCheck size={14} style={{ color: colors.fg, flexShrink: 0 }} />}
+            <span style={{ fontSize: 12, fontWeight: 600, color: colors.fg, flex: 1 }}>{text}</span>
+            {approval.status === 'pending' && (
+                <button onClick={approval.cancel} style={{ background: 'none', border: 'none', color: 'var(--toul-pos-text-sec)', fontSize: 11, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+                    Cancelar
+                </button>
+            )}
         </div>
     )
 }
@@ -966,9 +1034,11 @@ function RightPanel({ onConfirm, submitting, error, onClearError }: {
 /* ══════════════════════════════════════════════════════════════
    CONFIRMATION VIEW — mirrors mobile Step3 exactly
    ══════════════════════════════════════════════════════════════ */
-function ConfirmationPanel({ sale, onNewSale, onViewHistory }: {
-    sale: SaleSnapshot; onNewSale: () => void; onViewHistory: () => void
+function ConfirmationPanel({ sale, onNewSale, onViewHistory, onPrint, printing }: {
+    sale: DesktopSaleSnapshot; onNewSale: () => void; onViewHistory: () => void
+    onPrint?: () => void; printing?: boolean
 }) {
+    const { mode } = usePOSMode()
     const subtotal = Math.round(sale.subtotal || sale.items.reduce((s, i) => s + (i.unitPrice ?? i.product.sale_price) * i.quantity, 0))
 
     return (
@@ -1085,14 +1155,31 @@ function ConfirmationPanel({ sale, onNewSale, onViewHistory }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
                 <button
                     onClick={onNewSale}
+                    autoFocus
                     style={{
                         width: '100%', background: 'var(--toul-primary)', color: 'var(--toul-pos-bg-main)',
-                        border: 'none', borderRadius: 12, padding: '14px 0',
-                        fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                        border: 'none', borderRadius: 12, padding: '16px 0',
+                        fontSize: 15, fontWeight: 700, cursor: 'pointer',
                     }}
                 >
-                    OK
+                    {mode === 'caja' ? 'Nueva venta' : 'OK'}
                 </button>
+                {onPrint && sale.saleId && (
+                    <button
+                        onClick={onPrint}
+                        disabled={printing}
+                        style={{
+                            width: '100%', background: 'var(--toul-pos-bg-card)',
+                            border: `1.5px solid ${'var(--toul-pos-border)'}`, color: 'var(--toul-pos-text-main)',
+                            borderRadius: 12, padding: '14px 0',
+                            fontSize: 14, fontWeight: 600, cursor: printing ? 'default' : 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                            opacity: printing ? 0.6 : 1,
+                        }}
+                    >
+                        <Printer size={16} /> {printing ? 'Preparando tirilla…' : 'Imprimir tirilla'}
+                    </button>
+                )}
                 <button
                     onClick={onViewHistory}
                     style={{
@@ -1117,10 +1204,39 @@ export default function DesktopPOS() {
     const router = useRouter()
     const { cart, payment } = usePOSFlow()
     const { mutate: globalMutate } = useSWRConfig()
+    const { mode, role, autoPrint, onViewHistory } = usePOSMode()
 
-    const [saleSnap, setSaleSnap] = useState<SaleSnapshot | null>(null)
+    const [saleSnap, setSaleSnap] = useState<DesktopSaleSnapshot | null>(null)
     const [submitting, setSubmitting] = useState(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
+    const [printing, setPrinting] = useState(false)
+
+    // Modo isla: el vendedor necesita aprobación del administrador para fiar
+    const isCredit = payment.saleType === 'credito'
+    const needsApproval = role === 'seller' && isCredit
+    const approvalItems = useMemo(
+        () => cart.cartItems.map(i => ({ name: `${i.product.name}${i.variantName ? ` · ${i.variantName}` : ''}`, quantity: i.quantity })),
+        [cart.cartItems]
+    )
+    const approval = useCreditApproval({
+        enabled: needsApproval,
+        total: payment.total,
+        customerName: payment.selectedCustomer?.name || payment.customerSearch.trim(),
+        dueDate: payment.dueDate,
+        initialPayment: Number(payment.initialPayment) || 0,
+        items: approvalItems,
+    })
+
+    const handlePrint = useCallback(async (saleId: string) => {
+        setPrinting(true)
+        try {
+            printReceipt(await loadReceiptData(createClient(), saleId))
+        } catch {
+            toast.error('No se pudo preparar la tirilla')
+        } finally {
+            setPrinting(false)
+        }
+    }, [])
 
     const handleSubmit = useCallback(async () => {
         if (submitting || cart.isEmpty) return
@@ -1142,14 +1258,21 @@ export default function DesktopPOS() {
                 setTimeout(() => reject(new Error('La solicitud tardó demasiado. Verifica tu conexión e intenta de nuevo.')), 10000)
             )
             const result = await Promise.race([
-                payment.submitSale({ cartItems: cart.cartItems, subtotal: cart.subtotal }),
+                payment.submitSale({
+                    cartItems: cart.cartItems,
+                    subtotal: cart.subtotal,
+                    approvalId: needsApproval ? approval.requestId : null,
+                }),
                 timeoutPromise,
             ])
 
             setSubmitting(false)
 
             if (result.success) {
-                setSaleSnap(snapshot)
+                const saleId = (result as { saleId?: string }).saleId
+                setSaleSnap({ ...snapshot, saleId })
+                approval.reset()
+                if (mode === 'caja' && autoPrint && saleId) void handlePrint(saleId)
                 setTimeout(() => {
                     cart.clearCart()
                     payment.resetPayment()
@@ -1163,20 +1286,21 @@ export default function DesktopPOS() {
             const message = err instanceof Error ? err.message : 'Error inesperado al procesar la venta.'
             setSubmitError(message)
         }
-    }, [submitting, cart, payment, globalMutate])
+    }, [submitting, cart, payment, globalMutate, needsApproval, approval, mode, autoPrint, handlePrint])
 
     const handleNewSale = useCallback(() => {
         setSaleSnap(null)
         setSubmitError(null)
         cart.clearCart()
         payment.resetPayment()
-        closePOS()
-    }, [cart, payment, closePOS])
+        if (mode === 'drawer') closePOS()
+    }, [cart, payment, closePOS, mode])
 
     const handleViewHistory = useCallback(() => {
+        if (onViewHistory) { onViewHistory(); return }
         closePOS()
         router.push('/ventas')
-    }, [closePOS, router])
+    }, [closePOS, router, onViewHistory])
 
     return (
         <div style={{
@@ -1197,9 +1321,22 @@ export default function DesktopPOS() {
                 display: 'flex', flexDirection: 'column', overflow: 'hidden',
             }}>
                 {saleSnap ? (
-                    <ConfirmationPanel sale={saleSnap} onNewSale={handleNewSale} onViewHistory={handleViewHistory} />
+                    <ConfirmationPanel
+                        sale={saleSnap}
+                        onNewSale={handleNewSale}
+                        onViewHistory={handleViewHistory}
+                        onPrint={saleSnap.saleId ? () => handlePrint(saleSnap.saleId!) : undefined}
+                        printing={printing}
+                    />
                 ) : (
-                    <RightPanel onConfirm={handleSubmit} submitting={submitting} error={submitError} onClearError={() => setSubmitError(null)} />
+                    <RightPanel
+                        onConfirm={handleSubmit}
+                        submitting={submitting}
+                        error={submitError}
+                        onClearError={() => setSubmitError(null)}
+                        approval={approval}
+                        needsApproval={needsApproval}
+                    />
                 )}
             </div>
         </div>

@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 16 de septiembre de 2026 (sesión 7 — Fase 0 del modo isla: compras atómicas y correcciones)*
+*Última actualización: 16 de septiembre de 2026 (sesión 7 — modo isla: Fase 0 + Fase 1 construidas, pendiente desplegar)*
 
 ---
 
@@ -389,6 +389,50 @@ Modals base rediseñados:
 
 `npm run build` pasa sin errores.
 
+### Sesión 7 (continuación) — Fase 1 del modo isla ✅ construida, ⚠️ sin desplegar
+
+Rama `feat/modo-isla`. `npm run build` pasa. SQL probado en PGlite reproduciendo schema + v2…v9 con RLS activo: **45 casos OK** (incluye ejecutar el deploy dos veces).
+
+**Base de datos (`supabase/migration_v10_isla.sql`, 100% aditiva):**
+- `store_members` (admin/seller, una cuenta = un negocio) + `store_invites` (código de 6 caracteres, 7 días, un uso). Trigger agrega al dueño como admin en negocios nuevos; backfill para los existentes
+- `cash_sessions`: un turno abierto por negocio, base, conteo a ciegas, esperado, diferencia, resumen JSON
+- `approval_requests` (void_sale / credit_sale), `sale_voids` (foto completa de la venta anulada), `push_subscriptions`
+- Columnas nuevas: `sales.seller_id/seller_name/cash_session_id`, `payments.cash_session_id`, `inventory_adjustments.reference_id`, `stores.nit/address/phone/receipt_footer`, `payment_methods.is_cash`
+- Políticas **nuevas** para miembros (las del dueño no se tocaron). Vendedor: lee catálogo, clientes y ventas; registra ventas. NO ve caja, compras, proveedores ni gastos; no cambia precios
+- `sync_product_stock` pasa a SECURITY DEFINER (si no, el stock no bajaba cuando vendía un vendedor)
+- RPCs: `toul_session_context`, invitaciones/miembros, `toul_open/close_cash_session`, `toul_cash_session_summary`, `toul_request/resolve/cancel_approval`, `toul_void_sale`, push
+- Trigger en `payments`: el movimiento entra al turno abierto **de quien lo registra** (ventas del dueño por WhatsApp no descuadran la isla)
+
+**Reglas de negocio nuevas:**
+- Vendedor solo vende con turno propio abierto
+- Crédito de vendedor requiere aprobación del admin (60 min de vigencia, se invalida si cambia el total, un solo uso)
+- Anular: vendedor pide, admin aprueba; admin puede anular directo. La venta se BORRA de `sales` (sale de todos los reportes sin tocar queries) y queda en `sale_voids`. Inventario se devuelve con movimientos `void`, dinero con `payments.type = 'sale_refund'` (monto negativo). No se puede anular un crédito que ya tiene abonos
+- Cierre a ciegas: el vendedor no ve cuánto debería haber hasta cerrar
+- Descuentos del vendedor permitidos y visibles (historial, tirilla, resumen del turno)
+- `process_purchase` solo para administradores
+
+**App:**
+- `middleware.ts`: rol vía `toul_session_context` (con respaldo al dueño si la migración no está); vendedor solo `/caja/*` y `/reset-password`
+- `/caja` (layout propio, pantalla completa táctil): abrir turno, POS (`DesktopPOS` en modo caja vía `components/pos/POSMode.tsx`), ventas del turno, cerrar turno con resumen e impresión
+- `DesktopPOS`: flujo "Pedir aprobación" para crédito de vendedor, botón imprimir tirilla, tirilla automática en caja
+- Tirilla 80 mm por iframe oculto (`lib/isla/receipt.ts`) — no toca `globals.css`
+- Admin: `/aprobaciones` (con contador en el menú), `/turnos`, historial de ventas con vendedor/tirilla/anular/pestaña Anuladas, Ajustes → Equipo, Tirilla, Notificaciones
+- Push: `public/sw.js`, `lib/isla/pushClient.ts`, `lib/isla/push.ts` (web-push + VAPID), `POST /api/approvals`
+- Onboarding: "Soy vendedor" con código. `/reset-password` creado (recuperación de contraseña arreglada)
+- Íconos PWA reales en `public/icons/`, manifest con colores actuales
+
+**⚠️ Para desplegar (en este orden):**
+1. Ejecutar `supabase/deploy_isla.sql` en el SQL Editor (es seguro para la app actual en producción)
+2. Vercel → Environment Variables: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (valores en `.env.local`)
+3. Supabase → Authentication → URL Configuration: agregar `https://<dominio>/reset-password` a Redirect URLs
+4. Unir `feat/modo-isla` a `main`
+
+**Límites conocidos (v1):**
+- Devolución parcial (1 de 2 productos) no existe: se anula la venta completa y se registra de nuevo
+- Ocultar costos al vendedor es a nivel de pantallas; técnicamente `sale_items.unit_cost` es legible por un vendedor con conocimientos
+- Un vendedor que entra a `/onboarding` podría crear su propio negocio (queda aislado, pierde acceso a la isla)
+- Solo el dueño es administrador (no hay admins adicionales todavía)
+
 ### Schema migrations aplicadas en Supabase ✅
 
 **Migration v5** — Tablas para variantes y combos:
@@ -410,9 +454,9 @@ Modals base rediseñados:
 
 ### Modo isla — plan de trabajo
 
-**Fase 0 — Proteger** ✅ (sesión 7, falta ejecutar `process_purchase.sql` en Supabase)
+**Fase 0 — Proteger** ✅ (sesión 7)
 
-**Fase 1 — Para abrir la isla (apertura aprox. mediados de noviembre 2026)**
+**Fase 1 — Para abrir la isla (apertura aprox. mediados de noviembre 2026)** ✅ construida en sesión 7, pendiente desplegar (ver arriba)
 1. Roles: administrador y vendedor, cada uno con cuenta propia. Vendedor solo ve caja, sus ventas del turno y cierre de turno (sin costos, utilidades, proveedores ni reportes)
 2. Turnos de caja: apertura con base en efectivo, cierre con conteo, faltante/sobrante y responsable
 3. Cada venta registra vendedor y turno
@@ -425,7 +469,7 @@ Modals base rediseñados:
 10. POS táctil a pantalla completa
 11. Arreglar recuperación de contraseña
 
-**Fase 2 — Después de abrir:** ventas por vendedor, alertas de stock bajo, exportar datos
+**Fase 2 — Después de abrir:** ventas por vendedor, alertas de stock bajo, exportar datos, devolución parcial, lector de código de barras
 
 
 ### Prompt 5 — Animaciones móvil + Consistencia visual

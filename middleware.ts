@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { getSessionContext } from '@/lib/isla/context'
+
+// Rutas donde puede estar un vendedor (modo isla)
+const SELLER_PATHS = ['/caja', '/reset-password']
 
 export async function middleware(request: NextRequest) {
     let supabaseResponse = NextResponse.next({ request })
@@ -29,11 +33,16 @@ export async function middleware(request: NextRequest) {
 
     const { pathname } = request.nextUrl
     const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')
+    const isResetPassword = pathname.startsWith('/reset-password')
     const isOnboarding = pathname.startsWith('/onboarding')
     const isApi = pathname.startsWith('/api')
+    const isServiceWorker = pathname === '/sw.js' || pathname === '/manifest.json'
 
-    // Skip middleware for API routes
-    if (isApi) return supabaseResponse
+    // Skip middleware for API routes and PWA files
+    if (isApi || isServiceWorker) return supabaseResponse
+
+    // Recuperar contraseña: accesible con o sin sesión (el enlace del correo inicia sesión)
+    if (isResetPassword) return supabaseResponse
 
     // Not logged in → redirect to login
     if (!user && !isAuthRoute) {
@@ -45,16 +54,17 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/', request.url))
     }
 
-    // Logged in — check if store exists (skip if already on onboarding)
+    // Logged in — resolve store and role (skip if already on onboarding)
     if (user && !isAuthRoute && !isOnboarding) {
-        const { data: store } = await supabase
-            .from('stores')
-            .select('id')
-            .eq('owner_id', user.id)
-            .single()
+        const context = await getSessionContext(supabase)
 
-        if (!store) {
+        if (!context) {
             return NextResponse.redirect(new URL('/onboarding', request.url))
+        }
+
+        // Vendedor: solo la caja
+        if (context.role === 'seller' && !SELLER_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+            return NextResponse.redirect(new URL('/caja', request.url))
         }
     }
 
@@ -63,6 +73,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 }

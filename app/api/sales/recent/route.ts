@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getSessionContext } from '@/lib/isla/context'
 
 /**
  * GET /api/sales/recent?total=X&secondsAgo=30
@@ -15,8 +16,9 @@ export async function GET(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: store } = await supabase.from('stores').select('id').eq('owner_id', user.id).single()
-    if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    const context = await getSessionContext(supabase)
+    if (!context) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    const store = { id: context.storeId }
 
     const url = new URL(request.url)
     const totalStr = url.searchParams.get('total')

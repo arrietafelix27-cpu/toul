@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getSessionContext } from '@/lib/isla/context'
 
 // Lightweight endpoint for POS: returns products with stock > 0
 export async function GET() {
@@ -7,13 +8,9 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: store } = await supabase
-        .from('stores')
-        .select('id')
-        .eq('owner_id', user.id)
-        .single()
-
-    if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    const context = await getSessionContext(supabase)
+    if (!context) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    const store = { id: context.storeId }
 
     const [productsRes, variantsRes, adjRes, combosRes] = await Promise.all([
         supabase.from('products').select('id, name, sale_price, cpp, stock, image_url, images, reference').eq('store_id', store.id).eq('is_active', true).order('name'),

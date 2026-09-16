@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
-import { Zap, Check } from 'lucide-react'
+import { Zap, Check, KeyRound, Store } from 'lucide-react'
 
 const CATEGORIES = [
     { value: 'ropa', emoji: '👗', label: 'Ropa y accesorios' },
@@ -19,7 +19,9 @@ const CATEGORIES = [
 export default function OnboardingPage() {
     const router = useRouter()
     const supabase = createClient()
-    const [step, setStep] = useState(1)
+    // 0 = elegir camino, 1-2 = crear negocio, 'join' = vendedor con código
+    const [step, setStep] = useState<0 | 1 | 2 | 'join'>(0)
+    const [inviteCode, setInviteCode] = useState('')
     const [storeName, setStoreName] = useState('')
     const [category, setCategory] = useState('')
     const [loading, setLoading] = useState(false)
@@ -42,6 +44,21 @@ export default function OnboardingPage() {
         router.push('/')
     }
 
+    async function handleJoin() {
+        const code = inviteCode.trim().toUpperCase()
+        if (code.length !== 6) { toast.error('El código tiene 6 caracteres'); return }
+        setLoading(true)
+        const { error } = await supabase.rpc('toul_accept_invite', { p_code: code })
+        if (error) {
+            toast.error(error.message || 'Código inválido')
+            setLoading(false)
+            return
+        }
+        toast.success('¡Listo! Ya eres parte del equipo')
+        // Recarga completa: el middleware vuelve a leer el rol y lleva a la caja
+        window.location.href = '/caja'
+    }
+
     return (
         <div className="min-h-dvh flex flex-col px-5 py-10" style={{ background: 'var(--toul-bg)' }}>
             {/* Logo */}
@@ -53,13 +70,58 @@ export default function OnboardingPage() {
                 <span className="text-xl font-bold gradient-text">TOUL</span>
             </div>
 
+            {/* Step 0 — ¿Dueño o vendedor? */}
+            {step === 0 && (
+                <div className="flex-1 flex flex-col fade-in">
+                    <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--toul-text)' }}>¿Cómo vas a usar TOUL?</h2>
+                    <p className="text-sm mb-6" style={{ color: 'var(--toul-text-muted)' }}>Puedes crear tu negocio o unirte al de alguien más.</p>
+                    <div className="flex flex-col gap-3">
+                        {[
+                            { key: 1 as const, icon: Store, title: 'Tengo un negocio', text: 'Crea tu negocio y administra todo.' },
+                            { key: 'join' as const, icon: KeyRound, title: 'Soy vendedor', text: 'Tengo un código que me dio el administrador.' },
+                        ].map(opt => (
+                            <button key={String(opt.key)} onClick={() => setStep(opt.key)}
+                                className="flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-[0.98]"
+                                style={{ background: 'var(--toul-surface)', border: '1px solid var(--toul-border)', color: 'var(--toul-text)' }}>
+                                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                                    style={{ background: 'var(--toul-accent-dim)', color: 'var(--toul-accent)' }}>
+                                    <opt.icon size={20} />
+                                </div>
+                                <div>
+                                    <p className="font-semibold" style={{ fontSize: 15 }}>{opt.title}</p>
+                                    <p className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>{opt.text}</p>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Vendedor — código de invitación */}
+            {step === 'join' && (
+                <div className="flex-1 flex flex-col fade-in">
+                    <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--toul-text)' }}>Código de vendedor</h2>
+                    <p className="text-sm mb-6" style={{ color: 'var(--toul-text-muted)' }}>Escribe el código de 6 caracteres que te dio el administrador.</p>
+                    <input className="toul-input mb-4 text-center" type="text" placeholder="ABC123" value={inviteCode}
+                        onChange={e => setInviteCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+                        autoFocus autoCapitalize="characters" autoComplete="off"
+                        style={{ fontSize: 28, letterSpacing: '0.3em', fontWeight: 700 }} />
+                    <div className="mt-auto flex flex-col gap-2">
+                        <button className="toul-btn-primary" onClick={handleJoin} disabled={loading || inviteCode.length !== 6}>
+                            {loading ? 'Verificando...' : 'Unirme al negocio'}
+                        </button>
+                        <button className="toul-btn-ghost" onClick={() => setStep(0)} disabled={loading}>Volver</button>
+                    </div>
+                </div>
+            )}
+
             {/* Progress */}
-            <div className="flex gap-2 mb-8">
+            {(step === 1 || step === 2) && <div className="flex gap-2 mb-8">
                 {[1, 2].map(n => (
                     <div key={n} className="h-1 flex-1 rounded-full transition-all"
-                        style={{ background: step >= n ? 'var(--toul-accent)' : 'var(--toul-border)' }} />
+                        style={{ background: (step as number) >= n ? 'var(--toul-accent)' : 'var(--toul-border)' }} />
                 ))}
-            </div>
+            </div>}
 
             {/* Step 1 */}
             {step === 1 && (

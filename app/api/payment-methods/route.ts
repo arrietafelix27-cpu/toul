@@ -1,12 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { DEFAULT_PAYMENT_METHODS } from '@/lib/types'
+import { getSessionContext } from '@/lib/isla/context'
 
 async function getStoreId(supabase: Awaited<ReturnType<typeof createClient>>) {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return null
-    const { data: store } = await supabase.from('stores').select('id').eq('owner_id', user.id).single()
-    return store?.id ?? null
+    const context = await getSessionContext(supabase)
+    return context?.storeId ?? null
 }
 
 async function seedDefaultMethods(supabase: Awaited<ReturnType<typeof createClient>>, storeId: string) {

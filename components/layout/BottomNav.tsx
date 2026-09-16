@@ -1,12 +1,38 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Package, Wallet, Users, Settings, BarChart2, Clock, Menu, ChevronRight, Plus, Sparkles } from 'lucide-react'
+import { LayoutDashboard, Package, Wallet, Users, Settings, BarChart2, Clock, Menu, ChevronRight, Plus, Sparkles, ShieldCheck, LockKeyhole, MonitorSmartphone } from 'lucide-react'
+import { usePendingApprovalsCount } from '@/lib/isla/useSession'
 import { usePOS } from '@/components/pos/POSContext'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const SPRING_PRESS = { type: 'spring' as const, stiffness: 420, damping: 26 }
+
+// Contador de solicitudes pendientes (modo isla)
+function CountBadge({ count }: { count: number }) {
+    if (!count) return null
+    return (
+        <motion.span
+            initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={SPRING_PRESS}
+            style={{
+                minWidth: 20, height: 20, padding: '0 6px', borderRadius: 999, marginLeft: 'auto',
+                background: 'var(--toul-error)', color: '#fff', fontSize: 11, fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+            {count > 9 ? '9+' : count}
+        </motion.span>
+    )
+}
+
+const ISLA_SECTION = {
+    label: 'Isla',
+    items: [
+        { href: '/aprobaciones', icon: ShieldCheck, label: 'Aprobaciones', badge: true },
+        { href: '/turnos', icon: LockKeyhole, label: 'Turnos de caja' },
+        { href: '/caja', icon: MonitorSmartphone, label: 'Abrir caja' },
+    ]
+}
 
 // ── SIDEBAR SECTIONS ────────────────────────────────────────────────────────
 const NAV_SECTIONS = [
@@ -25,6 +51,7 @@ const NAV_SECTIONS = [
             { href: '/ventas', icon: Clock, label: 'Ventas' },
         ]
     },
+    ISLA_SECTION,
     {
         label: 'Personas',
         items: [
@@ -45,6 +72,7 @@ const NAV_SECTIONS = [
 export function Sidebar() {
     const pathname = usePathname()
     const { openPOS } = usePOS()
+    const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
     const isActive = (href: string) => pathname === href
 
     return (
@@ -123,8 +151,9 @@ export function Sidebar() {
                         }}>
                             {section.label}
                         </p>
-                        {section.items.map(({ href, icon: Icon, label }) => {
+                        {section.items.map(({ href, icon: Icon, label, ...rest }) => {
                             const active = isActive(href)
+                            const badge = 'badge' in rest && rest.badge ? pendingApprovals : 0
                             return (
                                 <Link
                                     key={href}
@@ -140,6 +169,7 @@ export function Sidebar() {
                                     }}>
                                     <Icon size={17} strokeWidth={active ? 2.4 : 2} />
                                     {label}
+                                    <CountBadge count={badge} />
                                 </Link>
                             )
                         })}
@@ -192,6 +222,7 @@ const MENU_SECTIONS = [
             { href: '/expenses', icon: Wallet, label: 'Gastos' },
         ]
     },
+    ISLA_SECTION,
     {
         label: 'Personas',
         items: [
@@ -218,6 +249,7 @@ export function BottomNav() {
     const pathname = usePathname()
     const { openPOS } = usePOS()
     const [menuOpen, setMenuOpen] = useState(false)
+    const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
 
     const isActive = (href: string) => {
         if (href === '/') return pathname === '/'
@@ -299,8 +331,9 @@ export function BottomNav() {
                                         {section.label}
                                     </p>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                        {section.items.map(({ href, icon: Icon, label }) => {
+                                        {section.items.map(({ href, icon: Icon, label, ...rest }) => {
                                             const active = isActive(href)
+                                            const badge = 'badge' in rest && rest.badge ? pendingApprovals : 0
                                             return (
                                                 <motion.div
                                                     key={href}
@@ -340,6 +373,7 @@ export function BottomNav() {
                                                         }}>
                                                             {label}
                                                         </span>
+                                                        <CountBadge count={badge} />
                                                         <ChevronRight
                                                             size={14}
                                                             color={active ? 'var(--toul-accent)' : 'rgba(255,255,255,0.2)'}
@@ -421,9 +455,13 @@ export function BottomNav() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
+                                        position: 'relative',
                                         background: menuOpen ? 'rgba(50,215,75,0.12)' : 'transparent',
                                         transition: 'background var(--toul-transition)',
                                     }}>
+                                        {pendingApprovals > 0 && (
+                                            <span style={{ position: 'absolute', top: 3, right: 3, width: 8, height: 8, borderRadius: '50%', background: 'var(--toul-error)', boxShadow: '0 0 0 2px rgba(10,10,10,0.9)' }} />
+                                        )}
                                         <Icon
                                             size={20}
                                             strokeWidth={menuOpen ? 2.4 : 2}
