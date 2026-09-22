@@ -14,19 +14,25 @@ export default function RegisterPage() {
     const [confirm, setConfirm] = useState('')
     const [showPassword, setShowPassword] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [needsConfirmation, setNeedsConfirmation] = useState(false)
 
     async function handleRegister(e: React.FormEvent) {
         e.preventDefault()
         if (password !== confirm) { toast.error('Las contraseñas no coinciden'); return }
         if (password.length < 8) { toast.error('La contraseña debe tener al menos 8 caracteres'); return }
         setLoading(true)
-        const { error } = await supabase.auth.signUp({ email, password })
+        const { data, error } = await supabase.auth.signUp({ email, password })
+        setLoading(false)
         if (error) {
             toast.error(error.message)
-        } else {
-            router.push('/onboarding')
+            return
         }
-        setLoading(false)
+        // Si el proyecto pide confirmar el correo, no hay sesión todavía
+        if (!data.session) {
+            setNeedsConfirmation(true)
+            return
+        }
+        router.push('/onboarding')
     }
 
     return (
@@ -43,6 +49,20 @@ export default function RegisterPage() {
 
             <div className="w-full max-w-sm rounded-3xl p-6"
                 style={{ background: 'var(--toul-surface)', border: '1px solid var(--toul-border)' }}>
+                {needsConfirmation ? (
+                    <div className="text-center py-4">
+                        <div className="text-4xl mb-4">📬</div>
+                        <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--toul-text)' }}>Confirma tu correo</h2>
+                        <p className="text-sm mb-6" style={{ color: 'var(--toul-text-muted)' }}>
+                            Te enviamos un correo a <strong style={{ color: 'var(--toul-text)' }}>{email}</strong>.
+                            Ábrelo y toca el enlace para activar la cuenta. Revisa también el correo no deseado.
+                        </p>
+                        <Link href="/login" className="toul-btn-primary" style={{ textDecoration: 'none' }}>
+                            Ya confirmé, entrar
+                        </Link>
+                    </div>
+                ) : (
+                <>
                 <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--toul-text)' }}>Crear cuenta</h2>
                 <p className="text-sm mb-6" style={{ color: 'var(--toul-text-muted)' }}>Empieza a controlar tu negocio hoy</p>
 
@@ -73,6 +93,8 @@ export default function RegisterPage() {
                     ¿Ya tienes cuenta?{' '}
                     <Link href="/login" className="font-semibold hover:underline" style={{ color: 'var(--toul-accent)' }}>Ingresa aquí</Link>
                 </p>
+                </>
+                )}
             </div>
         </div>
     )

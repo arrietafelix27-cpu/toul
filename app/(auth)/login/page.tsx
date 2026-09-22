@@ -19,7 +19,16 @@ export default function LoginPage() {
         setLoading(true)
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) {
-            toast.error('Correo o contraseña incorrectos')
+            // Mensaje según la causa real: "correo incorrecto" confundía cuando
+            // lo que faltaba era confirmar la cuenta desde el correo
+            const reason = error.message.toLowerCase()
+            if (reason.includes('not confirmed')) {
+                toast.error('Falta confirmar tu correo. Abre el enlace que te enviamos y vuelve a entrar.', { duration: 6000 })
+            } else if (reason.includes('rate limit') || error.status === 429) {
+                toast.error('Demasiados intentos. Espera un momento y vuelve a intentar.')
+            } else {
+                toast.error('Correo o contraseña incorrectos')
+            }
         } else {
             router.push('/')
             router.refresh()
