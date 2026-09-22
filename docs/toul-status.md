@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 16 de septiembre de 2026 (sesión 7 — modo isla: Fase 0 + Fase 1 construidas, pendiente desplegar)*
+*Última actualización: 22 de septiembre de 2026 (sesión 8 — ventas sin internet y conteo de inventario)*
 
 ---
 
@@ -389,6 +389,32 @@ Modals base rediseñados:
 
 `npm run build` pasa sin errores.
 
+### Sesión 8 — 22 de septiembre de 2026 ✅ construida, ⚠️ SQL sin ejecutar
+
+`deploy_isla.sql` YA está aplicado en Supabase (verificado). Falta ejecutar `supabase/deploy_offline_conteo.sql`.
+
+**Ventas sin internet (`migration_v11_offline_conteo.sql` + `process_sale`):**
+- `sales.client_sale_id` + índice único por tienda: reintentar el envío nunca duplica una venta. El RPC devuelve `{duplicate: true}` con el mismo `saleId`
+- `soldAt`: la venta guarda la hora real, no la del envío (máx. 7 días atrás)
+- `cashSessionId` en el payload: la venta entra al turno donde se hizo, aunque ya esté cerrado
+- `lib/isla/offline.ts`: cola en localStorage (venta + tirilla lista para imprimir). `queueSale` devuelve `false` si el navegador no pudo guardar y la caja avisa en vez de dar la venta por hecha
+- `lib/isla/useOffline.ts`: estado de conexión, envío automático al volver la señal, reintento cada 20 s
+- `DesktopPOS`: sin señal (o si el servidor no responde en 10 s) la venta se guarda y se imprime desde el computador. El crédito se bloquea sin internet
+- `usePOSData`: catálogo, métodos de pago y clientes quedan cacheados para vender offline
+- `useSessionContext` / `useOpenCashSession`: última respuesta buena guardada, así la caja abre sin señal
+- `public/sw.js`: precache de `/caja`, cache-first para estáticos, network-first para `/api/*`
+- Carrito ahora en localStorage con vencimiento de 12 h (antes sessionStorage: se perdía al cerrar el navegador)
+- `components/isla/OfflineBar.tsx` y `PendingSales.tsx`: aviso de conexión y lista de ventas por enviar (con reintento, impresión y descarte de las rechazadas)
+
+**Conteo de inventario:**
+- Tablas `inventory_counts` / `inventory_count_items` (solo admin) + RPC `toul_apply_inventory_count`
+- El conteo es a ciegas por defecto (el stock del sistema está oculto; hay botón para verlo)
+- Se guarda renglón por renglón mientras se cuenta (guardados encadenados por producto para no duplicar ni perder valores)
+- Al terminar: ajusta el inventario con movimientos `reason = 'count'`, muestra faltantes/sobrantes en unidades y en plata. Lo no contado no se toca; un conteo no se puede aplicar dos veces
+- Pantallas: `/inventory/conteo` y `/inventory/conteo/[id]`, con acceso desde el módulo de Inventario
+
+**Pruebas automáticas (nuevo):** `npm run test:db` levanta PostgreSQL en memoria (PGlite), reproduce todas las migraciones con RLS y corre 2 suites (`supabase/tests/`). 33 casos, todos en verde.
+
 ### Sesión 7 (continuación) — Fase 1 del modo isla ✅ construida, ⚠️ sin desplegar
 
 Rama `feat/modo-isla`. `npm run build` pasa. SQL probado en PGlite reproduciendo schema + v2…v9 con RLS activo: **45 casos OK** (incluye ejecutar el deploy dos veces).
@@ -422,7 +448,7 @@ Rama `feat/modo-isla`. `npm run build` pasa. SQL probado en PGlite reproduciendo
 - Íconos PWA reales en `public/icons/`, manifest con colores actuales
 
 **⚠️ Para desplegar (en este orden):**
-1. Ejecutar `supabase/deploy_isla.sql` en el SQL Editor (es seguro para la app actual en producción)
+1. ✅ `supabase/deploy_isla.sql` ejecutado. Falta `supabase/deploy_offline_conteo.sql` (sesión 8)
 2. Vercel → Environment Variables: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (valores en `.env.local`)
 3. Supabase → Authentication → URL Configuration: agregar `https://<dominio>/reset-password` a Redirect URLs
 4. Unir `feat/modo-isla` a `main`
@@ -470,6 +496,8 @@ Rama `feat/modo-isla`. `npm run build` pasa. SQL probado en PGlite reproduciendo
 11. Arreglar recuperación de contraseña
 
 **Fase 2 — Después de abrir:** ventas por vendedor, alertas de stock bajo, exportar datos, devolución parcial, lector de código de barras
+
+**Pendiente de infraestructura:** monitoreo de errores (Sentry o similar), exportar/respaldar datos, facturación electrónica DIAN, cobro por suscripción
 
 
 ### Prompt 5 — Animaciones móvil + Consistencia visual

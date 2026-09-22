@@ -5,11 +5,18 @@ import type { Product, CartItem } from '@/lib/types'
 import type { POSVariant, POSCombo } from './usePOSData'
 
 const STORAGE_KEY = 'toul_pos_cart'
+// El carrito vive en localStorage (no sessionStorage): si se cierra el navegador
+// o se va la luz en plena venta, al volver sigue ahí. Se descarta a las 12 horas.
+const CART_TTL_MS = 12 * 60 * 60 * 1000
 
 // ─── Persistence helpers ──────────────────────────────────────
 function persistCart(cartMap: Record<string, number>) {
     try {
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(cartMap))
+        if (Object.keys(cartMap).length === 0) {
+            localStorage.removeItem(STORAGE_KEY)
+            return
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ cart: cartMap, savedAt: Date.now() }))
     } catch {
         /* Storage full or unavailable — silent fallback */
     }
@@ -17,9 +24,14 @@ function persistCart(cartMap: Record<string, number>) {
 
 function hydrateCart(): Record<string, number> {
     try {
-        const raw = sessionStorage.getItem(STORAGE_KEY)
+        const raw = localStorage.getItem(STORAGE_KEY)
         if (!raw) return {}
-        return JSON.parse(raw) as Record<string, number>
+        const parsed = JSON.parse(raw) as { cart?: Record<string, number>; savedAt?: number }
+        if (!parsed?.cart || !parsed.savedAt || Date.now() - parsed.savedAt > CART_TTL_MS) {
+            localStorage.removeItem(STORAGE_KEY)
+            return {}
+        }
+        return parsed.cart
     } catch {
         return {}
     }
@@ -79,7 +91,7 @@ export function usePOSCart(products: Product[], variantsByProduct: Record<string
 
     const clearCart = useCallback(() => {
         setCartMap({})
-        try { sessionStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
+        try { localStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
     }, [])
 
     const addCombo = useCallback((comboId: string) => {

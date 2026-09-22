@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { Plus, Search, PackageMinus, Package, ChevronRight, Layers } from 'lucide-react'
+import { Plus, Search, PackageMinus, Package, ChevronRight, Layers, ClipboardList } from 'lucide-react'
 import Link from 'next/link'
 import type { Product } from '@/lib/types'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -143,6 +143,11 @@ export default function InventoryPage() {
                     <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Inventario</h1>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Link href="/inventory/conteo"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 border"
+                        style={{ color: 'var(--toul-text-muted)', borderColor: 'var(--toul-border)', background: 'var(--toul-surface)', textDecoration: 'none' }}>
+                        <ClipboardList size={15} /> Conteo
+                    </Link>
                     <button
                         onClick={() => setShowAdjustModal(true)}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 border"
@@ -150,8 +155,8 @@ export default function InventoryPage() {
                         <PackageMinus size={15} /> Ajuste
                     </button>
                     <Link href="/inventory/purchase"
-                        className="flex items-center gap-1.5 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95"
-                        style={{ background: 'var(--toul-accent)', boxShadow: '0 4px 16px var(--toul-accent-glow)', textDecoration: 'none' }}>
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                        style={{ background: 'var(--toul-accent)', color: '#000', boxShadow: '0 4px 16px var(--toul-accent-glow)', textDecoration: 'none' }}>
                         <Plus size={16} /> Nueva compra
                     </Link>
                 </div>

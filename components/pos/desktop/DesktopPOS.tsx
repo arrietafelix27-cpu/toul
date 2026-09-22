@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
     Search, Plus, Minus, Trash2, SlidersHorizontal, Package, Check,
     ShoppingBag, UserPlus, ChevronRight, AlertTriangle, RefreshCw, X, Layers,
-    Printer, ShieldCheck, Clock,
+    Printer, ShieldCheck, Clock, WifiOff, CloudUpload,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useSWRConfig } from 'swr'
@@ -17,9 +17,12 @@ import { usePOSMode } from '../POSMode'
 import { useCreditApproval, type CreditApprovalState } from '@/lib/isla/useCreditApproval'
 import { createClient } from '@/lib/supabase/client'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
+import { useOfflineSales } from '@/lib/isla/useOffline'
+import { getCachedStoreInfo, queueSale } from '@/lib/isla/offline'
+import type { ReceiptData } from '@/lib/isla/types'
 import toast from 'react-hot-toast'
 
-type DesktopSaleSnapshot = SaleSnapshot & { saleId?: string }
+type DesktopSaleSnapshot = SaleSnapshot & { saleId?: string; offline?: boolean; receipt?: ReceiptData }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Desktop POS v2 — Built from mobile visual DNA
@@ -549,9 +552,9 @@ function ProductList() {
 /* ══════════════════════════════════════════════════════════════
    RIGHT COLUMN — Cart + Payment (mirrors mobile Step2 exactly)
    ══════════════════════════════════════════════════════════════ */
-function RightPanel({ onConfirm, submitting, error, onClearError, approval, needsApproval }: {
+function RightPanel({ onConfirm, submitting, error, onClearError, approval, needsApproval, online }: {
     onConfirm: () => void; submitting: boolean; error: string | null; onClearError: () => void
-    approval: CreditApprovalState; needsApproval: boolean
+    approval: CreditApprovalState; needsApproval: boolean; online: boolean
 }) {
     const { data, cart, payment } = usePOSFlow()
     const [showDiscount, setShowDiscount] = useState(false)
@@ -697,17 +700,21 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             {(['contado', 'credito'] as const).map(type => {
                                 const active = (type === 'contado' && !isCredit) || (type === 'credito' && isCredit)
+                                // Sin internet solo se puede vender de contado
+                                const blocked = type === 'credito' && !online
                                 return (
                                     <button
                                         key={type}
-                                        onClick={() => payment.setSaleType(type)}
+                                        onClick={() => { if (!blocked) payment.setSaleType(type) }}
+                                        disabled={blocked}
                                         style={{
                                             background: active ? 'var(--toul-primary-dim)' : 'transparent',
                                             border: `1.5px solid ${active ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
                                             borderRadius: 10, padding: '14px 0',
                                             fontSize: 15, fontWeight: 700,
-                                            color: active ? 'var(--toul-primary)' : 'var(--toul-pos-text-sec)',
-                                            cursor: 'pointer', transition: 'all 120ms ease',
+                                            color: blocked ? 'var(--toul-pos-text-dim)' : active ? 'var(--toul-primary)' : 'var(--toul-pos-text-sec)',
+                                            cursor: blocked ? 'not-allowed' : 'pointer', transition: 'all 120ms ease',
+                                            opacity: blocked ? 0.5 : 1,
                                         }}
                                     >
                                         {type === 'contado' ? 'Contado' : 'Crédito'}
@@ -715,6 +722,17 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                 )
                             })}
                         </div>
+                        {!online && (
+                            <div style={{
+                                marginTop: 8, padding: '10px 12px', borderRadius: 10, background: 'var(--toul-pos-warning-dim)',
+                                display: 'flex', alignItems: 'center', gap: 8,
+                            }}>
+                                <WifiOff size={14} style={{ color: 'var(--toul-pos-warning)', flexShrink: 0 }} />
+                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--toul-pos-warning)' }}>
+                                    Sin internet: puedes seguir vendiendo de contado. El crédito necesita señal.
+                                </span>
+                            </div>
+                        )}
                     </Section>
 
                     {/* ── Cliente — identical to mobile ──────── */}
@@ -1059,7 +1077,7 @@ function ConfirmationPanel({ sale, onNewSale, onViewHistory, onPrint, printing }
                         ¡Venta lista!
                     </h2>
                     <p style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', margin: 0 }}>
-                        Inventario y caja actualizados
+                        {sale.offline ? 'Guardada en este computador · se envía sola al volver el internet' : 'Inventario y caja actualizados'}
                     </p>
                 </div>
             </div>
@@ -1164,7 +1182,7 @@ function ConfirmationPanel({ sale, onNewSale, onViewHistory, onPrint, printing }
                 >
                     {mode === 'caja' ? 'Nueva venta' : 'OK'}
                 </button>
-                {onPrint && sale.saleId && (
+                {onPrint && (sale.saleId || sale.receipt) && (
                     <button
                         onClick={onPrint}
                         disabled={printing}
@@ -1204,7 +1222,8 @@ export default function DesktopPOS() {
     const router = useRouter()
     const { cart, payment } = usePOSFlow()
     const { mutate: globalMutate } = useSWRConfig()
-    const { mode, role, autoPrint, onViewHistory } = usePOSMode()
+    const { mode, role, autoPrint, cashSessionId, sellerName, onViewHistory } = usePOSMode()
+    const { online, sync } = useOfflineSales()
 
     const [saleSnap, setSaleSnap] = useState<DesktopSaleSnapshot | null>(null)
     const [submitting, setSubmitting] = useState(false)
@@ -1238,6 +1257,32 @@ export default function DesktopPOS() {
         }
     }, [])
 
+    // Tirilla de una venta hecha sin internet: se arma con lo que hay en el computador
+    const buildLocalReceipt = useCallback((snapshot: SaleSnapshot, clientSaleId: string, soldAt: string): ReceiptData => {
+        const store = getCachedStoreInfo()
+        return {
+            saleId: clientSaleId,
+            createdAt: soldAt,
+            storeName: store?.name ?? 'TOUL',
+            nit: store?.nit ?? null,
+            address: store?.address ?? null,
+            phone: store?.phone ?? null,
+            footer: store?.receipt_footer ?? null,
+            sellerName: sellerName ?? null,
+            customerName: snapshot.customerName,
+            items: snapshot.items.map(i => ({
+                name: `${i.product.name}${i.variantName ? ` · ${i.variantName}` : ''}`,
+                quantity: i.quantity,
+                unitPrice: i.unitPrice ?? i.product.sale_price,
+            })),
+            subtotal: snapshot.subtotal ?? snapshot.total + snapshot.discount,
+            discount: snapshot.discount,
+            total: snapshot.total,
+            payments: snapshot.payments.map(p => ({ method: p.methodName, amount: p.amount })),
+            isCredit: snapshot.isCredit,
+        }
+    }, [sellerName])
+
     const handleSubmit = useCallback(async () => {
         if (submitting || cart.isEmpty) return
         setSubmitting(true)
@@ -1253,40 +1298,92 @@ export default function DesktopPOS() {
             customerName: payment.selectedCustomer?.name || payment.customerSearch || null,
         }
 
-        try {
-            const timeoutPromise = new Promise<{ success: false }>((_, reject) =>
-                setTimeout(() => reject(new Error('La solicitud tardó demasiado. Verifica tu conexión e intenta de nuevo.')), 10000)
-            )
-            const result = await Promise.race([
-                payment.submitSale({
-                    cartItems: cart.cartItems,
-                    subtotal: cart.subtotal,
-                    approvalId: needsApproval ? approval.requestId : null,
-                }),
-                timeoutPromise,
-            ])
+        // Identificador propio: si el envío se reintenta, el servidor no duplica la venta
+        const clientSaleId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+        const soldAt = new Date().toISOString()
+        const saleArgs = {
+            cartItems: cart.cartItems,
+            subtotal: cart.subtotal,
+            approvalId: needsApproval ? approval.requestId : null,
+            cashSessionId: cashSessionId ?? null,
+            clientSaleId,
+            soldAt,
+        }
 
+        const finish = (saleId?: string, receipt?: ReceiptData) => {
             setSubmitting(false)
+            setSaleSnap({ ...snapshot, saleId, receipt, offline: !saleId })
+            approval.reset()
+            if (mode === 'caja' && autoPrint) {
+                if (receipt) printReceipt(receipt)
+                else if (saleId) void handlePrint(saleId)
+            }
+            setTimeout(() => {
+                cart.clearCart()
+                payment.resetPayment()
+                globalMutate(() => true)
+            }, 300)
+        }
+
+        // Guardar en el computador para enviarla cuando vuelva el internet
+        const saveForLater = () => {
+            const receipt = buildLocalReceipt(snapshot, clientSaleId, soldAt)
+            const saved = queueSale({
+                clientSaleId,
+                soldAt,
+                total: snapshot.total,
+                body: payment.buildSaleBody(saleArgs),
+                receipt,
+            })
+            if (!saved) {
+                // Nunca dar por hecha una venta que no quedó guardada
+                setSubmitting(false)
+                setSubmitError('No se pudo guardar la venta en este computador. Anótala en papel y avisa al administrador.')
+                return
+            }
+            finish(undefined, receipt)
+            toast.success('Venta guardada. Se envía sola cuando vuelva el internet.')
+        }
+
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            // El crédito necesita señal (cliente, deuda y aprobación)
+            if (payment.saleType === 'credito') {
+                setSubmitting(false)
+                setSubmitError('Sin internet no se puede vender a crédito. Cobra de contado o espera señal.')
+                return
+            }
+            saveForLater()
+            return
+        }
+
+        try {
+            const timeoutPromise = new Promise<{ success: false; timedOut: true }>(resolve =>
+                setTimeout(() => resolve({ success: false, timedOut: true }), 10000)
+            )
+            const result = await Promise.race([payment.submitSale(saleArgs), timeoutPromise])
 
             if (result.success) {
-                const saleId = (result as { saleId?: string }).saleId
-                setSaleSnap({ ...snapshot, saleId })
-                approval.reset()
-                if (mode === 'caja' && autoPrint && saleId) void handlePrint(saleId)
-                setTimeout(() => {
-                    cart.clearCart()
-                    payment.resetPayment()
-                    globalMutate(() => true)
-                }, 300)
-            } else {
-                setSubmitError('No se pudo registrar la venta. Intenta de nuevo.')
+                finish((result as { saleId?: string }).saleId)
+                void sync()
+                return
             }
+
+            // Sin señal o el servidor no respondió: la venta no se pierde
+            if ('timedOut' in result || (result as { networkError?: boolean }).networkError) {
+                saveForLater()
+                return
+            }
+
+            setSubmitting(false)
+            setSubmitError('No se pudo registrar la venta. Intenta de nuevo.')
         } catch (err: unknown) {
             setSubmitting(false)
             const message = err instanceof Error ? err.message : 'Error inesperado al procesar la venta.'
             setSubmitError(message)
         }
-    }, [submitting, cart, payment, globalMutate, needsApproval, approval, mode, autoPrint, handlePrint])
+    }, [submitting, cart, payment, globalMutate, needsApproval, approval, mode, autoPrint, handlePrint, cashSessionId, buildLocalReceipt, sync])
 
     const handleNewSale = useCallback(() => {
         setSaleSnap(null)
@@ -1325,7 +1422,9 @@ export default function DesktopPOS() {
                         sale={saleSnap}
                         onNewSale={handleNewSale}
                         onViewHistory={handleViewHistory}
-                        onPrint={saleSnap.saleId ? () => handlePrint(saleSnap.saleId!) : undefined}
+                        onPrint={saleSnap.receipt
+                            ? () => printReceipt(saleSnap.receipt!)
+                            : saleSnap.saleId ? () => handlePrint(saleSnap.saleId!) : undefined}
                         printing={printing}
                     />
                 ) : (
@@ -1336,6 +1435,7 @@ export default function DesktopPOS() {
                         onClearError={() => setSubmitError(null)}
                         approval={approval}
                         needsApproval={needsApproval}
+                        online={online}
                     />
                 )}
             </div>

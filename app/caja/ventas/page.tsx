@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useCaja } from '@/components/isla/CajaContext'
 import { SaleDetail, SALE_LIST_SELECT, itemName, type SaleListRow } from '@/components/isla/SaleDetail'
+import { PendingSales } from '@/components/isla/PendingSales'
+import { useOfflineSales } from '@/lib/isla/useOffline'
 import { EASE_OUT_EMIL } from '@/components/ui'
 import type { SaleVoid } from '@/lib/isla/types'
 
@@ -15,6 +17,7 @@ const supabase = createClient()
 
 export default function CajaVentasPage() {
     const { ctx, session } = useCaja()
+    const offline = useOfflineSales()
     const [selected, setSelected] = useState<SaleListRow | null>(null)
 
     // Con turno abierto: ventas del turno. Sin turno: mis ventas de hoy.
@@ -112,6 +115,8 @@ export default function CajaVentasPage() {
                         })}
                     </div>
                 )}
+
+                <PendingSales offline={offline} />
 
                 {(data?.voids.length ?? 0) > 0 && (
                     <>

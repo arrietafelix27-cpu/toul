@@ -229,6 +229,14 @@ TOUL se está preparando para operar como sistema de una isla de perfumes (negoc
 - **Turnos**: cada movimiento de `payments` entra al turno abierto de quien lo registra. Cierre a ciegas con diferencia
 - Todo SQL del modo isla: `supabase/migration_v10_isla.sql`; despliegue en un solo archivo: `supabase/deploy_isla.sql`
 
+### Ventas sin internet y conteo de inventario (implementado)
+
+- **Sin señal la caja sigue vendiendo de contado**: la venta se guarda en el computador (`lib/isla/offline.ts`) y se envía sola al volver el internet. `sales.client_sale_id` garantiza que reintentar no duplique
+- El crédito requiere internet (necesita cliente y aprobación)
+- **Conteo de inventario** (`/inventory/conteo`, solo admin): conteo a ciegas, ajusta con `reason = 'count'` vía `toul_apply_inventory_count`. Lo no contado no se toca
+- SQL: `supabase/migration_v11_offline_conteo.sql`; despliegue: `supabase/deploy_offline_conteo.sql`
+- **Pruebas:** `npm run test:db` (PGlite + RLS real, `supabase/tests/`)
+
 ## Visión a futuro
 
 TOUL va a ser la app indispensable para cada emprendedor que quiera tener el control de su negocio. Modelo de suscripción mensual. Fácil de entender, fácil de usar, poderosa por dentro. La herramienta que hace que un emprendedor que vende por WhatsApp tenga el mismo control que una empresa grande, sin la complejidad.

@@ -8,6 +8,9 @@ import { ShoppingBag, ReceiptText, LockKeyhole, LayoutDashboard, LogOut, Printer
 import { POSProvider } from '@/components/pos/POSContext'
 import { CajaContext } from '@/components/isla/CajaContext'
 import { useOpenCashSession, useSessionContext } from '@/lib/isla/useSession'
+import { useOfflineSales } from '@/lib/isla/useOffline'
+import { cacheStoreInfo } from '@/lib/isla/offline'
+import { OfflineBar } from '@/components/isla/OfflineBar'
 import { createClient } from '@/lib/supabase/client'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 
@@ -35,6 +38,7 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     const [autoPrint, setAutoPrint] = useState(true)
     const [menuOpen, setMenuOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
+    const offline = useOfflineSales()
 
     useEffect(() => {
         try {
@@ -42,6 +46,20 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
             if (stored !== null) setAutoPrint(stored === '1')
         } catch { /* almacenamiento bloqueado: se usa el valor por defecto */ }
     }, [])
+
+    // La caja debe abrir aunque no haya internet, y la tirilla necesita
+    // los datos del negocio guardados en el computador
+    useEffect(() => {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => { /* sin soporte */ })
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!ctx?.storeId) return
+        createClient().from('stores').select('name, nit, address, phone, receipt_footer').eq('id', ctx.storeId).single()
+            .then(({ data }) => { if (data) cacheStoreInfo(data) })
+    }, [ctx?.storeId])
 
     useEffect(() => {
         if (!menuOpen) return
@@ -157,6 +175,8 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
                             </AnimatePresence>
                         </div>
                     </header>
+
+                    <OfflineBar offline={offline} />
 
                     <main style={{ flex: 1, minHeight: 0, position: 'relative' }}>
                         {children}

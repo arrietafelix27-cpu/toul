@@ -44,7 +44,8 @@ export interface POSPaymentState {
     canConfirm: boolean
 
     // Submit
-    submitSale: (payload: SalePayload) => Promise<{ success: boolean; saleId?: string }>
+    buildSaleBody: (payload: SalePayload) => Record<string, unknown>
+    submitSale: (payload: SalePayload) => Promise<{ success: boolean; saleId?: string; networkError?: boolean }>
 
     // Reset
     resetPayment: () => void
@@ -55,6 +56,12 @@ export interface SalePayload {
     subtotal: number
     /** Modo isla: aprobación del administrador para ventas a crédito de un vendedor */
     approvalId?: string | null
+    /** Turno de caja en el que se hace la venta */
+    cashSessionId?: string | null
+    /** Identificador propio de la venta: evita duplicados al reintentar el envío */
+    clientSaleId?: string
+    /** Hora real de la venta (importante para ventas hechas sin internet) */
+    soldAt?: string
 }
 
 export function usePOSPayment(
@@ -183,25 +190,30 @@ export function usePOSPayment(
         return true
     }, [cartIsEmpty, isCredit, selectedCustomer, customerSearch, dueDate, initialPayment, balanced, paymentSplits])
 
-    // Submit
-    const submitSale = useCallback(async (payload: SalePayload): Promise<{ success: boolean; saleId?: string }> => {
-        try {
-            const body = {
-                cart: payload.cartItems,
-                payments: paymentTarget > 0 ? paymentSplits : [],
-                discount: discountAmount,
-                subtotal: payload.subtotal,
-                total,
-                isCredit,
-                customerId: selectedCustomer?.id || null,
-                customerName: selectedCustomer ? selectedCustomer.name : (customerSearch.trim() || null),
-                customerPhone: selectedCustomer?.phone || null,
-                dueDate: isCredit ? dueDate : null,
-                initialPayment: paymentTarget,
-                notes: null,
-                approvalId: payload.approvalId ?? null,
-            }
+    // Armar el cuerpo de la venta (se usa también para guardarla sin internet)
+    const buildSaleBody = useCallback((payload: SalePayload): Record<string, unknown> => ({
+        cart: payload.cartItems,
+        payments: paymentTarget > 0 ? paymentSplits : [],
+        discount: discountAmount,
+        subtotal: payload.subtotal,
+        total,
+        isCredit,
+        customerId: selectedCustomer?.id || null,
+        customerName: selectedCustomer ? selectedCustomer.name : (customerSearch.trim() || null),
+        customerPhone: selectedCustomer?.phone || null,
+        dueDate: isCredit ? dueDate : null,
+        initialPayment: paymentTarget,
+        notes: null,
+        approvalId: payload.approvalId ?? null,
+        cashSessionId: payload.cashSessionId ?? null,
+        clientSaleId: payload.clientSaleId ?? null,
+        soldAt: payload.soldAt ?? new Date().toISOString(),
+    }), [paymentTarget, paymentSplits, discountAmount, total, isCredit, selectedCustomer, customerSearch, dueDate])
 
+    // Submit
+    const submitSale = useCallback(async (payload: SalePayload): Promise<{ success: boolean; saleId?: string; networkError?: boolean }> => {
+        const body = buildSaleBody(payload)
+        try {
             const res = await fetch('/api/sales', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -216,11 +228,13 @@ export function usePOSPayment(
             const result = await res.json()
             return { success: true, saleId: result.saleId }
         } catch (err: unknown) {
+            // Falla de red (sin internet): quien llama decide si la guarda para enviarla después
+            if (err instanceof TypeError) return { success: false, networkError: true }
             const message = err instanceof Error ? err.message : 'Error desconocido'
             toast.error(message)
             return { success: false }
         }
-    }, [paymentTarget, paymentSplits, discountAmount, total, isCredit, selectedCustomer, customerSearch, dueDate])
+    }, [buildSaleBody])
 
     // Reset
     const resetPayment = useCallback(() => {
@@ -244,6 +258,7 @@ export function usePOSPayment(
         selectedCustomer, setSelectedCustomer, customerSearch, setCustomerSearch,
         dueDate, setDueDate, initialPayment, setInitialPayment,
         canConfirm,
+        buildSaleBody,
         submitSale,
         resetPayment,
     }), [
@@ -255,6 +270,7 @@ export function usePOSPayment(
         selectedCustomer, setSelectedCustomer, customerSearch, setCustomerSearch,
         dueDate, setDueDate, initialPayment, setInitialPayment,
         canConfirm,
+        buildSaleBody,
         submitSale,
         resetPayment,
     ])

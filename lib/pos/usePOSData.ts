@@ -5,7 +5,25 @@ import useSWR from 'swr'
 import type { Product, PaymentMethodConfig, Customer } from '@/lib/types'
 
 // ─── Fetchers ─────────────────────────────────────────────────
-const jsonFetcher = (url: string) => fetch(url).then(r => r.json())
+// Guarda la última respuesta buena en el computador: si se cae internet,
+// la caja sigue mostrando productos, métodos de pago y clientes.
+const CACHE_PREFIX = 'toul-pos-cache:'
+
+const jsonFetcher = async (url: string) => {
+    try {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(String(res.status))
+        const data = await res.json()
+        try { localStorage.setItem(CACHE_PREFIX + url, JSON.stringify(data)) } catch { /* sin espacio */ }
+        return data
+    } catch (err) {
+        try {
+            const cached = localStorage.getItem(CACHE_PREFIX + url)
+            if (cached) return JSON.parse(cached)
+        } catch { /* sin almacenamiento */ }
+        throw err
+    }
+}
 
 // ─── Types ────────────────────────────────────────────────────
 export interface POSVariant {

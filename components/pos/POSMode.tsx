@@ -12,6 +12,10 @@ export interface POSModeValue {
     mode: 'drawer' | 'caja'
     role: MemberRole
     autoPrint: boolean
+    /** Turno de caja abierto (para ventas guardadas sin internet) */
+    cashSessionId?: string | null
+    /** Nombre de quien vende (sale en la tirilla) */
+    sellerName?: string | null
     onViewHistory?: () => void
 }
 

@@ -17,8 +17,10 @@ export default function CajaPage() {
         mode: 'caja',
         role: ctx.role,
         autoPrint,
+        cashSessionId: session?.id ?? null,
+        sellerName: ctx.displayName,
         onViewHistory: () => router.push('/caja/ventas'),
-    }), [ctx.role, autoPrint, router])
+    }), [ctx.role, autoPrint, session?.id, ctx.displayName, router])
 
     if (sessionLoading) {
         return (
