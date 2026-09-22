@@ -153,11 +153,12 @@ export default function Step1Products({ onContinue }: Props) {
                                     onClick={() => setShowFilterMenu(false)}
                                 />
                                 <div style={{
-                                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50,
-                                    background: 'var(--toul-pos-bg-card)',
-                                    border: '1.5px solid var(--toul-pos-border)',
-                                    borderRadius: 10, overflow: 'hidden',
-                                    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                                    position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 50,
+                                    background: 'var(--toul-surface-overlay)',
+                                    backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    borderRadius: 14, overflow: 'hidden',
+                                    boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
                                 }}>
                                     {FILTER_DEFS.map((fd, i) => {
                                         const active = filterType === fd.value
@@ -166,11 +167,11 @@ export default function Step1Products({ onContinue }: Props) {
                                                 key={fd.value}
                                                 onClick={() => { setFilterType(fd.value); setShowFilterMenu(false) }}
                                                 style={{
-                                                    width: '100%', padding: '10px 12px',
-                                                    display: 'flex', alignItems: 'center', gap: 8,
-                                                    background: active ? 'var(--toul-pos-green-dark)' : 'transparent',
+                                                    width: '100%', padding: '0 14px', height: 48,
+                                                    display: 'flex', alignItems: 'center', gap: 10,
+                                                    background: active ? 'var(--toul-surface-focused)' : 'transparent',
                                                     border: 'none',
-                                                    borderBottom: i < FILTER_DEFS.length - 1 ? '1px solid var(--toul-pos-border)' : 'none',
+                                                    borderBottom: i < FILTER_DEFS.length - 1 ? '1px solid var(--toul-divider)' : 'none',
                                                     cursor: 'pointer',
                                                 }}
                                             >

@@ -473,7 +473,8 @@ function ProductList() {
                     <div
                         style={{
                             position: 'absolute', inset: 0, zIndex: 20,
-                            background: 'rgba(0,0,0,0.45)',
+                            background: 'rgba(0,0,0,0.55)',
+                            backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             padding: 32,
                         }}
@@ -482,25 +483,34 @@ function ProductList() {
                         <div
                             onClick={e => e.stopPropagation()}
                             style={{
-                                background: 'var(--toul-pos-bg-card)', borderRadius: 16,
-                                width: '100%', maxWidth: 420,
+                                background: 'var(--toul-surface-overlay)', borderRadius: 24,
+                                width: '100%', maxWidth: 440,
                                 display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                                border: '1.5px solid var(--toul-pos-border)',
-                                maxHeight: '75%',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
+                                maxHeight: '78%',
                             }}
                         >
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                padding: '14px 16px', borderBottom: '1px solid var(--toul-pos-border)', flexShrink: 0,
+                                padding: '18px 20px 14px', borderBottom: '1px solid var(--toul-divider)', flexShrink: 0,
                             }}>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--toul-pos-text-main)' }}>
-                                    {product?.name}
+                                <span style={{ minWidth: 0 }}>
+                                    <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--toul-pos-text-sec)' }}>Elige la presentación</span>
+                                    <span style={{ display: 'block', fontSize: 19, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-pos-text-main)' }}>
+                                        {product?.name}
+                                    </span>
                                 </span>
                                 <button
                                     onClick={() => setExpandedVariantProduct(null)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--toul-pos-text-sec)', padding: 4, display: 'flex', alignItems: 'center' }}
+                                    aria-label="Cerrar"
+                                    style={{
+                                        width: 36, height: 36, borderRadius: 12, border: 'none', flexShrink: 0,
+                                        background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.7)',
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}
                                 >
-                                    <X size={16} />
+                                    <X size={17} />
                                 </button>
                             </div>
                             <div style={{ overflowY: 'auto', flex: 1 }}>
@@ -513,30 +523,42 @@ function ProductList() {
                                         <div
                                             key={key}
                                             style={{
-                                                display: 'flex', alignItems: 'center', gap: 12,
-                                                padding: '12px 16px', borderBottom: '1px solid var(--toul-pos-border)',
-                                                opacity: vOos ? 0.4 : 1,
+                                                display: 'flex', alignItems: 'center', gap: 12, minHeight: 64,
+                                                padding: '12px 20px', borderBottom: '1px solid var(--toul-divider)',
+                                                background: vSelected ? 'var(--toul-surface-focused)' : 'transparent',
+                                                transition: 'background var(--toul-transition)',
+                                                opacity: vOos ? 0.38 : 1,
                                                 pointerEvents: vOos ? 'none' : 'auto',
                                             }}
                                         >
                                             <div style={{ flex: 1 }}>
-                                                <p style={{ fontSize: 13, color: 'var(--toul-pos-text-main)', fontWeight: 600, margin: 0 }}>{variant.name}</p>
-                                                <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-                                                    <span style={{ fontSize: 12, color: 'var(--toul-primary)', fontWeight: 600 }}>{formatCOP(variant.sale_price)}</span>
-                                                    <span style={{ fontSize: 10, color: 'var(--toul-pos-text-dim)' }}>{vOos ? 'Sin stock' : `Stock: ${variant.stock}`}</span>
+                                                <p style={{ fontSize: 15, color: 'var(--toul-pos-text-main)', fontWeight: 600, letterSpacing: '-0.01em', margin: 0 }}>{variant.name}</p>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                                                    <span style={{ fontSize: 15, color: 'var(--toul-primary)', fontWeight: 700, letterSpacing: '-0.02em' }}>{formatCOP(variant.sale_price)}</span>
+                                                    <span style={{
+                                                        fontSize: 11, borderRadius: 999, padding: '2px 7px',
+                                                        color: vOos || variant.stock <= 3 ? 'var(--toul-pos-warning)' : 'var(--toul-pos-text-sec)',
+                                                        border: `1px solid ${vOos || variant.stock <= 3 ? 'rgba(255,214,10,0.3)' : 'var(--toul-pos-border)'}`,
+                                                    }}>
+                                                        {vOos ? 'Sin stock' : `${variant.stock} und`}
+                                                    </span>
                                                 </div>
                                             </div>
                                             {!vSelected ? (
                                                 <button
                                                     onClick={() => cart.addItem(key, variant.stock)}
                                                     style={{
-                                                        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                                                        background: 'var(--toul-pos-bg-card)', border: '1.5px solid var(--toul-pos-border)',
+                                                        width: 44, height: 44, borderRadius: 13, flexShrink: 0, border: 'none',
+                                                        background: 'var(--toul-primary)',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        cursor: 'pointer', color: 'var(--toul-pos-text-inactive)',
+                                                        cursor: 'pointer', color: '#000',
+                                                        transition: 'transform 100ms var(--toul-ease)',
                                                     }}
+                                                    onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.92)' }}
+                                                    onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                                                    onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
                                                 >
-                                                    <Plus size={14} />
+                                                    <Plus size={18} strokeWidth={2.6} />
                                                 </button>
                                             ) : (
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
