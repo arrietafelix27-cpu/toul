@@ -36,6 +36,7 @@ TOUL reemplaza el cuaderno, el Excel y el desorden.
 - Tema oscuro fijo — no hay tema claro ni personalización de tema
 - Color de acción principal: verde (`--toul-primary: #4ade80`)
 - Tokens CSS definidos en `app/globals.css` — todos los colores usan variables, cero hardcodeados en componentes
+- Desde v5.0 la caja (POS) usa el mismo lenguaje visual: los tokens `--toul-pos-*` apuntan al sistema global
 - Border-radius consistente, tipografía Inter, espaciados en múltiplos de 4px
 - Mobile: press states, no hover states. Sin modales pesados. Flujos en pasos.
 

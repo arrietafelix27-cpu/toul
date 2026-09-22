@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 22 de septiembre de 2026 (sesión 8 — ventas sin internet y conteo de inventario)*
+*Última actualización: 22 de septiembre de 2026 (sesión 9 — rediseño de la caja con el lenguaje visual global)*
 
 ---
 
@@ -389,9 +389,22 @@ Modals base rediseñados:
 
 `npm run build` pasa sin errores.
 
-### Sesión 8 — 22 de septiembre de 2026 ✅ construida, ⚠️ SQL sin ejecutar
+### Sesión 9 — 22 de septiembre de 2026 ✅ Rediseño de la caja (POS)
 
-`deploy_isla.sql` YA está aplicado en Supabase (verificado). Falta ejecutar `supabase/deploy_offline_conteo.sql`.
+La caja tenía paleta propia (azul marino `#0D1117` + verdes apagados `#4A6458`) y contrastaba con el resto de la app.
+
+- **`globals.css` v5.0:** los tokens `--toul-pos-*` ya no son una paleta aparte — apuntan al sistema global (negro puro, verde Apple, blancos con transparencia). Los nombres se conservan, así que la lógica de la caja no se tocó
+- **Fichas de producto:** foto 4:3, radio 16, nombre 14/600, precio 15/700 verde, chip de stock con borde (amarillo cuando quedan ≤3), "Sin stock" como etiqueta discreta arriba a la izquierda en vez de cortina roja
+- **Contador flotante** sobre la foto (− 1 +) con entrada spring; el − se vuelve papelera en la última unidad; botones de 36 px, `+` verde con icono negro
+- **Barra de cobro:** total a 30 px (26 en móvil) como elemento dominante, botón Confirmar de 56 px con glow verde y texto negro, fondo con frosted glass
+- **Objetivos táctiles** de 48 px o más en buscador, filtros, tipo de venta y métodos de pago; estados de presión (scale 0.97) en vez de hover
+- **Métodos de pago** con patrón "active container" y check con pop
+- Móvil (drawer del administrador): misma paleta, secciones 16 px de radio, total grande y botón de 52 px
+- Verificado en pantalla con datos de ejemplo a 1366×768
+
+### Sesión 8 — 22 de septiembre de 2026 ✅
+
+`deploy_isla.sql` y `deploy_offline_conteo.sql` aplicados en Supabase (verificado).
 
 **Ventas sin internet (`migration_v11_offline_conteo.sql` + `process_sale`):**
 - `sales.client_sale_id` + índice único por tienda: reintentar el envío nunca duplica una venta. El RPC devuelve `{duplicate: true}` con el mismo `saleId`

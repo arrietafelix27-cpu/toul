@@ -6,6 +6,7 @@ import {
     ShoppingBag, UserPlus, ChevronRight, AlertTriangle, RefreshCw, X, Layers,
     Printer, ShieldCheck, Clock, WifiOff, CloudUpload,
 } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { useSWRConfig } from 'swr'
 import { formatCOP } from '@/lib/utils'
@@ -44,9 +45,9 @@ function Section({ label, children }: { label: string; children: React.ReactNode
     return (
         <div style={{
             background: 'var(--toul-pos-bg-card)', border: `1px solid ${'var(--toul-pos-border)'}`,
-            borderRadius: 12, padding: '10px 12px',
+            borderRadius: 16, padding: '14px',
         }}>
-            <p style={{ fontSize: 9, color: 'var(--toul-pos-text-sec)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.2, margin: '0 0 8px' }}>
+            <p style={{ fontSize: 12, color: 'var(--toul-pos-text-sec)', fontWeight: 500, margin: '0 0 10px' }}>
                 {label}
             </p>
             {children}
@@ -122,27 +123,31 @@ function ProductList() {
             <div style={{ flexShrink: 0, marginBottom: 10 }}>
                 <div style={{ display: 'flex', gap: 8, marginBottom: showSort ? 8 : 0 }}>
                     <div style={{ flex: 1, position: 'relative' }}>
-                        <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-pos-text-sec)' }} />
+                        <Search size={17} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-pos-text-sec)' }} />
                         <input
                             ref={searchRef}
                             placeholder="Buscar producto..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
+                            onFocus={e => { e.currentTarget.style.background = 'var(--toul-surface-focused)'; e.currentTarget.style.borderColor = 'var(--toul-border-focused)' }}
+                            onBlur={e => { e.currentTarget.style.background = 'var(--toul-pos-bg-card)'; e.currentTarget.style.borderColor = 'var(--toul-pos-border)' }}
                             style={{
-                                width: '100%', background: 'var(--toul-pos-bg-card)', border: `1.5px solid ${'var(--toul-pos-border)'}`,
-                                borderRadius: 10, padding: '10px 12px 10px 36px', fontSize: 13,
+                                width: '100%', height: 48, background: 'var(--toul-pos-bg-card)', border: `1px solid ${'var(--toul-pos-border)'}`,
+                                borderRadius: 14, padding: '0 14px 0 42px', fontSize: 15, fontFamily: 'inherit',
                                 color: 'var(--toul-pos-text-main)', outline: 'none',
+                                transition: 'background var(--toul-transition), border-color var(--toul-transition)',
                             }}
                         />
                     </div>
                     <button
                         onClick={() => setShowSort(!showSort)}
                         style={{
-                            background: showSort ? 'var(--toul-pos-green-dark)' : 'var(--toul-pos-bg-card)',
-                            border: `1.5px solid ${showSort ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
-                            borderRadius: 10, width: 42, flexShrink: 0,
+                            background: showSort ? 'var(--toul-surface-focused)' : 'var(--toul-pos-bg-card)',
+                            border: `1px solid ${showSort ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
+                            borderRadius: 14, width: 48, height: 48, flexShrink: 0,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', color: showSort ? 'var(--toul-primary)' : 'var(--toul-pos-text-inactive)',
+                            cursor: 'pointer', color: showSort ? 'var(--toul-primary)' : 'var(--toul-pos-text-sec)',
+                            transition: 'background var(--toul-transition), border-color var(--toul-transition)',
                         }}
                     >
                         <SlidersHorizontal size={16} />
@@ -157,10 +162,11 @@ function ProductList() {
                                     key={s.key}
                                     onClick={() => { setSortKey(s.key); setShowSort(false) }}
                                     style={{
-                                        background: active ? 'var(--toul-pos-green-dark)' : 'transparent',
-                                        border: `1.5px solid ${active ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
-                                        borderRadius: 8, padding: '5px 10px', fontSize: 11, fontWeight: 600,
+                                        background: active ? 'var(--toul-surface-focused)' : 'transparent',
+                                        border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
+                                        borderRadius: 11, padding: '9px 14px', fontSize: 13, fontWeight: 500,
                                         color: active ? 'var(--toul-primary)' : 'var(--toul-pos-text-sec)', cursor: 'pointer',
+                                        fontFamily: 'inherit',
                                     }}
                                 >
                                     {s.label}
@@ -191,22 +197,27 @@ function ProductList() {
                                     key={product.id}
                                     onClick={() => setExpandedVariantProduct(product.id)}
                                     style={{
-                                        background: 'var(--toul-pos-bg-card)',
-                                        border: `1.5px solid ${anyInCart ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
-                                        borderRadius: 14, overflow: 'hidden',
-                                        cursor: 'pointer', transition: 'border-color 120ms ease',
+                                        background: anyInCart ? 'var(--toul-surface-focused)' : 'var(--toul-pos-bg-card)',
+                                        border: `1px solid ${anyInCart ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
+                                        borderRadius: 16, overflow: 'hidden',
+                                        cursor: 'pointer',
+                                        transition: 'background var(--toul-transition), border-color var(--toul-transition), transform 120ms var(--toul-ease)',
                                         display: 'flex', flexDirection: 'column',
                                     }}
+                                    onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.975)' }}
+                                    onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                                    onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
                                 >
                                     <div style={{
-                                        width: '100%', aspectRatio: '1', background: 'var(--toul-pos-bg-main)',
+                                        width: '100%', aspectRatio: '4 / 3',
+                                        background: 'linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         overflow: 'hidden', position: 'relative',
                                     }}>
                                         {img ? (
                                             <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
                                         ) : (
-                                            <Package size={28} style={{ color: 'var(--toul-pos-text-inactive)' }} />
+                                            <Package size={26} style={{ color: 'var(--toul-pos-text-inactive)' }} />
                                         )}
                                         {anyInCart && (
                                             <div style={{
@@ -219,13 +230,13 @@ function ProductList() {
                                             </div>
                                         )}
                                     </div>
-                                    <div style={{ padding: '10px 12px 10px' }}>
-                                        <p style={{ fontSize: 13, color: 'var(--toul-pos-text-main)', fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <div style={{ padding: '10px 12px 12px' }}>
+                                        <p style={{ fontSize: 14, color: 'var(--toul-pos-text-main)', fontWeight: 600, letterSpacing: '-0.01em', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {product.name}
                                         </p>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                                            <span style={{ fontSize: 12, color: 'var(--toul-primary)', fontWeight: 700 }}>{priceLabel}</span>
-                                            <span style={{ fontSize: 10, color: 'var(--toul-pos-text-sec)', background: 'var(--toul-pos-bg-main)', padding: '2px 6px', borderRadius: 4 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 5 }}>
+                                            <span style={{ fontSize: 15, color: 'var(--toul-primary)', fontWeight: 700, letterSpacing: '-0.02em' }}>{priceLabel}</span>
+                                            <span style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', border: '1px solid var(--toul-pos-border)', padding: '2px 7px', borderRadius: 999 }}>
                                                 {variants.length} var
                                             </span>
                                         </div>
@@ -244,95 +255,113 @@ function ProductList() {
                                 key={product.id}
                                 onClick={() => { if (!oos && !selected) cart.addItem(product.id, product.stock) }}
                                 style={{
-                                    background: 'var(--toul-pos-bg-card)',
-                                    border: `1.5px solid ${selected ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
-                                    borderRadius: 14, overflow: 'hidden',
-                                    opacity: oos ? 0.4 : 1,
+                                    position: 'relative',
+                                    background: selected ? 'var(--toul-surface-focused)' : 'var(--toul-pos-bg-card)',
+                                    border: `1px solid ${selected ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
+                                    borderRadius: 16, overflow: 'hidden',
                                     pointerEvents: oos ? 'none' : 'auto',
                                     cursor: oos ? 'default' : 'pointer',
-                                    transition: 'border-color 120ms ease',
+                                    transition: 'background var(--toul-transition), border-color var(--toul-transition), transform 120ms var(--toul-ease)',
                                     display: 'flex', flexDirection: 'column',
                                 }}
+                                onPointerDown={e => { if (!selected) e.currentTarget.style.transform = 'scale(0.975)' }}
+                                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
                             >
                                 <div style={{
-                                    width: '100%', aspectRatio: '1', background: 'var(--toul-pos-bg-main)',
+                                    width: '100%', aspectRatio: '4 / 3',
+                                    background: 'linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     overflow: 'hidden', position: 'relative',
+                                    opacity: oos ? 0.38 : 1,
                                 }}>
                                     {img ? (
                                         <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
                                     ) : (
-                                        <Package size={28} style={{ color: 'var(--toul-pos-text-inactive)' }} />
+                                        <Package size={26} style={{ color: 'var(--toul-pos-text-inactive)' }} />
                                     )}
-                                    {oos && (
-                                        <div style={{
-                                            position: 'absolute', inset: 0,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            background: 'rgba(0,0,0,0.55)',
-                                        }}>
-                                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--toul-pos-error)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sin stock</span>
-                                        </div>
-                                    )}
-                                    {selected && (
-                                        <div style={{
-                                            position: 'absolute', top: 8, right: 8,
-                                            width: 22, height: 22, borderRadius: '50%',
-                                            background: 'var(--toul-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                                        }}>
-                                            <Check size={12} style={{ color: 'var(--toul-pos-bg-main)', strokeWidth: 3 }} />
-                                        </div>
+                                {selected && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                                            style={{
+                                                position: 'absolute', left: 8, right: 8, bottom: 8, height: 46,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                padding: '0 6px', borderRadius: 14,
+                                                background: 'rgba(10,10,10,0.72)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+                                                border: '1px solid var(--toul-border-focused)',
+                                            }}
+                                        >
+                                            <button
+                                                onClick={e => { e.stopPropagation(); cart.decrementItem(product.id) }}
+                                                aria-label={qty === 1 ? 'Quitar del carrito' : 'Quitar uno'}
+                                                style={{
+                                                    width: 36, height: 36, borderRadius: 11, border: 'none',
+                                                    background: qty === 1 ? 'var(--toul-pos-error-dim)' : 'var(--toul-surface-2)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    cursor: 'pointer', color: qty === 1 ? 'var(--toul-pos-error)' : 'var(--toul-pos-text-main)',
+                                                    transition: 'transform 100ms var(--toul-ease)',
+                                                }}
+                                                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.9)' }}
+                                                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                                                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                                            >
+                                                {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
+                                            </button>
+                                            <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--toul-pos-text-main)', letterSpacing: '-0.02em' }}>
+                                                {qty}
+                                            </span>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); cart.addItem(product.id, product.stock) }}
+                                                disabled={qty >= product.stock}
+                                                aria-label="Agregar uno"
+                                                style={{
+                                                    width: 36, height: 36, borderRadius: 11, border: 'none',
+                                                    background: 'var(--toul-primary)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    cursor: qty >= product.stock ? 'default' : 'pointer',
+                                                    color: '#000', opacity: qty >= product.stock ? 0.3 : 1,
+                                                    transition: 'transform 100ms var(--toul-ease)',
+                                                }}
+                                                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.9)' }}
+                                                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                                                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                                            >
+                                                <Plus size={16} strokeWidth={2.6} />
+                                            </button>
+                                        </motion.div>
                                     )}
                                 </div>
-                                <div style={{ padding: '10px 12px 8px' }}>
-                                    <p style={{ fontSize: 13, color: 'var(--toul-pos-text-main)', fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {oos && (
+                                    <span style={{
+                                        position: 'absolute', top: 10, left: 10,
+                                        fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+                                        color: 'var(--toul-pos-text-sec)', background: 'rgba(10,10,10,0.75)',
+                                        backdropFilter: 'blur(8px)', borderRadius: 999, padding: '4px 9px',
+                                    }}>
+                                        Sin stock
+                                    </span>
+                                )}
+                                <div style={{ padding: '10px 12px 12px', opacity: oos ? 0.38 : 1 }}>
+                                    <p style={{ fontSize: 14, color: 'var(--toul-pos-text-main)', fontWeight: 600, letterSpacing: '-0.01em', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                         {product.name}
                                     </p>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                                        <span style={{ fontSize: 13, color: 'var(--toul-primary)', fontWeight: 700 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 5 }}>
+                                        <span style={{ fontSize: 15, color: 'var(--toul-primary)', fontWeight: 700, letterSpacing: '-0.02em' }}>
                                             {formatCOP(product.sale_price)}
                                         </span>
                                         {!oos && (
-                                            <span style={{ fontSize: 10, color: 'var(--toul-pos-text-sec)', background: 'var(--toul-pos-bg-main)', padding: '2px 6px', borderRadius: 4 }}>
+                                            <span style={{
+                                                fontSize: 11, borderRadius: 999, padding: '2px 7px',
+                                                color: product.stock <= 3 ? 'var(--toul-pos-warning)' : 'var(--toul-pos-text-sec)',
+                                                border: `1px solid ${product.stock <= 3 ? 'rgba(255,214,10,0.3)' : 'var(--toul-pos-border)'}`,
+                                            }}>
                                                 {product.stock} und
                                             </span>
                                         )}
                                     </div>
                                 </div>
-                                {selected && (
-                                    <div style={{
-                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                        padding: '6px 12px 10px', borderTop: `1px solid ${'var(--toul-pos-border)'}`,
-                                    }}>
-                                        <button
-                                            onClick={e => { e.stopPropagation(); cart.decrementItem(product.id) }}
-                                            style={{
-                                                width: 30, height: 30, borderRadius: 8, border: 'none',
-                                                background: qty === 1 ? 'var(--toul-pos-error-dim)' : 'var(--toul-pos-green-dark)',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                cursor: 'pointer', color: qty === 1 ? 'var(--toul-pos-error)' : 'var(--toul-primary)',
-                                            }}
-                                        >
-                                            {qty === 1 ? <Trash2 size={14} /> : <Minus size={14} />}
-                                        </button>
-                                        <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--toul-primary)' }}>
-                                            {qty}
-                                        </span>
-                                        <button
-                                            onClick={e => { e.stopPropagation(); cart.addItem(product.id, product.stock) }}
-                                            disabled={qty >= product.stock}
-                                            style={{
-                                                width: 30, height: 30, borderRadius: 8, border: 'none',
-                                                background: 'var(--toul-pos-green-dark)',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                cursor: qty >= product.stock ? 'default' : 'pointer',
-                                                color: 'var(--toul-primary)', opacity: qty >= product.stock ? 0.3 : 1,
-                                            }}
-                                        >
-                                            <Plus size={14} />
-                                        </button>
-                                    </div>
-                                )}
                             </div>
                         )
                     })}
@@ -347,8 +376,8 @@ function ProductList() {
                 {data.combos.length > 0 && (
                     <div style={{ marginTop: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                            <Layers size={12} style={{ color: 'var(--toul-pos-text-sec)' }} />
-                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--toul-pos-text-sec)', textTransform: 'uppercase', letterSpacing: 1 }}>Combos</span>
+                            <Layers size={14} style={{ color: 'var(--toul-pos-text-sec)' }} />
+                            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--toul-pos-text-sec)' }}>Combos</span>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
                             {data.combos.map(combo => {
@@ -360,11 +389,12 @@ function ProductList() {
                                         key={combo.id}
                                         onClick={() => { if (!selected) cart.addCombo(combo.id) }}
                                         style={{
-                                            background: 'var(--toul-pos-bg-card)',
-                                            border: `1.5px solid ${selected ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
-                                            borderRadius: 14, overflow: 'hidden',
+                                            position: 'relative',
+                                            background: selected ? 'var(--toul-surface-focused)' : 'var(--toul-pos-bg-card)',
+                                            border: `1px solid ${selected ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
+                                            borderRadius: 16, overflow: 'hidden',
                                             cursor: selected ? 'default' : 'pointer',
-                                            transition: 'border-color 120ms ease',
+                                            transition: 'background var(--toul-transition), border-color var(--toul-transition)',
                                             display: 'flex', flexDirection: 'column',
                                         }}
                                     >
@@ -650,12 +680,14 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                                 )}
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <p style={{ fontSize: 12, color: 'var(--toul-pos-text-main)', fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                <p style={{ fontSize: 14, color: 'var(--toul-pos-text-main)', fontWeight: 600, letterSpacing: '-0.01em', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                     {item.product.name}{item.variantName ? ` · ${item.variantName}` : ''}
                                                 </p>
-                                                <p style={{ fontSize: 10, color: 'var(--toul-pos-text-sec)', margin: 0 }}>×{item.quantity}</p>
+                                                <p style={{ fontSize: 12, color: 'var(--toul-pos-text-sec)', margin: 0 }}>
+                                                    {item.quantity} × {formatCOP(item.unitPrice ?? item.product.sale_price)}
+                                                </p>
                                             </div>
-                                            <span style={{ fontSize: 12, color: 'var(--toul-pos-text-main)', fontWeight: 600, fontFamily: 'monospace', flexShrink: 0 }}>
+                                            <span style={{ fontSize: 14, color: 'var(--toul-pos-text-main)', fontWeight: 600, flexShrink: 0 }}>
                                                 {formatCOP((item.unitPrice ?? item.product.sale_price) * item.quantity)}
                                             </span>
                                         </div>
@@ -710,8 +742,8 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                         style={{
                                             background: active ? 'var(--toul-primary-dim)' : 'transparent',
                                             border: `1.5px solid ${active ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
-                                            borderRadius: 10, padding: '14px 0',
-                                            fontSize: 15, fontWeight: 700,
+                                            borderRadius: 13, height: 50, fontFamily: 'inherit',
+                                            fontSize: 15, fontWeight: 600,
                                             color: blocked ? 'var(--toul-pos-text-dim)' : active ? 'var(--toul-primary)' : 'var(--toul-pos-text-sec)',
                                             cursor: blocked ? 'not-allowed' : 'pointer', transition: 'all 120ms ease',
                                             opacity: blocked ? 0.5 : 1,
@@ -864,22 +896,25 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                             key={m.id}
                                             onClick={() => payment.toggleMethod(m)}
                                             style={{
-                                                background: isActive ? 'var(--toul-pos-green-surface)' : 'var(--toul-pos-bg-card)',
-                                                border: `1.5px solid ${isActive ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
-                                                borderRadius: 12, padding: 12, cursor: 'pointer',
+                                                background: isActive ? 'var(--toul-surface-focused)' : 'transparent',
+                                                border: `1px solid ${isActive ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
+                                                borderRadius: 13, height: 54, padding: '0 12px', cursor: 'pointer',
                                                 display: 'flex', alignItems: 'center', gap: 10,
-                                                position: 'relative', textAlign: 'left',
-                                                transition: 'all 120ms ease',
+                                                position: 'relative', textAlign: 'left', fontFamily: 'inherit',
+                                                transition: 'background var(--toul-transition), border-color var(--toul-transition)',
                                             }}
                                         >
                                             {isActive && (
-                                                <div style={{
-                                                    position: 'absolute', top: 6, right: 6,
-                                                    width: 16, height: 16, borderRadius: '50%',
-                                                    background: 'var(--toul-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                }}>
-                                                    <Check size={10} style={{ color: 'var(--toul-pos-bg-main)' }} />
-                                                </div>
+                                                <motion.div
+                                                    initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                                    transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+                                                    style={{
+                                                        position: 'absolute', top: 7, right: 7,
+                                                        width: 17, height: 17, borderRadius: '50%',
+                                                        background: 'var(--toul-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    }}>
+                                                    <Check size={10} strokeWidth={3.5} style={{ color: '#000' }} />
+                                                </motion.div>
                                             )}
                                             <div style={{
                                                 width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
@@ -888,7 +923,7 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                             }}>
                                                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: m.color }} />
                                             </div>
-                                            <span style={{ fontSize: 12, color: 'var(--toul-pos-text-main)', fontWeight: 600 }}>
+                                            <span style={{ fontSize: 14, color: 'var(--toul-pos-text-main)', fontWeight: 500 }}>
                                                 {m.name}
                                             </span>
                                         </button>
@@ -960,17 +995,20 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
             {/* ── Sticky footer — mirrors mobile Step2 footer ── */}
             <div style={{
                 flexShrink: 0, borderTop: `1px solid ${'var(--toul-pos-footer-border)'}`,
-                padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                background: 'var(--toul-pos-bg-main)',
+                padding: '14px 20px calc(14px + env(safe-area-inset-bottom, 0px))',
+                display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'space-between',
+                background: 'rgba(10,10,10,0.9)', backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)',
             }}>
-                <div>
-                    <p style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', margin: 0 }}>
+                <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: 'var(--toul-pos-text-sec)', margin: 0 }}>
                         {cart.cartItems.length} prod · {cart.totalUnits} und
+                        {payment.discountAmount > 0 && (
+                            <span style={{ color: 'var(--toul-primary)' }}> · −{formatCOP(payment.discountAmount)} desc.</span>
+                        )}
                     </p>
-                    {payment.discountAmount > 0 && (
-                        <p style={{ fontSize: 10, color: 'var(--toul-primary)', margin: 0 }}>−{formatCOP(payment.discountAmount)} desc.</p>
-                    )}
-                    <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--toul-pos-text-main)', margin: 0 }}>{formatCOP(payment.total)}</p>
+                    <p style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.1, color: 'var(--toul-pos-text-main)', margin: 0 }}>
+                        {formatCOP(payment.total)}
+                    </p>
                 </div>
                 {(() => {
                     // Vendedor + crédito: primero pedir aprobación, luego confirmar
@@ -987,8 +1025,9 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                             style={{
                                 background: disabled ? 'var(--toul-pos-btn-disabled-bg)' : 'var(--toul-primary)',
                                 color: disabled ? 'var(--toul-pos-text-dim)' : 'var(--toul-pos-bg-main)',
-                                border: 'none', borderRadius: 12, padding: '14px 22px', minHeight: 50,
-                                fontSize: 15, fontWeight: 700, cursor: disabled ? 'default' : 'pointer',
+                                border: 'none', borderRadius: 16, padding: '0 26px', height: 56, flexShrink: 0,
+                                fontSize: 16, fontWeight: 600, cursor: disabled ? 'default' : 'pointer',
+                                boxShadow: disabled ? 'none' : '0 6px 26px var(--toul-accent-glow)',
                                 display: 'flex', alignItems: 'center', gap: 8,
                                 transition: 'transform 120ms var(--toul-ease), background 150ms var(--toul-ease)',
                             }}

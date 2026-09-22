@@ -19,9 +19,9 @@ function Section({ label, children }: { label: string; children: React.ReactNode
     return (
         <div style={{
             background: 'var(--toul-pos-bg-card)', border: '1px solid var(--toul-pos-border)',
-            borderRadius: 12, padding: '10px 12px',
+            borderRadius: 16, padding: '14px',
         }}>
-            <p style={{ fontSize: 9, color: 'var(--toul-pos-text-sec)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.2, margin: '0 0 8px' }}>
+            <p style={{ fontSize: 12, color: 'var(--toul-pos-text-sec)', fontWeight: 500, margin: '0 0 10px' }}>
                 {label}
             </p>
             {children}
@@ -130,8 +130,8 @@ export default function Step2Payment({ onBack, onConfirm, submitting, error, onC
                                         style={{
                                             background: active ? 'var(--toul-primary-dim)' : 'transparent',
                                             border: `1.5px solid ${active ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
-                                            borderRadius: 10, padding: '14px 0',
-                                            fontSize: 15, fontWeight: 700,
+                                            borderRadius: 13, height: 50, fontFamily: 'inherit',
+                                            fontSize: 15, fontWeight: 600,
                                             color: active ? 'var(--toul-primary)' : 'var(--toul-pos-text-sec)',
                                             cursor: 'pointer', transition: 'all 120ms ease',
                                         }}
@@ -271,22 +271,22 @@ export default function Step2Payment({ onBack, onConfirm, submitting, error, onC
                                             key={m.id}
                                             onClick={() => payment.toggleMethod(m)}
                                             style={{
-                                                background: isActive ? 'var(--toul-pos-green-surface)' : 'var(--toul-pos-bg-card)',
-                                                border: `1.5px solid ${isActive ? 'var(--toul-primary)' : 'var(--toul-pos-border)'}`,
-                                                borderRadius: 12, padding: 12, cursor: 'pointer',
+                                                background: isActive ? 'var(--toul-surface-focused)' : 'transparent',
+                                                border: `1px solid ${isActive ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
+                                                borderRadius: 13, height: 54, padding: '0 12px', cursor: 'pointer',
                                                 display: 'flex', alignItems: 'center', gap: 10,
-                                                position: 'relative', textAlign: 'left',
-                                                transition: 'all 120ms ease',
+                                                position: 'relative', textAlign: 'left', fontFamily: 'inherit',
+                                                transition: 'background var(--toul-transition), border-color var(--toul-transition)',
                                             }}
                                         >
                                             {/* Check badge */}
                                             {isActive && (
                                                 <div style={{
-                                                    position: 'absolute', top: 6, right: 6,
-                                                    width: 16, height: 16, borderRadius: '50%',
+                                                    position: 'absolute', top: 7, right: 7,
+                                                    width: 17, height: 17, borderRadius: '50%',
                                                     background: 'var(--toul-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                 }}>
-                                                    <Check size={10} style={{ color: 'var(--toul-pos-bg-main)' }} />
+                                                    <Check size={10} strokeWidth={3.5} style={{ color: '#000' }} />
                                                 </div>
                                             )}
                                             {/* Icon circle */}
@@ -371,16 +371,20 @@ export default function Step2Payment({ onBack, onConfirm, submitting, error, onC
             <div style={{
                 position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
                 background: 'var(--toul-pos-bg-main)', borderTop: '1px solid var(--toul-pos-footer-border)',
-                padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '12px 16px calc(12px + env(safe-area-inset-bottom, 0px))',
+                display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between',
+                backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)',
             }}>
-                <div>
-                    <p style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', margin: 0 }}>
+                <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: 'var(--toul-pos-text-sec)', margin: 0 }}>
                         {cart.cartItems.length} prod · {cart.totalUnits} und
+                        {payment.discountAmount > 0 && (
+                            <span style={{ color: 'var(--toul-primary)' }}> · −{formatCOP(payment.discountAmount)} desc.</span>
+                        )}
                     </p>
-                    {payment.discountAmount > 0 && (
-                        <p style={{ fontSize: 10, color: 'var(--toul-primary)', margin: 0 }}>−{formatCOP(payment.discountAmount)} desc.</p>
-                    )}
-                    <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--toul-pos-text-main)', margin: 0 }}>{formatCOP(payment.total)}</p>
+                    <p style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.15, color: 'var(--toul-pos-text-main)', margin: 0 }}>
+                        {formatCOP(payment.total)}
+                    </p>
                 </div>
                 <button
                     onClick={onConfirm}
@@ -388,9 +392,11 @@ export default function Step2Payment({ onBack, onConfirm, submitting, error, onC
                     style={{
                         background: (!payment.canConfirm || submitting) ? 'var(--toul-pos-btn-disabled-bg)' : 'var(--toul-primary)',
                         color: (!payment.canConfirm || submitting) ? 'var(--toul-pos-text-dim)' : 'var(--toul-pos-bg-main)',
-                        border: 'none', borderRadius: 10, padding: '12px 18px',
-                        fontSize: 13, fontWeight: 700, cursor: (!payment.canConfirm || submitting) ? 'default' : 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 6,
+                        border: 'none', borderRadius: 14, padding: '0 20px', height: 52, flexShrink: 0,
+                        fontSize: 15, fontWeight: 600, cursor: (!payment.canConfirm || submitting) ? 'default' : 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
+                        boxShadow: (!payment.canConfirm || submitting) ? 'none' : '0 6px 24px var(--toul-accent-glow)',
+                        transition: 'transform 120ms var(--toul-ease)',
                     }}
                 >
                     {submitting ? (

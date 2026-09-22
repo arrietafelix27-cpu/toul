@@ -51,7 +51,6 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
     const [count, setCount] = useState<CountState | null>(null)
     const [rows, setRows] = useState<Row[]>([])
     const [counted, setCounted] = useState<Record<string, string>>({})
-    const [itemIds, setItemIds] = useState<Record<string, string>>({})
     const [applied, setApplied] = useState<AppliedItem[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
@@ -121,7 +120,6 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
             setApplied((itemsRes.data ?? []) as AppliedItem[])
             setRows(built)
             setCounted(values)
-            setItemIds(ids)
             setLoading(false)
         }
 
@@ -150,7 +148,6 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
 
         if (data) {
             itemIdsRef.current[row.key] = data.id
-            setItemIds(prev => ({ ...prev, [row.key]: data.id }))
             return
         }
 

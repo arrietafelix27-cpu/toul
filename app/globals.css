@@ -61,28 +61,31 @@
   --toul-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   /* ============================================================
-     POS — identidad visual propia (preserved, not migrated)
+     POS — mismo lenguaje que el resto de la app (v5.0)
+     Antes tenía paleta propia (azul marino + verdes apagados);
+     ahora los tokens apuntan al sistema global. Se conservan los
+     nombres --toul-pos-* para no tocar la lógica de la caja.
      ============================================================ */
-  --toul-pos-bg-main: #0D1117;
-  --toul-pos-bg-card: #141B22;
-  --toul-pos-border: #1E2D26;
-  --toul-pos-green-dark: #0D1B15;
-  --toul-pos-green-mint: #0D2A1E;
-  --toul-pos-green-surface: #0A1F14;
-  --toul-pos-text-main: #FFFFFF;
-  --toul-pos-text-sec: #4A6458;
-  --toul-pos-text-inactive: #3A4A42;
-  --toul-pos-text-dim: #2A4A38;
-  --toul-pos-control-bar: #0A1A12;
-  --toul-pos-footer-border: #1A2228;
-  --toul-pos-btn-disabled-bg: #1A2D24;
-  --toul-pos-pill-done: #0F6E56;
-  --toul-pos-error: #E24B4A;
-  --toul-pos-error-dim: rgba(226, 75, 74, 0.12);
-  --toul-pos-error-dim-strong: rgba(226, 75, 74, 0.15);
-  --toul-pos-error-border: rgba(226, 75, 74, 0.3);
-  --toul-pos-warning: #FFB400;
-  --toul-pos-warning-dim: rgba(255, 180, 0, 0.08);
+  --toul-pos-bg-main: #0a0a0a;
+  --toul-pos-bg-card: rgba(255, 255, 255, 0.05);
+  --toul-pos-border: rgba(255, 255, 255, 0.07);
+  --toul-pos-green-dark: rgba(50, 215, 75, 0.12);
+  --toul-pos-green-mint: rgba(50, 215, 75, 0.12);
+  --toul-pos-green-surface: rgba(50, 215, 75, 0.06);
+  --toul-pos-text-main: #ffffff;
+  --toul-pos-text-sec: rgba(255, 255, 255, 0.45);
+  --toul-pos-text-inactive: rgba(255, 255, 255, 0.25);
+  --toul-pos-text-dim: rgba(255, 255, 255, 0.25);
+  --toul-pos-control-bar: rgba(255, 255, 255, 0.04);
+  --toul-pos-footer-border: rgba(255, 255, 255, 0.07);
+  --toul-pos-btn-disabled-bg: rgba(255, 255, 255, 0.07);
+  --toul-pos-pill-done: rgba(50, 215, 75, 0.35);
+  --toul-pos-error: #ff453a;
+  --toul-pos-error-dim: rgba(255, 69, 58, 0.12);
+  --toul-pos-error-dim-strong: rgba(255, 69, 58, 0.16);
+  --toul-pos-error-border: rgba(255, 69, 58, 0.3);
+  --toul-pos-warning: #ffd60a;
+  --toul-pos-warning-dim: rgba(255, 214, 10, 0.12);
 }
 
 /* ============================================================
