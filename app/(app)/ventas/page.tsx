@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { Clock, X, Printer, Ban } from 'lucide-react'
+import { Clock, X, Printer, Ban, Search, SlidersHorizontal } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
@@ -50,8 +50,19 @@ interface VentaData {
     is_credit: boolean
     customer_name: string | null
     seller_name?: string | null
+    cash_session_id?: string | null
     sale_items: SaleItem[]
+    sale_payments?: { amount: number; payment_methods: { name: string } | null }[]
 }
+
+type Kind = 'todas' | 'contado' | 'credito' | 'descuento'
+
+const KINDS: { value: Kind; label: string }[] = [
+    { value: 'todas', label: 'Todas' },
+    { value: 'contado', label: 'Contado' },
+    { value: 'credito', label: 'Crédito' },
+    { value: 'descuento', label: 'Con descuento' },
+]
 
 export default function VentasPage() {
     const supabase = createClient()
@@ -65,23 +76,33 @@ export default function VentasPage() {
     const [limit, setLimit] = useState(PAGE_SIZE)
     const [hasMore, setHasMore] = useState(true)
     const [view, setView] = useState<'ventas' | 'anuladas'>('ventas')
+    const [seller, setSeller] = useState<string>('todos')
+    const [kind, setKind] = useState<Kind>('todas')
+    const [query, setQuery] = useState('')
+    const [showFilters, setShowFilters] = useState(false)
     const [voidOpen, setVoidOpen] = useState(false)
     const [printing, setPrinting] = useState(false)
 
     // Using SWR for caching and consistency
     const { data: sales, isLoading, isValidating, mutate } = useSWR<VentaData[]>(
-        storeId ? ['sales', storeId, period, fromDate, toDate, limit] : null,
+        storeId ? ['sales', storeId, period, fromDate, toDate, limit, seller, kind] : null,
         async () => {
             const range = getRange(period, fromDate, toDate)
             // seller_name existe desde migration_v10 (modo isla); si falta, se reintenta sin él
-            const baseSelect = 'id, created_at, total, discount, payment_method, is_credit, customer_name, sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url))'
-            const run = (select: string) => supabase.from('sales')
-                .select(select)
-                .eq('store_id', storeId)
-                .order('created_at', { ascending: false })
-                .gte('created_at', range.from || '1970-01-01')
-                .lte('created_at', range.to || '9999-12-31')
-                .limit(limit + 1)
+            const baseSelect = 'id, created_at, total, discount, payment_method, is_credit, customer_name, cash_session_id, sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url)), sale_payments(amount, payment_methods(name))'
+            const run = (select: string) => {
+                let q = supabase.from('sales')
+                    .select(select)
+                    .eq('store_id', storeId)
+                    .order('created_at', { ascending: false })
+                    .gte('created_at', range.from || '1970-01-01')
+                    .lte('created_at', range.to || '9999-12-31')
+                if (seller !== 'todos') q = q.eq('seller_name', seller)
+                if (kind === 'contado') q = q.eq('is_credit', false)
+                if (kind === 'credito') q = q.eq('is_credit', true)
+                if (kind === 'descuento') q = q.gt('discount', 0)
+                return q.limit(limit + 1)
+            }
 
             let { data, error } = await run(`${baseSelect}, seller_name`)
             if (error) ({ data, error } = await run(baseSelect))
@@ -98,6 +119,11 @@ export default function VentasPage() {
         },
         { revalidateOnFocus: false, dedupingInterval: 30000 }
     )
+
+    const { data: sellers } = useSWR(storeId ? ['sellers', storeId] : null, async () => {
+        const { data } = await supabase.from('store_members').select('display_name').eq('store_id', storeId).order('created_at')
+        return (data ?? []).map(m => m.display_name as string)
+    }, { revalidateOnFocus: false })
 
     const { data: voids } = useSWR<SaleVoid[]>(
         storeId && view === 'anuladas' ? ['sale-voids', storeId, period, fromDate, toDate] : null,
@@ -124,14 +150,26 @@ export default function VentasPage() {
         }
     }
 
-    const totals = useMemo(() => {
+    // Búsqueda por cliente o producto sobre las ventas del período
+    const filtered = useMemo(() => {
         const list = sales || []
+        const q = query.trim().toLowerCase()
+        if (!q) return list
+        return list.filter(sale =>
+            sale.customer_name?.toLowerCase().includes(q) ||
+            sale.seller_name?.toLowerCase().includes(q) ||
+            sale.sale_items.some(i => ((i.products as { name?: string } | null)?.name ?? '').toLowerCase().includes(q))
+        )
+    }, [sales, query])
+
+    const totals = useMemo(() => {
+        const list = filtered
         return {
             revenue: Math.round(list.reduce((s, v) => s + v.total, 0)),
             profit: Math.round(list.reduce((s, v) => s + v.sale_items.reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0)),
             count: list.length,
         }
-    }, [sales])
+    }, [filtered])
 
     const PERIODS: { value: Period; label: string }[] = [
         { value: 'today', label: 'Hoy' },
@@ -235,6 +273,82 @@ export default function VentasPage() {
                 </motion.div>
             )}
 
+            {/* Búsqueda y filtros */}
+            {view === 'ventas' && (
+                <div className="mb-4">
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)' }} />
+                            <input className="toul-input" placeholder="Buscar por cliente, producto o vendedor"
+                                value={query} onChange={e => setQuery(e.target.value)} style={{ paddingLeft: 42 }} />
+                        </div>
+                        <button onClick={() => setShowFilters(v => !v)} aria-label="Filtros"
+                            style={{
+                                width: 48, flexShrink: 0, borderRadius: 14, cursor: 'pointer',
+                                background: showFilters || seller !== 'todos' || kind !== 'todas' ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                border: `1px solid ${showFilters || seller !== 'todos' || kind !== 'todas' ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                color: seller !== 'todos' || kind !== 'todas' ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'background var(--toul-transition), border-color var(--toul-transition)',
+                            }}>
+                            <SlidersHorizontal size={17} />
+                        </button>
+                    </div>
+
+                    <AnimatePresence>
+                        {showFilters && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }} style={{ overflow: 'hidden' }}>
+                                <div style={{ paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    <div>
+                                        <p className="toul-section-label" style={{ margin: '0 0 6px 2px' }}>Tipo de venta</p>
+                                        <div className="flex gap-1.5 flex-wrap">
+                                            {KINDS.map(k => {
+                                                const active = kind === k.value
+                                                return (
+                                                    <button key={k.value} onClick={() => { setKind(k.value); setLimit(PAGE_SIZE) }}
+                                                        style={{
+                                                            padding: '8px 14px', borderRadius: 12, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                                                            background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                                            border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                                            color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
+                                                            transition: 'background var(--toul-transition), border-color var(--toul-transition), color var(--toul-transition)',
+                                                        }}>
+                                                        {k.label}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                    {(sellers?.length ?? 0) > 1 && (
+                                        <div>
+                                            <p className="toul-section-label" style={{ margin: '0 0 6px 2px' }}>Vendedor</p>
+                                            <div className="flex gap-1.5 flex-wrap">
+                                                {['todos', ...(sellers ?? [])].map(name => {
+                                                    const active = seller === name
+                                                    return (
+                                                        <button key={name} onClick={() => { setSeller(name); setLimit(PAGE_SIZE) }}
+                                                            style={{
+                                                                padding: '8px 14px', borderRadius: 12, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                                                                background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                                                border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                                                color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
+                                                                transition: 'background var(--toul-transition), border-color var(--toul-transition), color var(--toul-transition)',
+                                                            }}>
+                                                            {name === 'todos' ? 'Todos' : name}
+                                                        </button>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            )}
+
             {/* Summary chips */}
             {view === 'anuladas' ? null : (isLoading || storeLoading) ? (
                 <div className="grid grid-cols-3 gap-2 mb-5">
@@ -263,7 +377,7 @@ export default function VentasPage() {
                 <div className="flex flex-col gap-2">
                     {[1, 2, 3, 4, 5, 6].map(n => <Skeleton key={n} height="68px" className="rounded-2xl" />)}
                 </div>
-            ) : sales?.length === 0 ? (
+            ) : filtered.length === 0 ? (
                 <EmptyState
                     icon={Clock}
                     title="Sin ventas en este período"
@@ -273,7 +387,7 @@ export default function VentasPage() {
                 <>
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                         className="flex flex-col gap-2">
-                        {sales?.map(sale => {
+                        {filtered.map(sale => {
                             const pm = PAYMENT_METHODS.find(m => m.value === sale.payment_method)
                             const profit = sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0)
                             const summary = sale.sale_items.slice(0, 2).map(i => (i.products as any)?.name || 'Producto').join(', ')
@@ -368,12 +482,33 @@ export default function VentasPage() {
                                         <span style={{ color: '#F59E0B' }}>−{formatCOP(selectedSale.discount)}</span>
                                     </div>
                                 )}
-                                <div className="flex justify-between">
-                                    <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Método</span>
-                                    <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>
-                                        {PAYMENT_METHODS.find(m => m.value === selectedSale.payment_method)?.label || selectedSale.payment_method}
-                                    </span>
-                                </div>
+                                {(selectedSale.sale_payments?.length ?? 0) > 0 ? (
+                                    selectedSale.sale_payments!.map((pay, i) => (
+                                        <div key={i} className="flex justify-between">
+                                            <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>
+                                                {pay.payment_methods?.name || 'Pago'}
+                                            </span>
+                                            <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>{formatCOP(pay.amount)}</span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="flex justify-between">
+                                        <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Método</span>
+                                        <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>
+                                            {PAYMENT_METHODS.find(m => m.value === selectedSale.payment_method)?.label || selectedSale.payment_method}
+                                        </span>
+                                    </div>
+                                )}
+                                {selectedSale.is_credit && (
+                                    <div className="flex justify-between">
+                                        <span className="text-sm" style={{ color: 'var(--toul-info)' }}>
+                                            Crédito{selectedSale.customer_name ? ` — ${selectedSale.customer_name}` : ''}
+                                        </span>
+                                        <span className="text-sm font-medium" style={{ color: 'var(--toul-info)' }}>
+                                            {formatCOP(Math.max(0, selectedSale.total - (selectedSale.sale_payments ?? []).reduce((s, p) => s + Number(p.amount), 0)))} pendiente
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between pt-2" style={{ borderTop: '1px solid var(--toul-border)' }}>
                                     <span className="font-bold" style={{ color: 'var(--toul-text)' }}>Total</span>
                                     <span className="text-xl font-bold" style={{ color: 'var(--toul-accent)' }}>{formatCOP(selectedSale.total)}</span>
@@ -386,10 +521,16 @@ export default function VentasPage() {
                                 </div>
                                 {selectedSale.seller_name && (
                                     <div className="flex justify-between">
-                                        <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Vendedor</span>
-                                        <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>{selectedSale.seller_name}</span>
+                                        <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Vendió</span>
+                                        <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>
+                                            {selectedSale.seller_name}{selectedSale.cash_session_id ? ' · en la caja' : ''}
+                                        </span>
                                     </div>
                                 )}
+                                <div className="flex justify-between">
+                                    <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>N° de venta</span>
+                                    <span className="text-sm font-medium" style={{ color: 'var(--toul-text-muted)' }}>#{selectedSale.id.slice(0, 8).toUpperCase()}</span>
+                                </div>
                                 <div className="flex gap-2 pt-3">
                                     <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-text)' }}
                                         disabled={printing} onClick={() => handlePrint(selectedSale.id)}>
