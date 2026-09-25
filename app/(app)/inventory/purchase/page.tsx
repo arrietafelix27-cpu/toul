@@ -718,7 +718,7 @@ export default function NewPurchaseFlow() {
                             )}
                             {paymentMethod === 'capital' && (
                                 <div className="p-4 rounded-xl text-sm" style={{ background: 'rgba(59,130,246,0.12)', color: 'var(--toul-info)' }}>
-                                    Se registrará una <strong>inyección de capital propio</strong>. El saldo de tu caja no se verá afectado.
+                                    Se registra como <strong>capital propio</strong>: esta compra la pagas con plata tuya, no del negocio.
                                 </div>
                             )}
                             {paymentMethod === 'credit' && Number(initialPayment) > 0 && initialPaymentMethod === 'cash' && (

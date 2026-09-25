@@ -72,7 +72,7 @@ Control de stock con movimientos detallados por producto.
 - No se puede eliminar un producto que tenga stock
 
 ### Caja
-Control del dinero del negocio distribuido por método de pago.
+Menú de 3 opciones: Nuevo gasto, Movimientos y Métodos de pago. **No muestra saldos** (decisión de producto: el total disponible se confundía con ganancia). Sin transferencias ni capital propio como módulo.
 - Capital propio incluido
 - Movimientos automáticos al registrar ventas y compras
 - Registro de gastos manuales

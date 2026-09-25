@@ -7,7 +7,6 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { staggerItem } from '@/lib/motion'
 import type { AIInsight } from '@/lib/types'
 import Link from 'next/link'
-import StrategicMetrics from './StrategicMetrics'
 
 interface ProductRow {
     id: string
@@ -29,14 +28,12 @@ const PRODUCT_TABS: { value: ProductTab; label: string; icon: any }[] = [
 
 export default function OperationalMetrics({
     products,
-    strategic,
     insights,
     loading,
     insightsLoading,
     pending
 }: {
     products: { topUnits: ProductRow[]; topProfit: ProductRow[]; lowStock: ProductRow[]; slowMoving: ProductRow[] };
-    strategic: { totalMoney: number; distribution: any[] };
     insights: AIInsight[];
     loading: boolean;
     insightsLoading: boolean;
@@ -48,22 +45,13 @@ export default function OperationalMetrics({
     return (
         <div className="grid grid-cols-12 gap-6 items-stretch">
             {/* Left — Smart Products Panel */}
-            <div className="col-span-12 lg:col-span-4 flex flex-col">
+            <div className="col-span-12 lg:col-span-6 flex flex-col">
                 <SmartProductsPanel products={products} loading={loading} />
             </div>
 
-            {/* Center — TOUL AI Copilot + Pendientes */}
-            <div className="col-span-12 lg:col-span-4 flex flex-col">
+            {/* Right — TOUL AI Copilot + Pendientes */}
+            <div className="col-span-12 lg:col-span-6 flex flex-col">
                 <AICopilotPanel insights={insights} loading={insightsLoading || loading} pending={pending} />
-            </div>
-
-            {/* Right — Cash & Liquidity */}
-            <div className="col-span-12 lg:col-span-4 flex flex-col">
-                <StrategicMetrics
-                    totalMoney={strategic.totalMoney}
-                    distribution={strategic.distribution}
-                    loading={loading}
-                />
             </div>
         </div>
     )

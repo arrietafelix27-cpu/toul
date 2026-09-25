@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 22 de septiembre de 2026 (sesión 9 — rediseño de la caja con el lenguaje visual global)*
+*Última actualización: 25 de septiembre de 2026 (sesión 10 — historial con filtros y Caja sin saldos)*
 
 ---
 
@@ -388,6 +388,21 @@ Modals base rediseñados:
 ⚠️ **Acción requerida antes de publicar:** ejecutar `supabase/rpc/process_purchase.sql` en el SQL Editor de Supabase. Sin eso, las compras fallan con la versión nueva del código.
 
 `npm run build` pasa sin errores.
+
+### Sesión 10 — 25 de septiembre de 2026 ✅ Historial de ventas + Caja simplificada
+
+**Historial de ventas:**
+- Filtros por vendedor y por tipo (contado / crédito / con descuento), búsqueda por cliente, producto o vendedor
+- Los totales del encabezado respetan lo filtrado
+- Detalle: pagos reales por método (`sale_payments`), saldo pendiente en crédito, quién vendió, si fue en la caja, número de venta
+
+**Caja: se eliminan los saldos de toda la app.** Decisión de producto de Félix — el "Total disponible" se confundía con ganancia.
+- `/cash` pasa a ser un menú de 3 opciones: Nuevo gasto, Movimientos, Métodos de pago
+- `/cash/movimientos` (nuevo): movimientos con nombre en español (`sale_payment` → "Abono de cliente", `sale_refund` → "Devolución por anulación", etc.), filtro por período y por entradas/salidas, paginado
+- `/cash/metodos` (nuevo): crear, renombrar y quitar métodos de pago. Sin saldos
+- **Eliminados:** transferencias entre métodos, capital propio como módulo (sigue existiendo como forma de pago en Compras), widget "Liquidez disponible" en ambos dashboards, componentes `StrategicMetrics` y `CapitalPropioModal`
+- `payment_methods` DELETE ya no exige saldo cero
+- **`process_purchase` ya no valida saldo** — no se puede bloquear una compra por un saldo que el usuario no puede ver. SQL: `supabase/deploy_compras_sin_saldo.sql` ⚠️ pendiente de ejecutar
 
 ### Sesión 9 — 22 de septiembre de 2026 ✅ Rediseño de la caja (POS)
 

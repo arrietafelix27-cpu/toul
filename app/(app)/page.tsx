@@ -11,7 +11,6 @@ import useSWR from 'swr'
 import HeroChart from '@/components/dashboard/HeroChart'
 import DashboardMetrics from '@/components/dashboard/DashboardMetrics'
 import OperationalMetrics from '@/components/dashboard/OperationalMetrics'
-import StrategicMetrics from '@/components/dashboard/StrategicMetrics'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Star } from 'lucide-react'
@@ -49,12 +48,10 @@ export default function DashboardPage() {
             const sevenDaysAgo = new Date(todayStart); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
             // Fetch current data + new dashboard enhancement queries
-            const [sales, expenses, products, pm, deposits, purchases, sales7d, salesStreak, salesYesterday, customersDebt, providersPending] = await Promise.all([
+            const [sales, expenses, products, purchases, sales7d, salesStreak, salesYesterday, customersDebt, providersPending] = await Promise.all([
                 supabase.from('sales').select('total, created_at, sale_items(unit_price, unit_cost, quantity, product_id, products(name, image_url))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 supabase.from('expenses').select('amount, created_at').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 supabase.from('products').select('*').eq('store_id', storeId).eq('is_active', true),
-                supabase.from('payment_methods').select('*').eq('store_id', storeId).eq('is_active', true).order('sort_order'),
-                supabase.from('payments').select('amount, method, type').eq('store_id', storeId),
                 supabase.from('purchases').select('total, created_at, provider_id, due_date').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 // Mejora 1: 7-day average
                 supabase.from('sales').select('total, created_at').eq('store_id', storeId).gte('created_at', sevenDaysAgo.toISOString()),
@@ -131,21 +128,6 @@ export default function DashboardPage() {
                 return { id: p.id, name: p.name, image_url: p.image_url, value: days, units: 0, subValue: `${days} días sin rotación` }
             }).sort((a, b) => b.value - a.value).slice(0, 5)
 
-            // 3. STRATEGIC DATA: CAJA
-            const balMap: Record<string, number> = {}
-            for (const p of (deposits.data || [])) {
-                const isOut = p.type === 'transfer_out' || p.type === 'expense' || p.type === 'purchase' || p.type === 'provider_payment'
-                const sign = isOut ? -1 : 1
-                balMap[p.method] = (balMap[p.method] || 0) + p.amount * sign
-            }
-
-            const totalMoney = Math.round(Object.values(balMap).reduce((s, v) => s + v, 0))
-            const distribution = (pm.data || []).map(m => ({
-                name: m.name,
-                value: Math.max(0, balMap[m.name] || 0),
-                color: m.color
-            })).filter(d => d.value > 0)
-
             // ── Mejora 1: Compute 7-day average ────────────────────────────
             const dayTotals7d: Record<string, number> = {}
             for (const s of (sales7d.data || [])) {
@@ -207,7 +189,6 @@ export default function DashboardPage() {
                 operational: {
                     products: { topUnits: sortedByUnits, topProfit: sortedByProfit, lowStock, slowMoving }
                 },
-                strategic: { totalMoney, distribution },
                 chart: { avg7d, streak, yesterdayTotal },
                 pending: { customerDebts, providerDebts }
             }
@@ -270,7 +251,6 @@ export default function DashboardPage() {
                     }}
                     topProduct={topProduct}
                     insight={insights?.[0] || null}
-                    strategic={dashboardData?.strategic || { totalMoney: 0, distribution: [] }}
                     loading={loading}
                     insightsLoading={insightsLoading || false}
                 />
@@ -331,7 +311,6 @@ export default function DashboardPage() {
                 {/* Row 2: Operational + Cash + AI — with breathing room */}
                 <OperationalMetrics
                     products={dashboardData?.operational.products || { topUnits: [], topProfit: [], lowStock: [], slowMoving: [] }}
-                    strategic={dashboardData?.strategic || { totalMoney: 0, distribution: [] }}
                     insights={insights || []}
                     loading={loading}
                     insightsLoading={insightsLoading}

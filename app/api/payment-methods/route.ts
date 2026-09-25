@@ -103,7 +103,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true })
 }
 
-// DELETE — soft-delete (check balance first)
+// DELETE — soft-delete (el historial de movimientos se conserva)
 export async function DELETE(request: Request) {
     const supabase = await createClient()
     const storeId = await getStoreId(supabase)
@@ -121,23 +121,6 @@ export async function DELETE(request: Request) {
         .single()
 
     if (!method) return NextResponse.json({ error: 'Method not found' }, { status: 404 })
-
-    // Check balance via payments table
-    const { data: payments } = await supabase
-        .from('payments')
-        .select('type, amount')
-        .eq('store_id', storeId)
-        .eq('method', method.name)
-
-    let balance = 0
-    for (const p of payments || []) {
-        const isOut = p.type === 'transfer_out' || p.type === 'expense' || p.type === 'purchase' || p.type === 'provider_payment'
-        balance += isOut ? -p.amount : p.amount
-    }
-
-    if (balance > 0) {
-        return NextResponse.json({ error: `No puedes eliminar "${method.name}" mientras tenga saldo. Transfiere primero.` }, { status: 409 })
-    }
 
     // Soft delete
     const { error } = await supabase

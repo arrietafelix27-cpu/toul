@@ -1,4 +1,11 @@
 -- =================================================================
+-- TOUL — Compras sin validación de saldo
+-- El módulo de Caja ya no muestra saldos, así que la compra no puede
+-- bloquearse por un saldo que el usuario no puede ver.
+-- Pegar en el SQL Editor de Supabase. Se puede ejecutar varias veces.
+-- =================================================================
+
+-- =================================================================
 -- RPC: process_purchase(payload jsonb) RETURNS jsonb
 -- =================================================================
 -- Procesa una compra completa de forma atómica.
@@ -236,3 +243,5 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.process_purchase(jsonb) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

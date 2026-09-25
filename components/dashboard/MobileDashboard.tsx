@@ -26,7 +26,6 @@ interface MobileDashboardProps {
     }
     topProduct: { name: string; image_url: string | null; units: number } | null
     insight: AIInsight | null
-    strategic: { totalMoney: number; distribution: { name: string; value: number; color: string }[] }
     loading: boolean
     insightsLoading: boolean
 }
@@ -41,7 +40,7 @@ const PERIODS: { value: Period; label: string }[] = [
 export default function MobileDashboard({
     storeName, currentDate, storeId, period, setPeriod,
     customRange, setCustomRange,
-    metrics, topProduct, insight, strategic,
+    metrics, topProduct, insight,
     loading, insightsLoading
 }: MobileDashboardProps) {
     const [showCalendar, setShowCalendar] = useState(false)
@@ -350,52 +349,6 @@ export default function MobileDashboard({
                 )}
             </motion.div>
 
-            {/* 6️⃣ Caja disponible simplificada */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.2 }} style={{ position: 'relative' }}>
-                <div className="toul-card flex flex-col gap-3" style={{ padding: 18 }}>
-                    <div className="flex items-center gap-2">
-                        <Wallet size={13} color="rgba(255,255,255,0.45)" />
-                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--toul-text-dim)' }}>Liquidez disponible</span>
-                    </div>
-
-                    {loading ? (
-                        <Skeleton width="140px" height="2rem" className="opacity-10" />
-                    ) : (
-                        <span style={{
-                            fontSize: 28,
-                            fontWeight: 700,
-                            letterSpacing: '-0.03em',
-                            color: 'var(--toul-text)',
-                            fontVariantNumeric: 'tabular-nums',
-                        }}>
-                            {formatCOP(strategic.totalMoney)}
-                        </span>
-                    )}
-
-                    {/* Method chips */}
-                    {!loading && strategic.distribution.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-1">
-                            {strategic.distribution.slice(0, 4).map((item, i) => (
-                                <div key={i} className="flex items-center gap-1.5"
-                                    style={{
-                                        padding: '5px 10px',
-                                        borderRadius: 10,
-                                        background: `${item.color}12`,
-                                        border: `1px solid ${item.color}20`,
-                                    }}>
-                                    <div className="rounded-full" style={{ width: 6, height: 6, backgroundColor: item.color }} />
-                                    <span style={{ fontSize: 11, fontWeight: 600, color: item.color }}>
-                                        {item.name}
-                                    </span>
-                                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--toul-text-dim)', fontVariantNumeric: 'tabular-nums' }}>
-                                        {formatCOP(item.value)}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </motion.div>
         </div>
     )
 }
