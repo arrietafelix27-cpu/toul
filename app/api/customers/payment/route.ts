@@ -14,9 +14,9 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     try {
-        const { customerId, amount, methodName, notes } = await request.json()
+        const { customerId, amount, notes } = await request.json()
 
-        if (!customerId || !amount || amount <= 0 || !methodName) {
+        if (!customerId || !amount || amount <= 0) {
             return NextResponse.json({ error: 'Datos de abono inválidos' }, { status: 400 })
         }
 
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
         const { error: payErr } = await supabase.from('payments').insert({
             store_id: storeId,
             type: 'sale_payment',
-            method: methodName,
+            method: 'General',
             amount: amount,
             notes: `Abono del cliente: ${customer.name}`
         })

@@ -19,7 +19,7 @@ const MIGRATIONS = [
     'schema.sql', 'migration_v2.sql', 'migration_v3.sql', 'migration_v4_appearance.sql',
     'migration_v5.sql', 'migration_v5_hotfix.sql', 'migration_v6.sql', 'migration_v7.sql',
     'migration_v7_hotfix.sql', 'migration_v8.sql', 'migration_v9.sql',
-    'deploy_isla.sql', 'deploy_offline_conteo.sql',
+    'deploy_isla.sql', 'deploy_offline_conteo.sql', 'deploy_compras_simples.sql',
 ]
 
 const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs']

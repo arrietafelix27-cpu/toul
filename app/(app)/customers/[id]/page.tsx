@@ -6,7 +6,6 @@ import { formatCOP, formatDate } from '@/lib/utils'
 import { ArrowLeft, Share2, Plus, Check } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
 import type { Customer, Credit } from '@/lib/types'
 
 export default function CustomerDetailPage() {
@@ -19,13 +18,6 @@ export default function CustomerDetailPage() {
     const [loading, setLoading] = useState(true)
     const [showPayment, setShowPayment] = useState(false)
     const [payAmount, setPayAmount] = useState('')
-    const { methods } = usePaymentMethods()
-    const [payMethod, setPayMethod] = useState('Efectivo')
-
-    // El método guardado debe existir de verdad en el negocio
-    useEffect(() => {
-        if (methods.length && !methods.some(m => m.name === payMethod)) setPayMethod(methods[0].name)
-    }, [methods, payMethod])
     const [saving, setSaving] = useState(false)
 
     useEffect(() => { loadData() }, [id])
@@ -47,9 +39,9 @@ export default function CustomerDetailPage() {
         if (!amount || amount <= 0) { toast.error('Ingresa un monto válido'); return }
         if (amount > (customer?.total_debt || 0)) { toast.error('El abono supera la deuda'); return }
         setSaving(true)
-        await supabase.from('credits').insert({ store_id: storeId, customer_id: id, type: 'payment', amount, payment_method: payMethod, notes: `Abono de ${customer?.name}` })
+        await supabase.from('credits').insert({ store_id: storeId, customer_id: id, type: 'payment', amount, payment_method: 'General', notes: `Abono de ${customer?.name}` })
         await supabase.from('customers').update({ total_debt: (customer?.total_debt || 0) - amount }).eq('id', id)
-        await supabase.from('payments').insert({ store_id: storeId, type: 'credit_payment', method: payMethod, amount, reference_id: id, notes: `Abono cliente: ${customer?.name}` })
+        await supabase.from('payments').insert({ store_id: storeId, type: 'credit_payment', method: 'General', amount, reference_id: id, notes: `Abono cliente: ${customer?.name}` })
         toast.success(`Abono de ${formatCOP(amount)} registrado ✅`)
         setShowPayment(false); setPayAmount(''); loadData(); setSaving(false)
     }
@@ -100,9 +92,6 @@ export default function CustomerDetailPage() {
                             <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--toul-text)' }}>Registrar abono</h3>
                             <div className="flex flex-col gap-3">
                                 <input className="toul-input" type="number" min={0} max={customer.total_debt} placeholder="Monto del abono" value={payAmount} onChange={e => setPayAmount(e.target.value)} />
-                                <select className="toul-input" value={payMethod} onChange={e => setPayMethod(e.target.value)}>
-                                    {methods.map(pm => <option key={pm.id} value={pm.name}>{pm.name}</option>)}
-                                </select>
                                 <div className="grid grid-cols-2 gap-2">
                                     <button onClick={() => setShowPayment(false)} className="toul-btn-secondary">Cancelar</button>
                                     <button onClick={handlePayment} disabled={saving} className="toul-btn-primary">

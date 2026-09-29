@@ -18,6 +18,7 @@ export default async function (db) {
   const [p2] = await q(`INSERT INTO products(store_id,name,sale_price,cost_price,cpp) VALUES ($1,'Bleu',380000,240000,240000) RETURNING id`, [STORE])
   const [v1] = await q(`INSERT INTO product_variants(store_id,product_id,name,sale_price,cpp) VALUES ($1,$2,'100ml',400000,250000) RETURNING id`, [STORE, p2.id])
   const [efe] = await q(`INSERT INTO payment_methods(store_id,name) VALUES ($1,'Efectivo') RETURNING id`, [STORE])
+  const [prov] = await q(`INSERT INTO providers(store_id,name) VALUES ($1,'Distribuidora') RETURNING id`, [STORE])
   await q(`INSERT INTO inventory_adjustments(store_id,product_id,quantity,reason) VALUES ($1,$2,10,'initial')`, [STORE, p1.id])
   await q(`INSERT INTO inventory_adjustments(store_id,product_id,variant_id,quantity,reason) VALUES ($1,$2,$3,6,'initial')`, [STORE, p2.id, v1.id])
 
@@ -77,6 +78,24 @@ export default async function (db) {
   ok((await as(O, () => err(() => q(`SELECT toul_apply_inventory_count($1,NULL)`, [count.id]))))?.includes('ya fue cerrado'), 'un conteo no se puede aplicar dos veces')
   const uncounted = await one(`SELECT stock FROM products WHERE id=$1`, [p2.id])
   ok(uncounted.stock === 7, 'los productos no contados no se tocan (padre de variante intacto)')
+
+  console.log('\n— Compra sin elegir de dónde sale el dinero')
+  const buy = await as(O, async () => (await one(`SELECT process_purchase($1::jsonb) r`, [JSON.stringify({
+    isCredit: false, items: [{ productId: p1.id, quantity: 4, unitCost: 250000 }],
+  })])).r)
+  ok(buy.success, 'compra de contado sin métodos de pago')
+  ok(Number((await one(`SELECT SUM(amount) s FROM purchase_payments WHERE purchase_id=$1`, [buy.purchaseId])).s) === 1000000, 'queda registrado el pago completo')
+
+  const credit = await as(O, async () => (await one(`SELECT process_purchase($1::jsonb) r`, [JSON.stringify({
+    isCredit: true, providerId: prov.id, dueDate: '2026-12-01', paidNow: 200000,
+    items: [{ productId: p1.id, quantity: 2, unitCost: 250000 }],
+  })])).r)
+  ok(credit.success, 'compra a crédito con abono inicial')
+  ok(Number((await one(`SELECT remaining_amount r FROM provider_debts WHERE purchase_id=$1`, [credit.purchaseId])).r) === 300000, 'la deuda queda en $300.000 (500.000 − 200.000)')
+  ok((await as(O, () => err(() => q(`SELECT process_purchase($1::jsonb)`, [JSON.stringify({
+    isCredit: true, providerId: prov.id, paidNow: 9999999,
+    items: [{ productId: p1.id, quantity: 1, unitCost: 250000 }] })]))))?.includes('abono no puede ser mayor'),
+    'el abono no puede superar el total')
 
   console.log(fails === 0 ? '  TODO OK' : `  ${fails} FALLOS`)
   return { fails }

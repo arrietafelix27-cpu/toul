@@ -39,7 +39,6 @@ export default function NewPurchaseFlow() {
     const [products, setProducts] = useState<Product[]>([])
     const [variantsByProduct, setVariantsByProduct] = useState<Record<string, Variant[]>>({})
     const [providers, setProviders] = useState<Provider[]>([])
-    const [cashWallets, setCashWallets] = useState<{ id: string, name: string }[]>([])
     const [loading, setLoading] = useState(true)
 
     // Flow state
@@ -52,10 +51,8 @@ export default function NewPurchaseFlow() {
     const [expandedInPicker, setExpandedInPicker] = useState<Set<string>>(new Set())
 
     // Step 2: Payment
-    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit' | 'capital'>('cash')
-    const [selectedCashWallet, setSelectedCashWallet] = useState<string>('')
+    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit'>('cash')
     const [initialPayment, setInitialPayment] = useState<string>('')
-    const [initialPaymentMethod, setInitialPaymentMethod] = useState<'cash' | 'capital'>('cash')
     const [selectedProviderId, setSelectedProviderId] = useState<string>('')
     const [dueDate, setDueDate] = useState<string>('')
 
@@ -71,16 +68,14 @@ export default function NewPurchaseFlow() {
             if (!store) return
             setStoreId(store.id)
 
-            const [prodRes, provRes, walletsRes, variantsRes] = await Promise.all([
+            const [prodRes, provRes, variantsRes] = await Promise.all([
                 supabase.from('products').select('*').eq('store_id', store.id).order('name'),
                 supabase.from('providers').select('*').eq('store_id', store.id).order('name'),
-                supabase.from('payment_methods').select('id, name').eq('store_id', store.id).eq('is_active', true).order('sort_order'),
                 supabase.from('product_variants').select('id, product_id, name, sale_price, cpp').eq('store_id', store.id).eq('is_active', true).order('name'),
             ])
 
             if (prodRes.data) setProducts(prodRes.data)
             if (provRes.data) setProviders(provRes.data)
-            if (walletsRes.data) setCashWallets(walletsRes.data)
 
             if (variantsRes.data) {
                 const grouped: Record<string, Variant[]> = {}
@@ -89,10 +84,6 @@ export default function NewPurchaseFlow() {
                     grouped[v.product_id].push(v)
                 }
                 setVariantsByProduct(grouped)
-            }
-
-            if (walletsRes.data && walletsRes.data.length > 0) {
-                setSelectedCashWallet(walletsRes.data[0].id)
             }
 
             setLoading(false)
@@ -148,26 +139,6 @@ export default function NewPurchaseFlow() {
     const handleSubmit = async () => {
         setSaving(true)
         try {
-            const paymentsPayload: any[] = []
-
-            if (paymentMethod === 'cash') {
-                const wallet = cashWallets.find(w => w.id === selectedCashWallet)
-                paymentsPayload.push({ methodId: selectedCashWallet, methodName: wallet?.name || '', amount: total, isCapital: false })
-            } else if (paymentMethod === 'capital') {
-                paymentsPayload.push({ methodId: null, methodName: 'Capital Propio', amount: total, isCapital: true })
-            } else if (paymentMethod === 'credit') {
-                const initialAmt = Number(initialPayment)
-                if (initialAmt > 0) {
-                    const wallet = cashWallets.find(w => w.id === selectedCashWallet)
-                    paymentsPayload.push({
-                        methodId: initialPaymentMethod === 'cash' ? selectedCashWallet : null,
-                        methodName: initialPaymentMethod === 'cash' ? wallet?.name : 'Capital Propio',
-                        amount: initialAmt,
-                        isCapital: initialPaymentMethod === 'capital'
-                    })
-                }
-            }
-
             const response = await fetch('/api/purchases', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -176,8 +147,8 @@ export default function NewPurchaseFlow() {
                     subtotal,
                     total,
                     isCredit: paymentMethod === 'credit',
+                    paidNow: paymentMethod === 'credit' ? Math.round(Number(initialPayment) || 0) : total,
                     dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-                    payments: paymentsPayload,
                     items: selectedItems.map(item => ({
                         productId: item.product.id,
                         variantId: item.variantId ?? null,
@@ -217,7 +188,6 @@ export default function NewPurchaseFlow() {
                 products={products}
                 variantsByProduct={variantsByProduct}
                 providers={providers}
-                cashWallets={cashWallets}
                 selectedItems={selectedItems}
                 addItem={addItem}
                 updateItem={updateItem}
@@ -230,12 +200,8 @@ export default function NewPurchaseFlow() {
                 setSortBy={setSortBy}
                 paymentMethod={paymentMethod}
                 setPaymentMethod={setPaymentMethod}
-                selectedCashWallet={selectedCashWallet}
-                setSelectedCashWallet={setSelectedCashWallet}
                 initialPayment={initialPayment}
                 setInitialPayment={setInitialPayment}
-                initialPaymentMethod={initialPaymentMethod}
-                setInitialPaymentMethod={setInitialPaymentMethod}
                 selectedProviderId={selectedProviderId}
                 setSelectedProviderId={setSelectedProviderId}
                 dueDate={dueDate}
@@ -474,73 +440,38 @@ export default function NewPurchaseFlow() {
                         <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
 
                             <div className="space-y-3">
-                                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>¿De dónde saldrá el dinero?</label>
+                                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>¿Cómo vas a pagar esta compra?</label>
 
                                 <div className="space-y-2">
-                                    <button onClick={() => setPaymentMethod('cash')}
-                                        className={`w-full toul-card p-4 flex items-center justify-between transition-all ${paymentMethod === 'cash' ? 'ring-2' : ''}`}
-                                        style={{ borderColor: paymentMethod === 'cash' ? 'var(--toul-accent)' : 'var(--toul-border)', '--tw-ring-color': 'var(--toul-accent)' } as any}>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--toul-accent)' }}>
-                                                <CreditCard size={20} />
-                                            </div>
-                                            <div className="text-left">
-                                                <p className="font-bold text-sm" style={{ color: 'var(--toul-text)' }}>Billetera del Negocio</p>
-                                                <p className="text-xs" style={{ color: 'var(--toul-text-subtle)' }}>Bancolombia, Nequi, Efectivo...</p>
-                                            </div>
-                                        </div>
-                                        {paymentMethod === 'cash' && <CheckCircle2 size={20} style={{ color: 'var(--toul-accent)' }} />}
-                                    </button>
-
-                                    {paymentMethod === 'cash' && (
-                                        <div className="pl-4 border-l-2 ml-4 mb-4" style={{ borderColor: 'var(--toul-accent)' }}>
-                                            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--toul-text-muted)' }}>
-                                                Seleccionar cartera específica:
-                                            </label>
-                                            <select
-                                                className="toul-input w-full"
-                                                value={selectedCashWallet}
-                                                onChange={(e) => setSelectedCashWallet(e.target.value)}>
-                                                {cashWallets.map(wallet => (
-                                                    <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                                                ))}
-                                                {cashWallets.length === 0 && (
-                                                    <option value="" disabled>No hay carteras (crea una en Caja)</option>
-                                                )}
-                                            </select>
-                                        </div>
-                                    )}
+                                    {([
+                                        { value: 'cash' as const, title: 'Ya la pagué', text: 'La compra queda saldada.', color: 'var(--toul-accent)', dim: 'var(--toul-accent-dim)' },
+                                        { value: 'credit' as const, title: 'Queda debiendo', text: 'Genera una deuda con el proveedor.', color: 'var(--toul-warning)', dim: 'var(--toul-warning-dim)' },
+                                    ]).map(option => {
+                                        const active = paymentMethod === option.value
+                                        return (
+                                            <button key={option.value} onClick={() => setPaymentMethod(option.value)}
+                                                className="w-full toul-card flex items-center justify-between"
+                                                style={{
+                                                    padding: 16, minHeight: 72, textAlign: 'left',
+                                                    background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                                    borderColor: active ? 'var(--toul-border-focused)' : 'var(--toul-border)',
+                                                    transition: 'background var(--toul-transition), border-color var(--toul-transition)',
+                                                }}>
+                                                <span className="flex items-center gap-3">
+                                                    <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                                                        style={{ background: option.dim, color: option.color }}>
+                                                        {option.value === 'cash' ? <CreditCard size={19} /> : <Package size={19} />}
+                                                    </span>
+                                                    <span>
+                                                        <span className="block font-semibold text-sm" style={{ color: 'var(--toul-text)' }}>{option.title}</span>
+                                                        <span className="block text-xs" style={{ color: 'var(--toul-text-subtle)' }}>{option.text}</span>
+                                                    </span>
+                                                </span>
+                                                {active && <CheckCircle2 size={20} style={{ color: option.color }} />}
+                                            </button>
+                                        )
+                                    })}
                                 </div>
-
-                                <button onClick={() => setPaymentMethod('capital')}
-                                    className={`w-full toul-card p-4 flex items-center justify-between transition-all ${paymentMethod === 'capital' ? 'ring-2' : ''}`}
-                                    style={{ borderColor: paymentMethod === 'capital' ? 'var(--toul-info)' : 'var(--toul-border)', '--tw-ring-color': 'var(--toul-info)' } as any}>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(59,130,246,0.12)', color: 'var(--toul-info)' }}>
-                                            <CreditCard size={20} />
-                                        </div>
-                                        <div className="text-left">
-                                            <p className="font-bold text-sm" style={{ color: 'var(--toul-text)' }}>Capital Propio</p>
-                                            <p className="text-xs" style={{ color: 'var(--toul-text-subtle)' }}>Dinero de tu bolsillo, no del negocio</p>
-                                        </div>
-                                    </div>
-                                    {paymentMethod === 'capital' && <CheckCircle2 size={20} style={{ color: 'var(--toul-info)' }} />}
-                                </button>
-
-                                <button onClick={() => setPaymentMethod('credit')}
-                                    className={`w-full toul-card p-4 flex items-center justify-between transition-all ${paymentMethod === 'credit' ? 'ring-2' : ''}`}
-                                    style={{ borderColor: paymentMethod === 'credit' ? 'var(--toul-warning)' : 'var(--toul-border)', '--tw-ring-color': 'var(--toul-warning)' } as any}>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--toul-warning-dim)', color: 'var(--toul-warning)' }}>
-                                            <Package size={20} />
-                                        </div>
-                                        <div className="text-left">
-                                            <p className="font-bold text-sm" style={{ color: 'var(--toul-text)' }}>A Crédito</p>
-                                            <p className="text-xs" style={{ color: 'var(--toul-text-subtle)' }}>Genera deuda con un proveedor</p>
-                                        </div>
-                                    </div>
-                                    {paymentMethod === 'credit' && <CheckCircle2 size={20} style={{ color: 'var(--toul-warning)' }} />}
-                                </button>
                             </div>
 
                             <div className="space-y-4 pt-4 border-t" style={{ borderColor: 'var(--toul-border)' }}>
@@ -575,51 +506,6 @@ export default function NewPurchaseFlow() {
                                                 onChange={(e) => setInitialPayment(e.target.value)}
                                             />
                                         </div>
-                                        {Number(initialPayment) > 0 && (
-                                            <div>
-                                                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>
-                                                    ¿De dónde sale el abono?
-                                                </label>
-                                                <div className="flex gap-2 mb-3">
-                                                    <button onClick={() => setInitialPaymentMethod('cash')}
-                                                        className="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all border"
-                                                        style={{
-                                                            background: initialPaymentMethod === 'cash' ? 'var(--toul-accent-dim)' : 'transparent',
-                                                            color: initialPaymentMethod === 'cash' ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
-                                                            borderColor: initialPaymentMethod === 'cash' ? 'var(--toul-accent)' : 'var(--toul-border)',
-                                                        }}>
-                                                        Billetera Negocio
-                                                    </button>
-                                                    <button onClick={() => setInitialPaymentMethod('capital')}
-                                                        className="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all border"
-                                                        style={{
-                                                            background: initialPaymentMethod === 'capital' ? 'rgba(59,130,246,0.12)' : 'transparent',
-                                                            color: initialPaymentMethod === 'capital' ? 'var(--toul-info)' : 'var(--toul-text-muted)',
-                                                            borderColor: initialPaymentMethod === 'capital' ? 'var(--toul-info)' : 'var(--toul-border)',
-                                                        }}>
-                                                        Capital Propio
-                                                    </button>
-                                                </div>
-                                                {initialPaymentMethod === 'cash' && (
-                                                    <div className="mb-4">
-                                                        <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--toul-text-muted)' }}>
-                                                            Seleccionar cartera específica:
-                                                        </label>
-                                                        <select
-                                                            className="toul-input w-full"
-                                                            value={selectedCashWallet}
-                                                            onChange={(e) => setSelectedCashWallet(e.target.value)}>
-                                                            {cashWallets.map(wallet => (
-                                                                <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                                                            ))}
-                                                            {cashWallets.length === 0 && (
-                                                                <option value="" disabled>No hay carteras</option>
-                                                            )}
-                                                        </select>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
                                         <div>
                                             <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>
                                                 Fecha de Vencimiento <span style={{ color: 'var(--toul-error)' }}>*</span>
@@ -658,12 +544,9 @@ export default function NewPurchaseFlow() {
                                 </div>
                                 <div className="p-4 space-y-3">
                                     <div className="flex justify-between text-sm">
-                                        <span style={{ color: 'var(--toul-text-muted)' }}>Método</span>
+                                        <span style={{ color: 'var(--toul-text-muted)' }}>Pago</span>
                                         <span className="font-medium text-right" style={{ color: 'var(--toul-text)' }}>
-                                            {paymentMethod === 'cash'
-                                                ? `Billetera (${cashWallets.find(w => w.id === selectedCashWallet)?.name || 'Sin nombre'})`
-                                                : paymentMethod === 'credit' ? 'A Crédito' : 'Capital Propio'
-                                            }
+                                            {paymentMethod === 'cash' ? 'Ya la pagué' : 'Queda debiendo'}
                                         </span>
                                     </div>
                                     {selectedProviderId && (
@@ -677,11 +560,7 @@ export default function NewPurchaseFlow() {
                                     {paymentMethod === 'credit' && Number(initialPayment) > 0 && (
                                         <>
                                             <div className="flex justify-between text-sm">
-                                                <span style={{ color: 'var(--toul-text-muted)' }}>
-                                                    Abono Inicial ({initialPaymentMethod === 'cash'
-                                                        ? `Billetera (${cashWallets.find(w => w.id === selectedCashWallet)?.name || 'Sin nombre'})`
-                                                        : 'Capital'})
-                                                </span>
+                                                <span style={{ color: 'var(--toul-text-muted)' }}>Abono inicial</span>
                                                 <span className="font-medium" style={{ color: 'var(--toul-accent)' }}>
                                                     {formatCOP(Number(initialPayment))}
                                                 </span>
@@ -711,21 +590,10 @@ export default function NewPurchaseFlow() {
                                 </div>
                             </div>
 
-                            {paymentMethod === 'cash' && (
-                                <div className="p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--toul-error)' }}>
-                                    Confirmar esta compra registrará un <strong>egreso</strong> en la caja de {formatCOP(total)}.
-                                </div>
-                            )}
-                            {paymentMethod === 'capital' && (
-                                <div className="p-4 rounded-xl text-sm" style={{ background: 'rgba(59,130,246,0.12)', color: 'var(--toul-info)' }}>
-                                    Se registra como <strong>capital propio</strong>: esta compra la pagas con plata tuya, no del negocio.
-                                </div>
-                            )}
-                            {paymentMethod === 'credit' && Number(initialPayment) > 0 && initialPaymentMethod === 'cash' && (
-                                <div className="p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--toul-error)' }}>
-                                    El abono inicial registrará un <strong>egreso</strong> en la caja de {formatCOP(Number(initialPayment))}.
-                                </div>
-                            )}
+                            <div className="p-4 rounded-xl text-sm" style={{ background: 'var(--toul-surface)', color: 'var(--toul-text-muted)', border: '1px solid var(--toul-border)' }}>
+                                Al confirmar, los productos entran al inventario y se recalcula su costo promedio.
+                                {paymentMethod === 'credit' && ' La deuda queda registrada con el proveedor.'}
+                            </div>
 
                             <button
                                 disabled={saving}

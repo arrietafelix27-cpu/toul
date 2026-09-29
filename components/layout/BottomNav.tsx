@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Package, Wallet, Users, Settings, BarChart2, Clock, Menu, ChevronRight, Plus, Sparkles, ShieldCheck, LockKeyhole, MonitorSmartphone } from 'lucide-react'
+import { LayoutDashboard, Package, Wallet, Users, Settings, BarChart2, Clock, Menu, ChevronRight, Plus, Sparkles, ShieldCheck, LockKeyhole } from 'lucide-react'
 import { usePendingApprovalsCount } from '@/lib/isla/useSession'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
@@ -30,7 +30,6 @@ const ISLA_SECTION = {
     items: [
         { href: '/aprobaciones', icon: ShieldCheck, label: 'Aprobaciones', badge: true },
         { href: '/turnos', icon: LockKeyhole, label: 'Turnos de caja' },
-        { href: '/caja', icon: MonitorSmartphone, label: 'Abrir caja' },
     ]
 }
 

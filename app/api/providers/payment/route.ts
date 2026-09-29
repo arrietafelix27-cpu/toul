@@ -6,8 +6,7 @@ import { NextResponse } from 'next/server'
  * Handles:
  * 1. provider.total_debt reduction
  * 2. provider_debts.remaining_amount distribution (FIFO: oldest first)
- * 3. Wallet balance validation
- * 4. Movement records (payments or owner_capital_injections)
+ * 3. Movement record
  */
 export async function POST(request: Request) {
     const supabase = await createClient()
@@ -15,7 +14,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     try {
-        const { providerId, amount, paymentMethod, walletId, walletName } = await request.json()
+        const { providerId, amount } = await request.json()
 
         if (!providerId || !amount || amount <= 0) {
             return NextResponse.json({ error: 'Datos de pago inválidos' }, { status: 400 })
@@ -47,28 +46,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'El monto del abono supera la deuda total' }, { status: 400 })
         }
 
-        // 3. Wallet Balance Validation (if cash)
-        if (paymentMethod === 'cash') {
-            if (!walletName) return NextResponse.json({ error: 'Nombre de cartera requerido para pago en efectivo' }, { status: 400 })
 
-            const { data: payHistory } = await supabase
-                .from('payments')
-                .select('type, amount')
-                .eq('store_id', storeId)
-                .eq('method', walletName)
-
-            let balance = 0
-            for (const p of (payHistory || [])) {
-                const isOut = p.type === 'transfer_out' || p.type === 'expense' || p.type === 'purchase' || p.type === 'provider_payment'
-                balance += isOut ? -p.amount : p.amount
-            }
-
-            if (balance < amount) {
-                return NextResponse.json({
-                    error: `Saldo insuficiente en "${walletName}". Disponible: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(balance)}`
-                }, { status: 400 })
-            }
-        }
 
         // 4. Perform atomic-like operations
 
@@ -100,25 +78,15 @@ export async function POST(request: Request) {
             remainingToPay -= deduction
         }
 
-        // C. Record movement
-        if (paymentMethod === 'capital') {
-            await supabase.from('owner_capital_injections').insert({
-                store_id: storeId,
-                amount: amount,
-                reference_type: 'provider_payment',
-                reference_id: providerId,
-                notes: `Abono a proveedor ${provider.name}`
-            })
-        } else {
-            await supabase.from('payments').insert({
-                store_id: storeId,
-                type: 'provider_payment',
-                method: walletName,
-                amount: amount,
-                reference_id: providerId,
-                notes: `Abono a proveedor: ${provider.name}`
-            })
-        }
+        // C. Movimiento de caja (los métodos de pago son solo para ventas)
+        await supabase.from('payments').insert({
+            store_id: storeId,
+            type: 'provider_payment',
+            method: 'General',
+            amount: amount,
+            reference_id: providerId,
+            notes: `Abono a proveedor: ${provider.name}`
+        })
 
         return NextResponse.json({ success: true })
 

@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     try {
-        const { category, description, amount, method, isCapital } = await request.json()
+        const { category, description, amount } = await request.json()
 
         if (!amount || amount <= 0) {
             return NextResponse.json({ error: 'Monto inválido' }, { status: 400 })
@@ -30,33 +30,21 @@ export async function POST(request: Request) {
             category,
             description: description || null,
             amount,
-            payment_method: method
+            payment_method: 'General'
         }).select().single()
 
         if (expError) throw expError
 
-        // 3. Register Movement
-        if (isCapital || method === 'capital') {
-            await supabase.from('owner_capital_injections').insert({
-                store_id: storeId,
-                amount: amount,
-                reference_type: 'expense',
-                reference_id: expense.id,
-                notes: `Gasto: ${description || category} (Capital Propio)`
-            })
-        } else {
-            // General payment record
-            // Note: If 'method' is the name of a specific wallet, ensure balance validation if needed?
-            // For expenses, we'll keep it simple but record it.
-            await supabase.from('payments').insert({
-                store_id: storeId,
-                type: 'expense',
-                method: method,
-                amount: amount,
-                reference_id: expense.id,
-                notes: `Gasto: ${description || category}`
-            })
-        }
+        // 3. Movimiento de caja. Los métodos de pago describen cómo te pagan
+        //    a ti en una venta, así que un gasto no elige método.
+        await supabase.from('payments').insert({
+            store_id: storeId,
+            type: 'expense',
+            method: 'General',
+            amount: amount,
+            reference_id: expense.id,
+            notes: `Gasto: ${description || category}`
+        })
 
         return NextResponse.json({ success: true, expenseId: expense.id })
 

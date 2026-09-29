@@ -6,25 +6,16 @@ import { Plus, Receipt, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Skeleton, EmptyState } from '@/components/ui/Skeleton'
 import { EXPENSE_CATEGORIES } from '@/lib/types'
-import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
 import type { Expense } from '@/lib/types'
 
 export default function ExpensesPage() {
-    const { methods, labelFor } = usePaymentMethods()
     const supabase = createClient()
     const [storeId, setStoreId] = useState('')
     const [expenses, setExpenses] = useState<Expense[]>([])
     const [loading, setLoading] = useState(true)
     const [showForm, setShowForm] = useState(false)
     const [saving, setSaving] = useState(false)
-    const [form, setForm] = useState({ category: 'otros', description: '', amount: '', method: 'Efectivo' })
-
-    // El método guardado debe existir de verdad en el negocio
-    useEffect(() => {
-        if (methods.length && !methods.some(m => m.name === form.method)) {
-            setForm(f => ({ ...f, method: methods[0].name }))
-        }
-    }, [methods, form.method])
+    const [form, setForm] = useState({ category: 'otros', description: '', amount: '' })
 
     useEffect(() => { loadExpenses() }, [])
 
@@ -52,8 +43,6 @@ export default function ExpensesPage() {
                     category: form.category,
                     description: form.description,
                     amount: Number(form.amount),
-                    method: form.method,
-                    isCapital: form.method === 'capital'
                 })
             })
 
@@ -62,7 +51,7 @@ export default function ExpensesPage() {
 
             toast.success('Gasto registrado ✅')
             setShowForm(false)
-            setForm({ category: 'otros', description: '', amount: '', method: 'efectivo' })
+            setForm({ category: 'otros', description: '', amount: '' })
             loadExpenses()
         } catch (e: any) {
             console.error(e)
@@ -141,16 +130,10 @@ export default function ExpensesPage() {
                             <label className="text-xs text-slate-400 mb-1 block">Descripción (opcional)</label>
                             <input className="toul-input" type="text" placeholder="Ej: Ads de Instagram" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3">
                             <div>
                                 <label className="text-xs text-slate-400 mb-1 block">Monto *</label>
                                 <input className="toul-input" type="number" min={0} placeholder="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs text-slate-400 mb-1 block">Cómo pagaste</label>
-                                <select className="toul-input" value={form.method} onChange={e => setForm(f => ({ ...f, method: e.target.value }))}>
-                                    {methods.map(pm => <option key={pm.id} value={pm.name}>{pm.name}</option>)}
-                                </select>
                             </div>
                         </div>
                         <button onClick={handleSave} disabled={saving} className="toul-btn-primary">{saving ? 'Guardando...' : 'Guardar gasto'}</button>
@@ -171,7 +154,6 @@ export default function ExpensesPage() {
                 <div className="flex flex-col gap-2">
                     {expenses.map(expense => {
                         const cat = EXPENSE_CATEGORIES.find(c => c.value === expense.category)
-                        const pmLabel = labelFor(expense.payment_method)
                         return (
                             <div key={expense.id} className="bg-slate-900 border border-slate-800 rounded-2xl flex items-center gap-3 px-4 py-3">
                                 <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
@@ -183,7 +165,6 @@ export default function ExpensesPage() {
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                     <p className="font-bold text-red-400 text-sm">−{formatCOP(expense.amount)}</p>
-                                    <p className="text-xs" style={{ color: 'var(--toul-text-dim)' }}>{pmLabel}</p>
                                 </div>
                             </div>
                         )

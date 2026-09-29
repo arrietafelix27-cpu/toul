@@ -4,8 +4,7 @@ import { explainError } from '@/lib/errors'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { LogOut, Store, User, MonitorSmartphone, ChevronRight } from 'lucide-react'
-import Link from 'next/link'
+import { LogOut, Store, User } from 'lucide-react'
 import { TeamSection } from '@/components/isla/TeamSection'
 import { ReceiptSettings } from '@/components/isla/ReceiptSettings'
 import { PushPrompt } from '@/components/isla/PushPrompt'
@@ -102,16 +101,6 @@ export default function SettingsPage() {
 
             {/* Modo isla */}
             <p className="toul-section-label" style={{ marginTop: 24 }}>Punto de venta (isla)</p>
-            <Link href="/caja" className="toul-card toul-card-interactive mb-4" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--toul-accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <MonitorSmartphone size={19} style={{ color: 'var(--toul-accent)' }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Abrir caja en pantalla completa</p>
-                    <p style={{ fontSize: 13, color: 'var(--toul-text-muted)', margin: 0 }}>Para el computador táctil de la isla</p>
-                </div>
-                <ChevronRight size={16} style={{ color: 'var(--toul-text-dim)' }} />
-            </Link>
             <PushPrompt />
             {storeId && <TeamSection storeId={storeId} />}
             {storeId && <ReceiptSettings storeId={storeId} />}

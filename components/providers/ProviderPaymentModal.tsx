@@ -19,22 +19,7 @@ export function ProviderPaymentModal({ storeId, providerId, providerName, totalD
     const supabase = createClient()
 
     const [amount, setAmount] = useState('')
-    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'capital'>('cash')
     const [saving, setSaving] = useState(false)
-    const [cashWallets, setCashWallets] = useState<{ id: string, name: string }[]>([])
-    const [selectedCashWallet, setSelectedCashWallet] = useState('')
-
-    // Fetch cash wallets on mount
-    useEffect(() => {
-        const loadCashWallets = async () => {
-            const { data } = await supabase.from('payment_methods').select('id, name').eq('store_id', storeId).eq('is_active', true).order('sort_order')
-            if (data) {
-                setCashWallets(data)
-                if (data.length > 0) setSelectedCashWallet(data[0].id)
-            }
-        }
-        loadCashWallets()
-    }, [storeId, supabase])
 
     const maxAmount = totalDebt
 
@@ -47,18 +32,10 @@ export function ProviderPaymentModal({ storeId, providerId, providerName, totalD
 
         setSaving(true)
         try {
-            const walletName = cashWallets.find(w => w.id === selectedCashWallet)?.name
-
             const response = await fetch('/api/providers/payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    providerId,
-                    amount: payAmount,
-                    paymentMethod,
-                    walletId: selectedCashWallet,
-                    walletName
-                })
+                body: JSON.stringify({ providerId, amount: payAmount })
             })
 
             const result = await response.json()
@@ -131,72 +108,7 @@ export function ProviderPaymentModal({ storeId, providerId, providerName, totalD
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>Método de Pago</label>
-                        <div className="space-y-3">
-                            <button onClick={() => setPaymentMethod('cash')}
-                                className={`w-full toul-card p-3 flex items-center justify-between transition-all ${paymentMethod === 'cash' ? 'ring-2' : ''}`}
-                                style={{ borderColor: paymentMethod === 'cash' ? 'var(--toul-accent)' : 'var(--toul-border)', '--tw-ring-color': 'var(--toul-accent)' } as any}>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--toul-accent)' }}>
-                                        <CreditCard size={16} />
-                                    </div>
-                                    <div className="text-left">
-                                        <p className="font-bold text-sm leading-tight" style={{ color: 'var(--toul-text)' }}>Efectivo / Banco</p>
-                                        <p className="text-[10px]" style={{ color: 'var(--toul-text-subtle)' }}>Se descuenta de la caja</p>
-                                    </div>
-                                </div>
-                                {paymentMethod === 'cash' && <CheckCircle2 size={18} style={{ color: 'var(--toul-accent)' }} />}
-                            </button>
 
-                            {paymentMethod === 'cash' && (
-                                <div className="pl-4 border-l-2 ml-4" style={{ borderColor: 'var(--toul-accent)' }}>
-                                    <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--toul-text-muted)' }}>
-                                        Seleccionar cuenta:
-                                    </label>
-                                    <select
-                                        className="toul-input w-full py-2 text-sm"
-                                        value={selectedCashWallet}
-                                        onChange={(e) => setSelectedCashWallet(e.target.value)}
-                                    >
-                                        {cashWallets.map(wallet => (
-                                            <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                                        ))}
-                                        {cashWallets.length === 0 && (
-                                            <option value="" disabled>No hay cuentas de caja</option>
-                                        )}
-                                    </select>
-                                </div>
-                            )}
-
-                            <button onClick={() => setPaymentMethod('capital')}
-                                className={`w-full toul-card p-3 flex items-center justify-between transition-all ${paymentMethod === 'capital' ? 'ring-2' : ''}`}
-                                style={{ borderColor: paymentMethod === 'capital' ? '#6366f1' : 'var(--toul-border)', '--tw-ring-color': '#6366f1' } as any}>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
-                                        <Package size={16} />
-                                    </div>
-                                    <div className="text-left">
-                                        <p className="font-bold text-sm leading-tight" style={{ color: 'var(--toul-text)' }}>Capital Propio</p>
-                                        <p className="text-[10px]" style={{ color: 'var(--toul-text-subtle)' }}>Inyección de bolsillo</p>
-                                    </div>
-                                </div>
-                                {paymentMethod === 'capital' && <CheckCircle2 size={18} style={{ color: '#6366f1' }} />}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Alerts */}
-                    {paymentMethod === 'capital' && (
-                        <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
-                            <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-                            <p>Se registrará una <strong>inyección de capital propio</strong>. El saldo de tu caja no se verá afectado.</p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer */}
-                <div className="p-4 border-t bg-gray-50 dark:bg-gray-900/50" style={{ borderColor: 'var(--toul-border)' }}>
                     <button
                         disabled={saving || !amount || Number(amount) <= 0 || Number(amount) > maxAmount}
                         onClick={handleConfirm}

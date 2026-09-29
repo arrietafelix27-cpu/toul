@@ -1,4 +1,10 @@
 -- =================================================================
+-- TOUL — Compras sin elegir 'de dónde sale el dinero'
+-- Los métodos de pago quedan solo para las ventas.
+-- Pegar en el SQL Editor de Supabase. Se puede ejecutar varias veces.
+-- =================================================================
+
+-- =================================================================
 -- RPC: process_purchase(payload jsonb) RETURNS jsonb
 -- =================================================================
 -- Procesa una compra completa de forma atómica.
@@ -230,3 +236,5 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.process_purchase(jsonb) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

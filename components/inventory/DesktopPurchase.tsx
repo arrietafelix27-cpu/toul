@@ -26,7 +26,6 @@ interface Props {
     products: Product[]
     variantsByProduct: Record<string, Variant[]>
     providers: Provider[]
-    cashWallets: { id: string; name: string }[]
     // Cart state
     selectedItems: SelectedItem[]
     addItem: (product: Product, variantId?: string, variantName?: string) => void
@@ -39,14 +38,10 @@ interface Props {
     sortBy: 'A-Z' | 'Stock' | 'Recientes'
     setSortBy: (v: 'A-Z' | 'Stock' | 'Recientes') => void
     // Payment state
-    paymentMethod: 'cash' | 'credit' | 'capital'
-    setPaymentMethod: (v: 'cash' | 'credit' | 'capital') => void
-    selectedCashWallet: string
-    setSelectedCashWallet: (v: string) => void
+    paymentMethod: 'cash' | 'credit'
+    setPaymentMethod: (v: 'cash' | 'credit') => void
     initialPayment: string
     setInitialPayment: (v: string) => void
-    initialPaymentMethod: 'cash' | 'capital'
-    setInitialPaymentMethod: (v: 'cash' | 'capital') => void
     selectedProviderId: string
     setSelectedProviderId: (v: string) => void
     dueDate: string
@@ -61,11 +56,11 @@ interface Props {
 // ─── Component ───────────────────────────────────────────────
 
 export function DesktopPurchase({
-    products, variantsByProduct, providers, cashWallets,
+    products, variantsByProduct, providers,
     selectedItems, addItem, updateItem, removeItem,
     expandedInPicker, toggleExpand, searchQuery, setSearchQuery, sortBy, setSortBy,
-    paymentMethod, setPaymentMethod, selectedCashWallet, setSelectedCashWallet,
-    initialPayment, setInitialPayment, initialPaymentMethod, setInitialPaymentMethod,
+    paymentMethod, setPaymentMethod,
+    initialPayment, setInitialPayment,
     selectedProviderId, setSelectedProviderId, dueDate, setDueDate,
     subtotal, total, saving, onSubmit,
 }: Props) {
@@ -291,77 +286,36 @@ export function DesktopPurchase({
                 {/* ── RIGHT: Payment + Submit ──────────────────────────── */}
                 <div className="sticky top-6 space-y-4">
 
-                    {/* Payment method */}
+                    {/* Cómo se paga la compra */}
                     <div className="toul-card p-5 space-y-3">
-                        <p className="text-sm font-semibold mb-1" style={{ color: 'var(--toul-text-muted)' }}>¿De dónde saldrá el dinero?</p>
+                        <p className="text-sm font-semibold mb-1" style={{ color: 'var(--toul-text-muted)' }}>¿Cómo vas a pagar esta compra?</p>
 
-                        {/* Cash */}
-                        <button onClick={() => setPaymentMethod('cash')}
-                            className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all border ${paymentMethod === 'cash' ? 'ring-2' : ''}`}
-                            style={{
-                                background: paymentMethod === 'cash' ? 'rgba(74,222,128,0.06)' : 'var(--toul-surface-2)',
-                                borderColor: paymentMethod === 'cash' ? 'var(--toul-accent)' : 'transparent',
-                                '--tw-ring-color': 'var(--toul-accent)',
-                            } as any}>
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                                style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--toul-accent)' }}>
-                                <CreditCard size={16} />
-                            </div>
-                            <div className="flex-1 text-left">
-                                <p className="text-sm font-bold" style={{ color: 'var(--toul-text)' }}>Billetera del Negocio</p>
-                                <p className="text-xs" style={{ color: 'var(--toul-text-subtle)' }}>Nequi, Efectivo, Bancolombia...</p>
-                            </div>
-                            {paymentMethod === 'cash' && <CheckCircle2 size={16} style={{ color: 'var(--toul-accent)' }} />}
-                        </button>
-
-                        {paymentMethod === 'cash' && (
-                            <div className="pl-3 border-l-2" style={{ borderColor: 'var(--toul-accent)' }}>
-                                <select className="toul-input w-full text-sm"
-                                    value={selectedCashWallet}
-                                    onChange={(e) => setSelectedCashWallet(e.target.value)}>
-                                    {cashWallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                                    {cashWallets.length === 0 && <option value="" disabled>No hay carteras</option>}
-                                </select>
-                            </div>
-                        )}
-
-                        {/* Capital */}
-                        <button onClick={() => setPaymentMethod('capital')}
-                            className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all border ${paymentMethod === 'capital' ? 'ring-2' : ''}`}
-                            style={{
-                                background: paymentMethod === 'capital' ? 'rgba(59,130,246,0.06)' : 'var(--toul-surface-2)',
-                                borderColor: paymentMethod === 'capital' ? 'var(--toul-info)' : 'transparent',
-                                '--tw-ring-color': 'var(--toul-info)',
-                            } as any}>
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                                style={{ background: 'rgba(59,130,246,0.12)', color: 'var(--toul-info)' }}>
-                                <CreditCard size={16} />
-                            </div>
-                            <div className="flex-1 text-left">
-                                <p className="text-sm font-bold" style={{ color: 'var(--toul-text)' }}>Capital Propio</p>
-                                <p className="text-xs" style={{ color: 'var(--toul-text-subtle)' }}>Dinero de tu bolsillo</p>
-                            </div>
-                            {paymentMethod === 'capital' && <CheckCircle2 size={16} style={{ color: 'var(--toul-info)' }} />}
-                        </button>
-
-                        {/* Credit */}
-                        <button onClick={() => setPaymentMethod('credit')}
-                            className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all border ${paymentMethod === 'credit' ? 'ring-2' : ''}`}
-                            style={{
-                                background: paymentMethod === 'credit' ? 'rgba(245,158,11,0.06)' : 'var(--toul-surface-2)',
-                                borderColor: paymentMethod === 'credit' ? 'var(--toul-warning)' : 'transparent',
-                                '--tw-ring-color': 'var(--toul-warning)',
-                            } as any}>
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                                style={{ background: 'var(--toul-warning-dim)', color: 'var(--toul-warning)' }}>
-                                <Package size={16} />
-                            </div>
-                            <div className="flex-1 text-left">
-                                <p className="text-sm font-bold" style={{ color: 'var(--toul-text)' }}>A Crédito</p>
-                                <p className="text-xs" style={{ color: 'var(--toul-text-subtle)' }}>Genera deuda con proveedor</p>
-                            </div>
-                            {paymentMethod === 'credit' && <CheckCircle2 size={16} style={{ color: 'var(--toul-warning)' }} />}
-                        </button>
+                        {([
+                            { value: 'cash' as const, title: 'Ya la pagué', text: 'La compra queda saldada', color: 'var(--toul-accent)', dim: 'var(--toul-accent-dim)' },
+                            { value: 'credit' as const, title: 'Queda debiendo', text: 'Genera deuda con el proveedor', color: 'var(--toul-warning)', dim: 'var(--toul-warning-dim)' },
+                        ]).map(option => {
+                            const active = paymentMethod === option.value
+                            return (
+                                <button key={option.value} onClick={() => setPaymentMethod(option.value)}
+                                    className="w-full p-3 rounded-xl flex items-center gap-3 border text-left"
+                                    style={{
+                                        minHeight: 64,
+                                        background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface-2)',
+                                        borderColor: active ? 'var(--toul-border-focused)' : 'transparent',
+                                        transition: 'background var(--toul-transition), border-color var(--toul-transition)',
+                                    }}>
+                                    <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                                        style={{ background: option.dim, color: option.color }}>
+                                        {option.value === 'cash' ? <CreditCard size={17} /> : <Package size={17} />}
+                                    </span>
+                                    <span className="flex-1">
+                                        <span className="block text-sm font-bold" style={{ color: 'var(--toul-text)' }}>{option.title}</span>
+                                        <span className="block text-xs" style={{ color: 'var(--toul-text-subtle)' }}>{option.text}</span>
+                                    </span>
+                                    {active && <CheckCircle2 size={16} style={{ color: option.color }} />}
+                                </button>
+                            )
+                        })}
                     </div>
 
                     {/* Provider + Credit fields */}
@@ -398,38 +352,6 @@ export function DesktopPurchase({
                                         value={initialPayment}
                                         onChange={(e) => setInitialPayment(e.target.value)} />
                                 </div>
-                                {Number(initialPayment) > 0 && (
-                                    <div>
-                                        <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>¿De dónde sale el abono?</label>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => setInitialPaymentMethod('cash')}
-                                                className="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all border"
-                                                style={{
-                                                    background: initialPaymentMethod === 'cash' ? 'var(--toul-accent-dim)' : 'transparent',
-                                                    color: initialPaymentMethod === 'cash' ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
-                                                    borderColor: initialPaymentMethod === 'cash' ? 'var(--toul-accent)' : 'var(--toul-border)',
-                                                }}>
-                                                Billetera
-                                            </button>
-                                            <button onClick={() => setInitialPaymentMethod('capital')}
-                                                className="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all border"
-                                                style={{
-                                                    background: initialPaymentMethod === 'capital' ? 'rgba(59,130,246,0.12)' : 'transparent',
-                                                    color: initialPaymentMethod === 'capital' ? 'var(--toul-info)' : 'var(--toul-text-muted)',
-                                                    borderColor: initialPaymentMethod === 'capital' ? 'var(--toul-info)' : 'var(--toul-border)',
-                                                }}>
-                                                Capital
-                                            </button>
-                                        </div>
-                                        {initialPaymentMethod === 'cash' && (
-                                            <select className="toul-input w-full mt-2 text-sm"
-                                                value={selectedCashWallet}
-                                                onChange={(e) => setSelectedCashWallet(e.target.value)}>
-                                                {cashWallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                                            </select>
-                                        )}
-                                    </div>
-                                )}
                             </>
                         )}
                     </div>
@@ -448,15 +370,10 @@ export function DesktopPurchase({
                                 </span>
                             </div>
                         )}
-                        {/* Context alert */}
-                        {paymentMethod === 'cash' && selectedItems.length > 0 && (
-                            <p className="text-xs p-2.5 rounded-lg" style={{ background: 'rgba(239,68,68,0.08)', color: 'var(--toul-error)' }}>
-                                Se registrará un <strong>egreso</strong> de {formatCOP(total)} en tu caja.
-                            </p>
-                        )}
-                        {paymentMethod === 'capital' && selectedItems.length > 0 && (
-                            <p className="text-xs p-2.5 rounded-lg" style={{ background: 'rgba(59,130,246,0.08)', color: 'var(--toul-info)' }}>
-                                Se registrará como <strong>capital propio</strong>. Tu caja no se verá afectada.
+                        {selectedItems.length > 0 && (
+                            <p className="text-xs p-2.5 rounded-lg" style={{ background: 'var(--toul-surface-2)', color: 'var(--toul-text-muted)' }}>
+                                Los productos entran al inventario y se recalcula su costo promedio.
+                                {paymentMethod === 'credit' && ' La deuda queda registrada con el proveedor.'}
                             </p>
                         )}
                         <button
