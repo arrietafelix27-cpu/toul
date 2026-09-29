@@ -148,6 +148,12 @@ export default function NewPurchaseFlow() {
                     total,
                     isCredit: paymentMethod === 'credit',
                     paidNow: paymentMethod === 'credit' ? Math.round(Number(initialPayment) || 0) : total,
+                    // Compatibilidad: la versión anterior del servidor espera `payments`.
+                    // Así la compra funciona aunque el SQL nuevo no esté aplicado todavía.
+                    payments: (() => {
+                        const paid = paymentMethod === 'credit' ? Math.round(Number(initialPayment) || 0) : total
+                        return paid > 0 ? [{ methodId: null, methodName: 'General', amount: paid, isCapital: false }] : []
+                    })(),
                     dueDate: dueDate ? new Date(dueDate).toISOString() : null,
                     items: selectedItems.map(item => ({
                         productId: item.product.id,
