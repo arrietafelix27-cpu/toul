@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Package, Wallet, Users, Settings, BarChart2, Clock, Menu, ChevronRight, Plus, Sparkles, ShieldCheck, LockKeyhole, MonitorSmartphone } from 'lucide-react'
 import { usePendingApprovalsCount } from '@/lib/isla/useSession'
-import { usePOS } from '@/components/pos/POSContext'
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -45,7 +45,7 @@ const NAV_SECTIONS = [
     {
         label: 'Operaciones',
         items: [
-            { href: '/products', icon: Package, label: 'Productos' },
+            { href: '/products', icon: Package, label: 'Catálogo' },
             { href: '/inventory', icon: Package, label: 'Inventario' },
             { href: '/cash', icon: Wallet, label: 'Caja' },
             { href: '/ventas', icon: Clock, label: 'Ventas' },
@@ -71,7 +71,7 @@ const NAV_SECTIONS = [
 // ── SIDEBAR (desktop) ──────────────────────────────────────────────────────
 export function Sidebar() {
     const pathname = usePathname()
-    const { openPOS } = usePOS()
+    const router = useRouter()
     const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
     const isActive = (href: string) => pathname === href
 
@@ -107,7 +107,7 @@ export function Sidebar() {
             {/* CTA: Nueva venta */}
             <div className="px-3 pt-4 pb-2">
                 <motion.button
-                    onClick={openPOS}
+                    onClick={() => router.push('/caja')}
                     whileTap={{ scale: 0.97 }}
                     transition={SPRING_PRESS}
                     className="w-full flex items-center justify-center gap-2"
@@ -207,7 +207,7 @@ export function Sidebar() {
 
 const MOBILE_NAV = [
     { href: '/', icon: LayoutDashboard, label: 'Inicio' },
-    { href: '/products', icon: Package, label: 'Productos' },
+    { href: '/products', icon: Package, label: 'Catálogo' },
     { type: 'pos' as const },
     { href: '/cash', icon: Wallet, label: 'Caja' },
     { type: 'menu' as const, icon: Menu, label: 'Más' },
@@ -247,7 +247,7 @@ const MENU_SECTIONS = [
 
 export function BottomNav() {
     const pathname = usePathname()
-    const { openPOS } = usePOS()
+    const router = useRouter()
     const [menuOpen, setMenuOpen] = useState(false)
     const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
 
@@ -410,7 +410,7 @@ export function BottomNav() {
                             return (
                                 <div key="pos-center" className="flex items-center justify-center" style={{ width: 64 }}>
                                     <motion.button
-                                        onClick={openPOS}
+                                        onClick={() => router.push('/caja')}
                                         whileTap={{ scale: 0.94 }}
                                         transition={SPRING_PRESS}
                                         className="flex items-center justify-center"

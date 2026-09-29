@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { PriceField, EASE_OUT_EMIL } from '@/components/ui'
 
 /** Apertura de turno: se registra con cuánto efectivo arranca la caja. */
-export function OpenSessionCard({ name, onOpened }: { name: string; onOpened: () => void }) {
+export function OpenSessionCard({ name, onOpened, embedded = false }: { name: string; onOpened: () => void; embedded?: boolean }) {
     const [base, setBase] = useState('')
     const [opening, setOpening] = useState(false)
 
@@ -19,6 +19,17 @@ export function OpenSessionCard({ name, onOpened }: { name: string; onOpened: ()
         if (error) { toast.error(error.message); return }
         toast.success('Turno abierto. ¡Buenas ventas!')
         onOpened()
+    }
+
+    if (embedded) {
+        return (
+            <div>
+                <PriceField label="Base en efectivo" value={base} onChange={setBase} step={1000} />
+                <button className="toul-btn-primary" onClick={open} disabled={opening} style={{ marginTop: 14 }}>
+                    {opening ? 'Abriendo…' : 'Abrir turno'}
+                </button>
+            </div>
+        )
     }
 
     return (

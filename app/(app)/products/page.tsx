@@ -439,7 +439,7 @@ export default function ProductsPage() {
 
                 <motion.div variants={fadeUp} initial="hidden" animate="visible"
                     className="flex items-center justify-between mb-5 relative">
-                    <h1 className="text-2xl font-bold" style={{ color: 'var(--toul-text)' }}>Productos</h1>
+                    <h1 className="text-2xl font-bold" style={{ color: 'var(--toul-text)' }}>Catálogo</h1>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setShowCategoriesModal(true)}
@@ -1157,8 +1157,8 @@ function EmptyState({ hasSearch, hasFilter }: { hasSearch: boolean; hasFilter: b
             <p className="text-sm mb-5" style={{ color: 'var(--toul-text-muted)' }}>{message}</p>
             {!hasSearch && !hasFilter && (
                 <Link href="/products/new"
-                    className="inline-flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
-                    style={{ background: 'var(--toul-accent)', textDecoration: 'none' }}>
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+                    style={{ background: 'var(--toul-accent)', color: '#000', textDecoration: 'none' }}>
                     <Plus size={16} /> Crear producto
                 </Link>
             )}

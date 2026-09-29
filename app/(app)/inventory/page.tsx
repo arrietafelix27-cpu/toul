@@ -221,8 +221,8 @@ export default function InventoryPage() {
                     description={searchQuery ? 'No hay resultados para tu búsqueda.' : 'Parece que aún no tienes productos en tu inventario.'}
                     action={!searchQuery && (
                         <Link href="/products/new"
-                            className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all active:scale-95"
-                            style={{ background: 'var(--toul-accent)', textDecoration: 'none', boxShadow: '0 4px 16px var(--toul-accent-glow)' }}>
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all active:scale-95"
+                            style={{ background: 'var(--toul-accent)', color: '#000', textDecoration: 'none', boxShadow: '0 4px 16px var(--toul-accent-glow)' }}>
                             <Plus size={16} /> Crear mi primer producto
                         </Link>
                     )}

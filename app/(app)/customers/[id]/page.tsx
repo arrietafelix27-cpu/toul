@@ -6,7 +6,7 @@ import { formatCOP, formatDate } from '@/lib/utils'
 import { ArrowLeft, Share2, Plus, Check } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { PAYMENT_METHODS, type PaymentMethod } from '@/lib/types'
+import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
 import type { Customer, Credit } from '@/lib/types'
 
 export default function CustomerDetailPage() {
@@ -19,7 +19,13 @@ export default function CustomerDetailPage() {
     const [loading, setLoading] = useState(true)
     const [showPayment, setShowPayment] = useState(false)
     const [payAmount, setPayAmount] = useState('')
-    const [payMethod, setPayMethod] = useState<PaymentMethod>('efectivo')
+    const { methods } = usePaymentMethods()
+    const [payMethod, setPayMethod] = useState('Efectivo')
+
+    // El método guardado debe existir de verdad en el negocio
+    useEffect(() => {
+        if (methods.length && !methods.some(m => m.name === payMethod)) setPayMethod(methods[0].name)
+    }, [methods, payMethod])
     const [saving, setSaving] = useState(false)
 
     useEffect(() => { loadData() }, [id])
@@ -94,8 +100,8 @@ export default function CustomerDetailPage() {
                             <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--toul-text)' }}>Registrar abono</h3>
                             <div className="flex flex-col gap-3">
                                 <input className="toul-input" type="number" min={0} max={customer.total_debt} placeholder="Monto del abono" value={payAmount} onChange={e => setPayAmount(e.target.value)} />
-                                <select className="toul-input" value={payMethod} onChange={e => setPayMethod(e.target.value as PaymentMethod)}>
-                                    {PAYMENT_METHODS.map(pm => <option key={pm.value} value={pm.value}>{pm.label}</option>)}
+                                <select className="toul-input" value={payMethod} onChange={e => setPayMethod(e.target.value)}>
+                                    {methods.map(pm => <option key={pm.id} value={pm.name}>{pm.name}</option>)}
                                 </select>
                                 <div className="grid grid-cols-2 gap-2">
                                     <button onClick={() => setShowPayment(false)} className="toul-btn-secondary">Cancelar</button>

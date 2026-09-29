@@ -5,7 +5,7 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useStore } from '@/lib/hooks/useData'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Sparkles, Brain, User, ArrowLeft, Trash2, TrendingUp, Wallet, Package, Target } from 'lucide-react'
+import { Send, Sparkles, Brain, User, ArrowLeft, Trash2, TrendingUp, Wallet, Package, Target, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ToulAIPage() {
@@ -104,6 +104,8 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
     const scrollRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
     const [input, setInput] = useState('')
+    const [chatError, setChatError] = useState<string | null>(null)
+    const [lastMessage, setLastMessage] = useState('')
 
     const transport = useMemo(() => new DefaultChatTransport({
         api: '/api/toul-ai/chat',
@@ -114,6 +116,11 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
         transport: transport as any,
         onError: (err: any) => {
             console.error('TOUL AI Error:', err)
+            setChatError(
+                typeof navigator !== 'undefined' && !navigator.onLine
+                    ? 'Sin internet. TOUL AI necesita conexión para responder.'
+                    : 'TOUL AI no pudo responder. Intenta de nuevo en un momento.'
+            )
         }
     })
     const { messages, sendMessage, status, setMessages }: any = chatHelpers
@@ -124,10 +131,13 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
         const currentInput = input.trim()
         if (!currentInput || isLoading) return
         setInput('')
+        setChatError(null)
+        setLastMessage(currentInput)
         try {
             await sendMessage({ text: currentInput })
         } catch (err: any) {
             console.error('Submit Error:', err)
+            setChatError('TOUL AI no pudo responder. Intenta de nuevo en un momento.')
         }
     }
 
@@ -282,7 +292,7 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
                                     <div
                                         className={`px-4 py-3 text-[13px] leading-relaxed ${isUser ? 'rounded-2xl rounded-tr-md' : 'rounded-2xl rounded-tl-md'}`}
                                         style={isUser
-                                            ? { background: 'var(--toul-accent)', color: '#fff' }
+                                            ? { background: 'var(--toul-accent)', color: '#000' }
                                             : { background: 'var(--toul-surface)', border: '1px solid var(--toul-border)', color: 'var(--toul-text-muted)' }
                                         }
                                     >
@@ -322,6 +332,31 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
                         </motion.div>
                     )}
                 </div>
+
+                {/* ── Aviso de error ──────────────────────────────────── */}
+                {chatError && (
+                    <div className="px-4 md:px-6 pb-3 shrink-0">
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '12px 14px', borderRadius: 14,
+                            background: 'var(--toul-error-dim)', border: '1px solid rgba(255,69,58,0.2)',
+                        }}>
+                            <AlertTriangle size={17} style={{ color: 'var(--toul-error)', flexShrink: 0 }} />
+                            <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: 'var(--toul-error)' }}>{chatError}</span>
+                            {lastMessage && (
+                                <button
+                                    onClick={() => { setChatError(null); sendMessage({ text: lastMessage }) }}
+                                    style={{
+                                        height: 34, padding: '0 12px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+                                        border: '1px solid rgba(255,69,58,0.3)', background: 'transparent',
+                                        color: 'var(--toul-error)', fontSize: 13, fontWeight: 600, flexShrink: 0,
+                                    }}>
+                                    Reintentar
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Input Area ──────────────────────────────────────── */}
                 <div className="px-4 md:px-6 py-4 shrink-0" style={{ borderTop: '1px solid var(--toul-border)', background: 'var(--toul-surface)' }}>

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { Clock, X, Printer, Ban, Search, SlidersHorizontal } from 'lucide-react'
@@ -8,7 +9,6 @@ import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
 import type { SaleVoid } from '@/lib/isla/types'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PAYMENT_METHODS } from '@/lib/types'
 import { staggerContainer, staggerItem, fadeUp, t, panelVariants, backdropVariants } from '@/lib/motion'
 import { Skeleton, EmptyState } from '@/components/ui/Skeleton'
 import { useStore } from '@/lib/hooks/useData'
@@ -119,6 +119,18 @@ export default function VentasPage() {
         },
         { revalidateOnFocus: false, dedupingInterval: 30000 }
     )
+
+    // Nombres reales de los métodos de pago del negocio (Datáfono, Addi, etc.)
+    const { data: methodNames } = useSWR(storeId ? ['method-names', storeId] : null, async () => {
+        const res = await fetch('/api/payment-methods')
+        const data = await res.json()
+        const map: Record<string, string> = {}
+        for (const m of data.methods ?? []) map[String(m.name).toLowerCase()] = m.name
+        return map
+    }, { revalidateOnFocus: false })
+
+    const methodLabel = (raw: string) =>
+        methodNames?.[raw?.toLowerCase()] ?? (raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : 'Pago')
 
     const { data: sellers } = useSWR(storeId ? ['sellers', storeId] : null, async () => {
         const { data } = await supabase.from('store_members').select('display_name').eq('store_id', storeId).order('created_at')
@@ -381,14 +393,20 @@ export default function VentasPage() {
                 <EmptyState
                     icon={Clock}
                     title="Sin ventas en este período"
-                    description="Cambia el filtro o registra una venta nueva para ver resultados aquí."
+                    description="Cambia el filtro, o ve a la caja y registra una venta."
+                    action={
+                        <Link href="/caja"
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold"
+                            style={{ background: 'var(--toul-accent)', color: '#000', textDecoration: 'none', boxShadow: '0 4px 16px var(--toul-accent-glow)' }}>
+                            Ir a la caja
+                        </Link>
+                    }
                 />
             ) : (
                 <>
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                         className="flex flex-col gap-2">
                         {filtered.map(sale => {
-                            const pm = PAYMENT_METHODS.find(m => m.value === sale.payment_method)
                             const profit = sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0)
                             const summary = sale.sale_items.slice(0, 2).map(i => (i.products as any)?.name || 'Producto').join(', ')
                             const more = sale.sale_items.length > 2 ? ` +${sale.sale_items.length - 2}` : ''
@@ -404,7 +422,7 @@ export default function VentasPage() {
                                     <div className="flex-1 min-w-0">
                                         <p className="font-semibold text-sm truncate" style={{ color: 'var(--toul-text)' }}>{summary}{more}</p>
                                         <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>
-                                            {formatDateTime(sale.created_at)} · {pm?.label || sale.payment_method}
+                                            {formatDateTime(sale.created_at)} · {methodLabel(sale.payment_method)}
                                             {sale.seller_name && sale.seller_name !== 'Administrador' && <span> · {sale.seller_name}</span>}
                                             {sale.is_credit && <span style={{ color: '#00E5A0', fontWeight: 600 }}> · Crédito</span>}
                                             {sale.is_credit && sale.customer_name && <span style={{ color: 'var(--toul-text-muted)' }}> — {sale.customer_name}</span>}
@@ -495,7 +513,7 @@ export default function VentasPage() {
                                     <div className="flex justify-between">
                                         <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Método</span>
                                         <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>
-                                            {PAYMENT_METHODS.find(m => m.value === selectedSale.payment_method)?.label || selectedSale.payment_method}
+                                            {methodLabel(selectedSale.payment_method)}
                                         </span>
                                     </div>
                                 )}

@@ -12,9 +12,11 @@ import { useSWRConfig } from 'swr'
 import { formatCOP } from '@/lib/utils'
 import { usePOS } from '../POSContext'
 import { usePOSFlow } from '../POSFlowProvider'
-import type { SaleSnapshot } from '../mobile/Step3Confirmation'
+import type { SaleSnapshot } from '../types'
 import type { Customer } from '@/lib/types'
 import { usePOSMode } from '../POSMode'
+import { useIsMobile } from '@/lib/hooks/useIsMobile'
+import { AnimatePresence } from 'framer-motion'
 import { useCreditApproval, type CreditApprovalState } from '@/lib/isla/useCreditApproval'
 import { createClient } from '@/lib/supabase/client'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
@@ -61,6 +63,8 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 function ProductList() {
     const { closePOS } = usePOS()
     const { mode } = usePOSMode()
+    // En celular la cuadrícula deja ver un producto por pantalla: se usa lista
+    const narrow = useIsMobile(900)
     const { data, cart } = usePOSFlow()
     const searchRef = useRef<HTMLInputElement>(null)
     const [search, setSearch] = useState('')
@@ -179,11 +183,110 @@ function ProductList() {
 
             {/* Product Grid — desktop-optimized cards with large images */}
             <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
+                <div style={narrow
+                    ? { display: 'flex', flexDirection: 'column', gap: 8 }
+                    : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
                     {sorted.map(product => {
                         const variants = data.variantsByProduct[product.id]
                         const isVariantProduct = variants && variants.length > 0
                         const img = (product.images?.[0] || product.image_url) as string | null
+
+                        // ── Fila de celular ───────────────────────────────────
+                        if (narrow) {
+                            const variantList = variants ?? []
+                            const qty = isVariantProduct ? 0 : (cart.cartMap[product.id] || 0)
+                            const inCart = isVariantProduct
+                                ? variantList.some(v => (cart.cartMap[`${product.id}:${v.id}`] || 0) > 0)
+                                : qty > 0
+                            const oos = !isVariantProduct && product.stock <= 0
+                            const prices = variantList.map(v => v.sale_price)
+                            const priceLabel = isVariantProduct
+                                ? (Math.min(...prices) === Math.max(...prices)
+                                    ? formatCOP(Math.min(...prices))
+                                    : `${formatCOP(Math.min(...prices))} – ${formatCOP(Math.max(...prices))}`)
+                                : formatCOP(product.sale_price)
+
+                            return (
+                                <div
+                                    key={product.id}
+                                    onClick={() => {
+                                        if (isVariantProduct) { setExpandedVariantProduct(product.id); return }
+                                        if (!oos && qty === 0) cart.addItem(product.id, product.stock)
+                                    }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 12, padding: 10, minHeight: 76,
+                                        borderRadius: 16,
+                                        background: inCart ? 'var(--toul-surface-focused)' : 'var(--toul-pos-bg-card)',
+                                        border: `1px solid ${inCart ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
+                                        opacity: oos ? 0.4 : 1,
+                                        pointerEvents: oos ? 'none' : 'auto',
+                                        transition: 'background var(--toul-transition), border-color var(--toul-transition)',
+                                    }}
+                                >
+                                    <div style={{
+                                        width: 56, height: 56, borderRadius: 12, flexShrink: 0, overflow: 'hidden',
+                                        background: 'linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                        {img
+                                            ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                                            : <Package size={20} style={{ color: 'var(--toul-pos-text-inactive)' }} />}
+                                    </div>
+
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <p style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--toul-pos-text-main)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {product.name}
+                                        </p>
+                                        <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--toul-primary)', margin: '2px 0 0', letterSpacing: '-0.02em' }}>
+                                            {priceLabel}
+                                            <span style={{ fontSize: 12, fontWeight: 500, color: oos || (!isVariantProduct && product.stock <= 3) ? 'var(--toul-pos-warning)' : 'var(--toul-pos-text-sec)', marginLeft: 8 }}>
+                                                {isVariantProduct ? `${variantList.length} presentaciones` : oos ? 'Sin stock' : `${product.stock} und`}
+                                            </span>
+                                        </p>
+                                    </div>
+
+                                    {isVariantProduct ? (
+                                        <ChevronRight size={20} style={{ color: 'var(--toul-pos-text-sec)', flexShrink: 0 }} />
+                                    ) : qty > 0 ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); cart.decrementItem(product.id) }}
+                                                aria-label={qty === 1 ? 'Quitar del carrito' : 'Quitar uno'}
+                                                style={{
+                                                    width: 40, height: 40, borderRadius: 12, border: 'none',
+                                                    background: qty === 1 ? 'var(--toul-pos-error-dim)' : 'var(--toul-surface-2)',
+                                                    color: qty === 1 ? 'var(--toul-pos-error)' : 'var(--toul-pos-text-main)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                                                }}>
+                                                {qty === 1 ? <Trash2 size={17} /> : <Minus size={17} />}
+                                            </button>
+                                            <span style={{ fontSize: 17, fontWeight: 700, minWidth: 20, textAlign: 'center', color: 'var(--toul-pos-text-main)' }}>{qty}</span>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); cart.addItem(product.id, product.stock) }}
+                                                disabled={qty >= product.stock}
+                                                aria-label="Agregar uno"
+                                                style={{
+                                                    width: 40, height: 40, borderRadius: 12, border: 'none',
+                                                    background: 'var(--toul-primary)', color: '#000',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    cursor: qty >= product.stock ? 'default' : 'pointer',
+                                                    opacity: qty >= product.stock ? 0.3 : 1,
+                                                }}>
+                                                <Plus size={17} strokeWidth={2.6} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                                            background: 'var(--toul-surface-2)', color: 'var(--toul-pos-text-main)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        }}>
+                                            <Plus size={18} strokeWidth={2.4} />
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        }
 
                         // ── Variant product card ──────────────────────────────
                         if (isVariantProduct) {
@@ -1290,6 +1393,8 @@ export default function DesktopPOS() {
     const [submitting, setSubmitting] = useState(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [printing, setPrinting] = useState(false)
+    const [checkoutOpen, setCheckoutOpen] = useState(false)
+    const narrow = useIsMobile(900)
 
     // Modo isla: el vendedor necesita aprobación del administrador para fiar
     const isCredit = payment.saleType === 'credito'
@@ -1460,6 +1565,108 @@ export default function DesktopPOS() {
         router.push('/ventas')
     }, [closePOS, router, onViewHistory])
 
+    const right = saleSnap ? (
+        <ConfirmationPanel
+            sale={saleSnap}
+            onNewSale={() => { setCheckoutOpen(false); handleNewSale() }}
+            onViewHistory={handleViewHistory}
+            onPrint={saleSnap.receipt
+                ? () => printReceipt(saleSnap.receipt!)
+                : saleSnap.saleId ? () => handlePrint(saleSnap.saleId!) : undefined}
+            printing={printing}
+        />
+    ) : (
+        <RightPanel
+            onConfirm={handleSubmit}
+            submitting={submitting}
+            error={submitError}
+            onClearError={() => setSubmitError(null)}
+            approval={approval}
+            needsApproval={needsApproval}
+            online={online}
+        />
+    )
+
+    // ── Celular: productos a pantalla completa + cobro en una hoja ──
+    if (narrow) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', overflow: 'hidden', background: 'var(--toul-pos-bg-main)' }}>
+                <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                    <ProductList />
+                </div>
+
+                {/* Barra de cobro */}
+                <div style={{
+                    flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 16px calc(12px + env(safe-area-inset-bottom, 0px))',
+                    borderTop: '1px solid var(--toul-pos-footer-border)',
+                    background: 'rgba(10,10,10,0.92)', backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)',
+                }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 12, color: 'var(--toul-pos-text-sec)', margin: 0 }}>
+                            {cart.cartItems.length} prod · {cart.totalUnits} und
+                        </p>
+                        <p style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.15, color: 'var(--toul-pos-text-main)', margin: 0 }}>
+                            {formatCOP(payment.total)}
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => setCheckoutOpen(true)}
+                        disabled={cart.isEmpty}
+                        style={{
+                            height: 54, padding: '0 22px', borderRadius: 16, border: 'none', flexShrink: 0,
+                            background: cart.isEmpty ? 'var(--toul-pos-btn-disabled-bg)' : 'var(--toul-primary)',
+                            color: cart.isEmpty ? 'var(--toul-pos-text-dim)' : '#000',
+                            fontSize: 16, fontWeight: 600, fontFamily: 'inherit',
+                            cursor: cart.isEmpty ? 'default' : 'pointer',
+                            boxShadow: cart.isEmpty ? 'none' : '0 6px 26px var(--toul-accent-glow)',
+                        }}>
+                        Cobrar
+                    </button>
+                </div>
+
+                <AnimatePresence>
+                    {(checkoutOpen || saleSnap) && (
+                        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'flex-end' }}>
+                            <motion.div
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                transition={{ duration: 0.18 }}
+                                onClick={() => { if (!saleSnap) setCheckoutOpen(false) }}
+                                style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}
+                            />
+                            <motion.div
+                                initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                                transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+                                style={{
+                                    position: 'relative', width: '100%', height: '92dvh',
+                                    background: 'var(--toul-pos-bg-main)',
+                                    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+                                    display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                                    boxShadow: '0 -20px 60px rgba(0,0,0,0.5)',
+                                }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px 8px', flexShrink: 0 }}>
+                                    <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-pos-text-main)' }}>
+                                        {saleSnap ? '¡Venta lista!' : 'Cobrar'}
+                                    </span>
+                                    {!saleSnap && (
+                                        <button onClick={() => setCheckoutOpen(false)} aria-label="Volver a productos"
+                                            style={{ width: 36, height: 36, borderRadius: 12, border: 'none', background: 'var(--toul-surface-2)', color: 'var(--toul-pos-text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                            <X size={17} />
+                                        </button>
+                                    )}
+                                </div>
+                                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                    {right}
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+            </div>
+        )
+    }
+
+    // ── Computador: dos columnas ───────────────────────────────────
     return (
         <div style={{
             display: 'flex', width: '100%', height: '100%', overflow: 'hidden',
@@ -1478,27 +1685,7 @@ export default function DesktopPOS() {
                 width: '40%', height: '100%', background: 'var(--toul-pos-bg-main)',
                 display: 'flex', flexDirection: 'column', overflow: 'hidden',
             }}>
-                {saleSnap ? (
-                    <ConfirmationPanel
-                        sale={saleSnap}
-                        onNewSale={handleNewSale}
-                        onViewHistory={handleViewHistory}
-                        onPrint={saleSnap.receipt
-                            ? () => printReceipt(saleSnap.receipt!)
-                            : saleSnap.saleId ? () => handlePrint(saleSnap.saleId!) : undefined}
-                        printing={printing}
-                    />
-                ) : (
-                    <RightPanel
-                        onConfirm={handleSubmit}
-                        submitting={submitting}
-                        error={submitError}
-                        onClearError={() => setSubmitError(null)}
-                        approval={approval}
-                        needsApproval={needsApproval}
-                        online={online}
-                    />
-                )}
+                {right}
             </div>
         </div>
     )

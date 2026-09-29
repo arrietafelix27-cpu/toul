@@ -2,10 +2,7 @@
 import { BottomNav, Sidebar } from '@/components/layout/BottomNav'
 import { POSProvider } from '@/components/pos/POSContext'
 import { AnimatePresence } from 'framer-motion'
-import dynamic from 'next/dynamic'
 import PageWrapper from '@/components/ui/PageWrapper'
-
-const POSDrawer = dynamic(() => import('@/components/pos/POSDrawer'), { ssr: false })
 
 function AppInner({ children }: { children: React.ReactNode }) {
     return (
@@ -19,9 +16,8 @@ function AppInner({ children }: { children: React.ReactNode }) {
                     </PageWrapper>
                 </AnimatePresence>
             </div>
-            {/* Bottom nav handles mobile POS button */}
+            {/* La venta vive en /caja — una sola caja para toda la app */}
             <BottomNav />
-            <POSDrawer />
         </div>
     )
 }

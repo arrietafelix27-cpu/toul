@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 25 de septiembre de 2026 (sesión 10 — historial con filtros y Caja sin saldos)*
+*Última actualización: 29 de septiembre de 2026 (sesión 11 — una sola caja y pulido general)*
 
 ---
 
@@ -388,6 +388,23 @@ Modals base rediseñados:
 ⚠️ **Acción requerida antes de publicar:** ejecutar `supabase/rpc/process_purchase.sql` en el SQL Editor de Supabase. Sin eso, las compras fallan con la versión nueva del código.
 
 `npm run build` pasa sin errores.
+
+### Sesión 11 — 29 de septiembre de 2026 ✅ Tanda 1 de pulido
+
+**Una sola caja en toda la app.** Había dos POS distintos (drawer móvil de 3 pasos + DesktopPOS) y el móvil no tenía turnos, aprobaciones, tirilla ni ventas sin internet.
+- `DesktopPOS` ahora es responsivo: en celular (<900px) lista compacta de productos + barra de cobro + hoja de pago; en computador, las dos columnas de siempre
+- El botón "+" del panel y "Nueva venta" del sidebar llevan a `/caja`
+- Eliminados: `POSDrawer`, `Step1Products`, `Step2Payment`, `Step3Confirmation` (~1.150 líneas). El tipo `SaleSnapshot` vive ahora en `components/pos/types.ts`
+- `app/(app)/layout.tsx` ya no monta el drawer
+- El administrador puede vender sin turno (ventas por WhatsApp); el vendedor sigue necesitándolo. Aviso con botón "Abrir turno" cuando el admin vende sin turno
+
+**Otros arreglos:**
+- Eliminado el módulo duplicado `/clients` (fantasma, sin enlaces)
+- **Métodos de pago dinámicos en Gastos y Abonos** — usaban una lista fija de 4; si creabas "Datáfono" no aparecía. Nuevo hook `lib/hooks/usePaymentMethods.ts`
+- Historial de ventas muestra el nombre real del método (antes mostraba el texto crudo)
+- TOUL AI avisa cuando falla y deja reintentar (antes solo `console.error`)
+- "Productos" pasa a llamarse **"Catálogo"** en el menú, para distinguirlo de Inventario
+- Estado vacío de Ventas con acción "Ir a la caja"; textos verdes con contraste correcto (negro sobre verde)
 
 ### Sesión 10 — 25 de septiembre de 2026 ✅ Historial de ventas + Caja simplificada
 

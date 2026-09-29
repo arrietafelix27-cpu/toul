@@ -5,17 +5,26 @@ import { formatCOP, formatDate } from '@/lib/utils'
 import { Plus, Receipt, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Skeleton, EmptyState } from '@/components/ui/Skeleton'
-import { PAYMENT_METHODS, EXPENSE_CATEGORIES, type PaymentMethod } from '@/lib/types'
+import { EXPENSE_CATEGORIES } from '@/lib/types'
+import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
 import type { Expense } from '@/lib/types'
 
 export default function ExpensesPage() {
+    const { methods, labelFor } = usePaymentMethods()
     const supabase = createClient()
     const [storeId, setStoreId] = useState('')
     const [expenses, setExpenses] = useState<Expense[]>([])
     const [loading, setLoading] = useState(true)
     const [showForm, setShowForm] = useState(false)
     const [saving, setSaving] = useState(false)
-    const [form, setForm] = useState({ category: 'otros', description: '', amount: '', method: 'efectivo' as PaymentMethod })
+    const [form, setForm] = useState({ category: 'otros', description: '', amount: '', method: 'Efectivo' })
+
+    // El método guardado debe existir de verdad en el negocio
+    useEffect(() => {
+        if (methods.length && !methods.some(m => m.name === form.method)) {
+            setForm(f => ({ ...f, method: methods[0].name }))
+        }
+    }, [methods, form.method])
 
     useEffect(() => { loadExpenses() }, [])
 
@@ -139,8 +148,8 @@ export default function ExpensesPage() {
                             </div>
                             <div>
                                 <label className="text-xs text-slate-400 mb-1 block">Cómo pagaste</label>
-                                <select className="toul-input" value={form.method} onChange={e => setForm(f => ({ ...f, method: e.target.value as PaymentMethod }))}>
-                                    {PAYMENT_METHODS.map(pm => <option key={pm.value} value={pm.value}>{pm.label}</option>)}
+                                <select className="toul-input" value={form.method} onChange={e => setForm(f => ({ ...f, method: e.target.value }))}>
+                                    {methods.map(pm => <option key={pm.id} value={pm.name}>{pm.name}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -162,7 +171,7 @@ export default function ExpensesPage() {
                 <div className="flex flex-col gap-2">
                     {expenses.map(expense => {
                         const cat = EXPENSE_CATEGORIES.find(c => c.value === expense.category)
-                        const pm = PAYMENT_METHODS.find(m => m.value === expense.payment_method)
+                        const pmLabel = labelFor(expense.payment_method)
                         return (
                             <div key={expense.id} className="bg-slate-900 border border-slate-800 rounded-2xl flex items-center gap-3 px-4 py-3">
                                 <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
@@ -174,7 +183,7 @@ export default function ExpensesPage() {
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                     <p className="font-bold text-red-400 text-sm">−{formatCOP(expense.amount)}</p>
-                                    <p className="text-xs" style={{ color: pm?.color || '#94a3b8' }}>{pm?.label}</p>
+                                    <p className="text-xs" style={{ color: 'var(--toul-text-dim)' }}>{pmLabel}</p>
                                 </div>
                             </div>
                         )
