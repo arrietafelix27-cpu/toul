@@ -9,6 +9,7 @@ import { ArrowLeft, Check, Pencil, Plus, Trash2, X } from 'lucide-react'
 import type { PaymentMethodConfig } from '@/lib/types'
 import { EASE_OUT_EMIL } from '@/components/ui'
 import { Sheet } from '@/components/isla/Sheet'
+import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 
 const COLORS = ['#32d74b', '#0a84ff', '#bf5af2', '#ffd60a', '#ff9f0a', '#ff453a', '#64d2ff', '#ffffff']
 
@@ -18,6 +19,7 @@ export default function MetodosPagoPage() {
     const [name, setName] = useState('')
     const [color, setColor] = useState(COLORS[0])
     const [saving, setSaving] = useState(false)
+    const [removing, setRemoving] = useState<PaymentMethodConfig | null>(null)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editingName, setEditingName] = useState('')
 
@@ -54,13 +56,13 @@ export default function MetodosPagoPage() {
     }
 
     async function remove(method: PaymentMethodConfig) {
-        if (!confirm(`¿Quitar "${method.name}"? Las ventas que ya se cobraron con él no se modifican.`)) return
         const res = await fetch('/api/payment-methods', {
             method: 'DELETE', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: method.id }),
         })
         const data = await res.json()
-        if (!res.ok) { toast.error(data.error || 'No se pudo quitar'); return }
+        setRemoving(null)
+        if (!res.ok) { toast.error(data.error || 'No se pudo quitar. Intenta de nuevo.'); return }
         toast.success(`"${method.name}" quitado`)
         mutate()
     }
@@ -123,13 +125,23 @@ export default function MetodosPagoPage() {
                             ) : (
                                 <>
                                     <button onClick={() => { setEditingId(method.id); setEditingName(method.name) }} aria-label={`Renombrar ${method.name}`} style={iconBtn('var(--toul-text-muted)')}><Pencil size={16} /></button>
-                                    <button onClick={() => remove(method)} aria-label={`Quitar ${method.name}`} style={iconBtn('var(--toul-error)')}><Trash2 size={16} /></button>
+                                    <button onClick={() => setRemoving(method)} aria-label={`Quitar ${method.name}`} style={iconBtn('var(--toul-error)')}><Trash2 size={16} /></button>
                                 </>
                             )}
                         </motion.div>
                     ))}
                 </div>
             )}
+
+            <ConfirmSheet
+                open={!!removing}
+                onClose={() => setRemoving(null)}
+                onConfirm={() => removing && remove(removing)}
+                title={`¿Quitar "${removing?.name}"?`}
+                message="Dejará de aparecer al cobrar. Las ventas que ya se cobraron con este método no se modifican."
+                confirmLabel="Sí, quitar"
+                danger
+            />
 
             <Sheet open={adding} onClose={() => !saving && setAdding(false)}
                 title="Nuevo método de pago" subtitle="Por ejemplo: Datáfono, Addi, Transferencia."

@@ -6,6 +6,7 @@ import { DefaultChatTransport } from 'ai'
 import { useStore } from '@/lib/hooks/useData'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Sparkles, Brain, User, ArrowLeft, Trash2, TrendingUp, Wallet, Package, Target, AlertTriangle } from 'lucide-react'
+import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import Link from 'next/link'
 
 export default function ToulAIPage() {
@@ -105,6 +106,7 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
     const inputRef = useRef<HTMLInputElement>(null)
     const [input, setInput] = useState('')
     const [chatError, setChatError] = useState<string | null>(null)
+    const [clearOpen, setClearOpen] = useState(false)
     const [lastMessage, setLastMessage] = useState('')
 
     const transport = useMemo(() => new DefaultChatTransport({
@@ -193,14 +195,23 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
                         </div>
                     </div>
                     <button
-                        onClick={() => {
-                            if (confirm('¿Borrar la conversación actual?')) setMessages([])
-                        }}
+                        onClick={() => setClearOpen(true)}
+                        aria-label="Borrar conversación"
                         className="p-2 rounded-full transition-all hover:opacity-70"
                         style={{ color: 'var(--toul-text-subtle)' }}
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
+
+                    <ConfirmSheet
+                        open={clearOpen}
+                        onClose={() => setClearOpen(false)}
+                        onConfirm={() => { setMessages([]); setChatError(null); setClearOpen(false) }}
+                        title="¿Borrar la conversación?"
+                        message="Se borra lo que hablaste con TOUL AI en esta pantalla. Tus datos del negocio no se tocan."
+                        confirmLabel="Sí, borrar"
+                        danger
+                    />
                 </div>
 
                 {/* ── Messages ───────────────────────────────────────── */}

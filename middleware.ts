@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { getSessionContext } from '@/lib/isla/context'
+import { CONTEXT_COOKIE, buildContextCookie, readCachedContext } from '@/lib/isla/sessionCookie'
 
 // Rutas donde puede estar un vendedor (modo isla)
 const SELLER_PATHS = ['/caja', '/reset-password']
@@ -56,14 +57,29 @@ export async function middleware(request: NextRequest) {
 
     // Logged in — resolve store and role (skip if already on onboarding)
     if (user && !isAuthRoute && !isOnboarding) {
-        const context = await getSessionContext(supabase)
+        // Caché de 2 minutos: evita preguntar el rol a la base de datos en cada pantalla
+        const cached = await readCachedContext(request.cookies.get(CONTEXT_COOKIE)?.value, user.id)
 
-        if (!context) {
-            return NextResponse.redirect(new URL('/onboarding', request.url))
+        let role = cached?.role
+        if (!cached) {
+            const context = await getSessionContext(supabase)
+
+            if (!context) {
+                return NextResponse.redirect(new URL('/onboarding', request.url))
+            }
+
+            role = context.role
+            const cookie = await buildContextCookie({ userId: user.id, storeId: context.storeId, role: context.role })
+            if (cookie) {
+                supabaseResponse.cookies.set(cookie.name, cookie.value, {
+                    maxAge: cookie.maxAge, httpOnly: true, sameSite: 'lax', path: '/',
+                    secure: process.env.NODE_ENV === 'production',
+                })
+            }
         }
 
         // Vendedor: solo la caja
-        if (context.role === 'seller' && !SELLER_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+        if (role === 'seller' && !SELLER_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) {
             return NextResponse.redirect(new URL('/caja', request.url))
         }
     }

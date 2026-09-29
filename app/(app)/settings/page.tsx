@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { explainError } from '@/lib/errors'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
@@ -45,7 +46,7 @@ export default function SettingsPage() {
         if (!storeName.trim()) { toast.error('Ingresa el nombre del negocio'); return }
         setSaving(true)
         const { error } = await supabase.from('stores').update({ name: storeName.trim(), category, updated_at: new Date().toISOString() }).eq('id', storeId)
-        if (error) toast.error('Error al guardar')
+        if (error) toast.error(explainError(error, 'No se pudieron guardar los datos del negocio.'))
         else toast.success('Cambios guardados ✅')
         setSaving(false)
     }

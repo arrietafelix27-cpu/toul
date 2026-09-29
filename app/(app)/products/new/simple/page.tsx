@@ -1,5 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import { explainError } from '@/lib/errors'
+import { formatCOP } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
@@ -145,7 +147,7 @@ export default function NewSimpleProductPage() {
 
         const { error } = await supabase.from('products').insert(productData)
         if (error) {
-            toast.error('Error al crear el producto: ' + error.message)
+            toast.error(explainError(error, 'No se pudo crear el producto. Revisa el nombre y el precio.'))
             setLoading(false)
             return
         }
@@ -376,6 +378,41 @@ export default function NewSimpleProductPage() {
                                 onChange={setCostPrice}
                             />
                         </div>
+
+                        {/* ─── AYUDA DE PRECIO ─── */}
+                        {costPriceNum > 0 && (
+                            <div style={{ marginBottom: 8 }}>
+                                <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '0 0 8px 2px' }}>
+                                    ¿No sabes qué precio poner? Toca la ganancia que quieres:
+                                </p>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    {[30, 40, 50, 60].map(target => {
+                                        // Precio que deja ese margen sobre la venta
+                                        const suggested = Math.round(costPriceNum / (1 - target / 100) / 100) * 100
+                                        const active = salePriceNum === suggested
+                                        return (
+                                            <button
+                                                key={target}
+                                                type="button"
+                                                onClick={() => setSalePrice(String(suggested))}
+                                                style={{
+                                                    flex: '1 1 auto', minWidth: 78, minHeight: 52,
+                                                    padding: '8px 12px', borderRadius: 13, cursor: 'pointer', fontFamily: 'inherit',
+                                                    background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                                    border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                                    color: active ? 'var(--toul-accent)' : 'var(--toul-text)',
+                                                    transition: 'background var(--toul-transition), border-color var(--toul-transition), color var(--toul-transition)',
+                                                }}>
+                                                <span style={{ display: 'block', fontSize: 12, color: 'var(--toul-text-dim)' }}>{target}% margen</span>
+                                                <span style={{ display: 'block', fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                                                    {formatCOP(suggested)}
+                                                </span>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* ─── MARGEN ─── */}
                         <motion.div

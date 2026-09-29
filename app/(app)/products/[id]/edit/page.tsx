@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { explainError } from '@/lib/errors'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
@@ -316,7 +317,7 @@ export default function EditProductPage() {
 
         const { error } = await supabase.from('products').update(updates).eq('id', id)
         if (error) {
-            toast.error('Error al guardar: ' + error.message)
+            toast.error(explainError(error, 'No se pudieron guardar los cambios.'))
             setSaving(false)
             return
         }
@@ -372,7 +373,7 @@ export default function EditProductPage() {
         const { error } = await supabase.from('products').update(updates).eq('id', id)
         setSaving(false)
         if (error) {
-            toast.error('Error al guardar: ' + error.message)
+            toast.error(explainError(error, 'No se pudieron guardar los cambios.'))
             return
         }
         toast.success('Datos actualizados')

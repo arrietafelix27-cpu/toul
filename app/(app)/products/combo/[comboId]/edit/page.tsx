@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { explainError } from '@/lib/errors'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
@@ -258,11 +259,11 @@ export default function EditComboPage() {
             image_url: imageUrl,
         }).eq('id', comboId)
 
-        if (comboErr) { toast.error('Error al actualizar el combo'); setLoading(false); return }
+        if (comboErr) { toast.error(explainError(comboErr, 'No se pudieron guardar los cambios del combo.')); setLoading(false); return }
 
         // Replace combo_items: delete all + insert new
         const { error: deleteErr } = await supabase.from('combo_items').delete().eq('combo_id', comboId)
-        if (deleteErr) { toast.error('Error al actualizar los productos del combo'); setLoading(false); return }
+        if (deleteErr) { toast.error('No se pudieron guardar los productos del combo. Intenta de nuevo.'); setLoading(false); return }
 
         const { error: itemsErr } = await supabase.from('combo_items').insert(
             selectedItems.map(i => ({

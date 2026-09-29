@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { explainError } from '@/lib/errors'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
@@ -210,7 +211,7 @@ export default function NewComboPage() {
             is_active: true,
         }).select('id').single()
 
-        if (comboErr || !combo) { toast.error('Error al crear el combo'); setLoading(false); return }
+        if (comboErr || !combo) { toast.error(explainError(comboErr, 'No se pudo crear el combo. Revisa el nombre y el precio.')); setLoading(false); return }
 
         const { error: itemsErr } = await supabase.from('combo_items').insert(
             selectedItems.map(i => ({
@@ -223,7 +224,7 @@ export default function NewComboPage() {
 
         if (itemsErr) {
             await supabase.from('combos').delete().eq('id', combo.id)
-            toast.error('Error al guardar los productos del combo')
+            toast.error('El combo se creó pero no se guardaron sus productos. Ábrelo y agrégalos de nuevo.')
             setLoading(false); return
         }
 

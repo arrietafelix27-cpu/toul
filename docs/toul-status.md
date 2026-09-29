@@ -389,6 +389,15 @@ Modals base rediseñados:
 
 `npm run build` pasa sin errores.
 
+### Sesión 11 (continuación) — Tanda 2 de pulido ✅
+
+- **Mensajes de error que explican qué hacer** (`lib/errors.ts`): traduce códigos de Postgres/PostgREST y fallas de red a español accionable. Aplicado en crear/editar producto, combos, variantes, lotes y ajustes del negocio
+- **Confirmaciones con el estilo de TOUL** (`components/isla/ConfirmSheet.tsx`) en vez de la ventana gris del navegador: quitar método de pago, borrar venta pendiente y borrar conversación de TOUL AI
+- **Ayuda de precio** al crear un producto: con el costo puesto, sugiere precios por margen (30/40/50/60%) redondeados a la centena
+- **Navegación más rápida**: el middleware cacheaba nada; ahora guarda `{userId, storeId, role}` firmado (HMAC) en una cookie de 2 minutos (`lib/isla/sessionCookie.ts`). Sin `TOUL_SESSION_SECRET` configurado funciona igual que antes. La cookie solo decide el enrutamiento; los permisos siguen en la base de datos
+
+⚠️ Para que la caché funcione en producción: agregar `TOUL_SESSION_SECRET` en Vercel (el valor está en `.env.local`).
+
 ### Sesión 11 — 29 de septiembre de 2026 ✅ Tanda 1 de pulido
 
 **Una sola caja en toda la app.** Había dos POS distintos (drawer móvil de 3 pasos + DesktopPOS) y el móvil no tenía turnos, aprobaciones, tirilla ni ventas sin internet.

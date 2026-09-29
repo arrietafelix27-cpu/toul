@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { explainError } from '@/lib/errors'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
@@ -37,7 +38,7 @@ export default function BatchPage() {
             store_id: store.id, product_id: id, quantity: qty, unit_cost: cost,
             supplier: supplier || null, notes: notes || null,
         })
-        if (batchErr) { toast.error('Error al registrar el lote'); setLoading(false); return }
+        if (batchErr) { toast.error(explainError(batchErr, 'No se pudo registrar la entrada. Revisa la cantidad y el costo.')); setLoading(false); return }
 
         // Update CPP only — stock handled via inventory_adjustments + trigger
         await supabase.from('products').update({ cpp: newCpp, updated_at: new Date().toISOString() }).eq('id', id)
@@ -45,7 +46,7 @@ export default function BatchPage() {
             store_id: store.id, product_id: id, quantity: qty,
             reason: 'batch_entry', notes: notes || supplier || null,
         })
-        if (adjErr) { toast.error('Error al actualizar el inventario'); setLoading(false); return }
+        if (adjErr) { toast.error(explainError(adjErr, 'La entrada se guardó pero el inventario no se actualizó. Revísalo.')); setLoading(false); return }
         toast.success(`¡Lote registrado! Nuevo stock: ${newStock} unidades`)
         router.push(`/inventory/${id}`)
     }

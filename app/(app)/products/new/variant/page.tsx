@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { explainError } from '@/lib/errors'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
@@ -229,7 +230,7 @@ export default function NewVariantProductPage() {
         if (reference.trim()) productPayload.reference = reference.trim()
 
         const { data: p1, error: e1 } = await supabase.from('products').insert(productPayload).select('id').single()
-        if (e1 || !p1) { toast.error('Error al crear el producto'); setLoading(false); return }
+        if (e1 || !p1) { toast.error(explainError(e1, 'No se pudo crear el producto. Revisa el nombre.')); setLoading(false); return }
         const productId = p1.id
 
         // Insert attributes
@@ -238,7 +239,7 @@ export default function NewVariantProductPage() {
         )
         if (attrErr) {
             await supabase.from('products').delete().eq('id', productId)
-            toast.error('Error al guardar atributos')
+            toast.error('El producto se creó pero faltaron sus características. Edítalo para agregarlas.')
             setLoading(false); return
         }
 
@@ -256,7 +257,7 @@ export default function NewVariantProductPage() {
         )
         if (varErr) {
             await supabase.from('products').delete().eq('id', productId)
-            toast.error('Error al guardar variantes')
+            toast.error('El producto se creó pero faltaron sus presentaciones. Edítalo para agregarlas.')
             setLoading(false); return
         }
 
