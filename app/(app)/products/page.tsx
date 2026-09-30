@@ -250,7 +250,7 @@ export default function ProductsPage() {
 
             {/* ── Grilla ── */}
             {isLoading ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(140px, 22vw, 210px), 1fr))', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(150px, 22vw, 210px), 1fr))', gap: 12 }}>
                     {Array.from({ length: 8 }).map((_, i) => (
                         <div key={i} className="skeleton" style={{ aspectRatio: '1 / 1.45', borderRadius: 18 }} />
                     ))}
@@ -276,7 +276,7 @@ export default function ProductsPage() {
             ) : (
                 <motion.div
                     key={typeFilter + sortOrder}
-                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(140px, 22vw, 210px), 1fr))', gap: 12, alignItems: 'stretch' }}>
+                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(150px, 22vw, 210px), 1fr))', gap: 12, alignItems: 'stretch' }}>
                     {items.map((item, index) => (
                         <CatalogCard key={`${item.kind}-${item.id}`} item={item} index={index} />
                     ))}

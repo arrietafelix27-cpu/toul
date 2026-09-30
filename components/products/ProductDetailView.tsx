@@ -35,8 +35,10 @@ export interface MovementLine {
 }
 
 export interface ProductDetailProps {
-    kind: 'simple' | 'presentaciones' | 'combo'
+    kind: 'simple' | 'presentaciones' | 'combo' | 'presentacion'
     name: string
+    /** Producto al que pertenece — solo cuando se ve una presentación */
+    parent?: { name: string; href: string } | null
     categoryName?: string | null
     reference?: string | null
     images: string[]
@@ -59,6 +61,7 @@ const KIND_LABEL: Record<ProductDetailProps['kind'], { label: string; Icon: type
     simple: { label: 'Producto', Icon: Package },
     presentaciones: { label: 'Con presentaciones', Icon: Layers },
     combo: { label: 'Combo', Icon: Gift },
+    presentacion: { label: 'Presentación', Icon: Layers },
 }
 
 function Stat({ label, value, tone = 'default', hint }: { label: string; value: string; tone?: 'default' | 'accent' | 'warn' | 'error'; hint?: string }) {
@@ -88,7 +91,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 
 export function ProductDetailView(props: ProductDetailProps) {
     const {
-        kind, name, categoryName, reference, images, priceLabel,
+        kind, name, parent, categoryName, reference, images, priceLabel,
         cost, margin, stock, stockValue, presentations, components,
         sales, insight, movements, actions, backHref = '/products',
     } = props
@@ -168,6 +171,15 @@ export function ProductDetailView(props: ProductDetailProps) {
                     {reference && <span style={chip()}>Ref. {reference}</span>}
                 </div>
 
+                {parent && (
+                    <Link href={parent.href}
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5, textDecoration: 'none',
+                            fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', marginBottom: 2,
+                        }}>
+                        <ChevronLeft size={13} /> {parent.name}
+                    </Link>
+                )}
                 <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: '0 0 4px', textWrap: 'balance' }}>
                     {name}
                 </h1>
@@ -199,7 +211,11 @@ export function ProductDetailView(props: ProductDetailProps) {
 
             {/* ── Presentaciones ── */}
             {presentations && presentations.length > 0 && (
-                <Section title="Presentaciones" hint="El mismo producto en distintas medidas. Cada una tiene su precio y su stock.">
+                <Section
+                    title={kind === 'presentacion' ? 'Otras presentaciones' : 'Presentaciones'}
+                    hint={kind === 'presentacion'
+                        ? 'El mismo producto en otras medidas.'
+                        : 'El mismo producto en distintas medidas. Cada una tiene su precio y su stock.'}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {presentations.map(item => {
                             const body = (
