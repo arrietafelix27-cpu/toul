@@ -1,308 +1,254 @@
 'use client'
-import { useState, useMemo } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { formatCOP } from '@/lib/utils'
-import { BarChart2, Package, TrendingUp, ChevronUp, ChevronDown } from 'lucide-react'
-import { motion } from 'framer-motion'
-import AnimatedNumber from '@/components/ui/AnimatedNumber'
-import { staggerContainer, staggerItem, fadeUp, t } from '@/lib/motion'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { useStore } from '@/lib/hooks/useData'
+
+import { useMemo, useState } from 'react'
 import useSWR from 'swr'
+import { motion } from 'framer-motion'
+import { createClient } from '@/lib/supabase/client'
+import { useStore } from '@/lib/hooks/useData'
+import { EXPENSE_CATEGORIES } from '@/lib/types'
+import { fadeUp } from '@/lib/motion'
+import { ReportsView, PERIODS, type Period } from '@/components/reports/ReportsView'
+import { EMPTY_TOTALS, type ProductLine, type ReportData, type ReportTotals } from '@/lib/reports/types'
 
-type Period = 'today' | 'week' | 'month' | 'total' | 'custom'
-type SortKey = 'revenue' | 'profit' | 'units' | 'margin'
+const supabase = createClient()
 
-interface ProductRow {
-    id: string
-    name: string
-    image_url: string | null
-    units: number
-    revenue: number
-    cost: number
-    profit: number
-    margin: number
-    profitPerUnit: number
-}
+/* ── Rangos ─────────────────────────────────────────────── */
 
-function getRange(period: Period, from: string, to: string): { from: string | null; to: string | null } {
-    if (period === 'custom') return { from: from || null, to: to ? to + 'T23:59:59' : null }
+interface Range { from: string; to: string }
+
+function getRange(period: Period, from: string, to: string): Range {
     const now = new Date()
-    if (period === 'total') return { from: null, to: null }
+    const end = now.toISOString()
+
+    if (period === 'custom') {
+        return {
+            from: from ? new Date(from).toISOString() : new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
+            to: to ? new Date(to + 'T23:59:59').toISOString() : end,
+        }
+    }
     if (period === 'today') {
-        const s = new Date(now); s.setHours(0, 0, 0, 0)
-        return { from: s.toISOString(), to: now.toISOString() }
+        const start = new Date(now); start.setHours(0, 0, 0, 0)
+        return { from: start.toISOString(), to: end }
     }
     if (period === 'week') {
-        const s = new Date(now); s.setDate(s.getDate() - 6); s.setHours(0, 0, 0, 0)
-        return { from: s.toISOString(), to: now.toISOString() }
+        const start = new Date(now); start.setDate(start.getDate() - 6); start.setHours(0, 0, 0, 0)
+        return { from: start.toISOString(), to: end }
     }
-    if (period === 'month') {
-        const s = new Date(now.getFullYear(), now.getMonth(), 1)
-        return { from: s.toISOString(), to: now.toISOString() }
+    if (period === 'year') {
+        return { from: new Date(now.getFullYear(), 0, 1).toISOString(), to: end }
     }
-    return { from: null, to: null }
+    return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to: end }
 }
 
+/** El mismo lapso, justo antes: sirve para comparar. */
+function previousRange(range: Range): Range {
+    const from = new Date(range.from).getTime()
+    const to = new Date(range.to).getTime()
+    const span = Math.max(to - from, 1)
+    return { from: new Date(from - span).toISOString(), to: new Date(from).toISOString() }
+}
+
+/* ── Cálculo ────────────────────────────────────────────── */
+
+interface SaleItemRow {
+    product_id: string | null
+    quantity: number
+    unit_price: number
+    unit_cost: number
+    products: { name: string } | null
+}
+interface SaleRow { total: number; sale_items: SaleItemRow[] }
+
+function totalsFrom(sales: SaleRow[], expenses: { amount: number }[], purchases: { total: number }[]): ReportTotals {
+    let revenue = 0, cogs = 0, units = 0
+    for (const sale of sales) {
+        revenue += Number(sale.total) || 0
+        for (const item of sale.sale_items ?? []) {
+            units += Number(item.quantity) || 0
+            cogs += (Number(item.unit_cost) || 0) * (Number(item.quantity) || 0)
+        }
+    }
+    const expenseTotal = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+    const grossProfit = revenue - cogs
+
+    return {
+        revenue: Math.round(revenue),
+        cogs: Math.round(cogs),
+        grossProfit: Math.round(grossProfit),
+        expenses: Math.round(expenseTotal),
+        netProfit: Math.round(grossProfit - expenseTotal),
+        grossMargin: revenue > 0 ? (grossProfit / revenue) * 100 : 0,
+        salesCount: sales.length,
+        unitsSold: units,
+        avgTicket: sales.length > 0 ? Math.round(revenue / sales.length) : 0,
+        inventoryPurchases: Math.round(purchases.reduce((sum, p) => sum + (Number(p.total) || 0), 0)),
+    }
+}
+
+function productLines(sales: SaleRow[]): ProductLine[] {
+    const map = new Map<string, Omit<ProductLine, 'margin'>>()
+    for (const sale of sales) {
+        for (const item of sale.sale_items ?? []) {
+            if (!item.product_id) continue
+            const quantity = Number(item.quantity) || 0
+            const revenue = (Number(item.unit_price) || 0) * quantity
+            const profit = revenue - (Number(item.unit_cost) || 0) * quantity
+            const existing = map.get(item.product_id)
+            if (existing) {
+                existing.units += quantity
+                existing.revenue += revenue
+                existing.profit += profit
+            } else {
+                map.set(item.product_id, {
+                    id: item.product_id,
+                    name: item.products?.name ?? 'Producto',
+                    units: quantity,
+                    revenue,
+                    profit,
+                })
+            }
+        }
+    }
+    return [...map.values()].map(line => ({
+        ...line,
+        revenue: Math.round(line.revenue),
+        profit: Math.round(line.profit),
+        margin: line.revenue > 0 ? (line.profit / line.revenue) * 100 : 0,
+    }))
+}
+
+const SALE_SELECT = 'total, sale_items(product_id, quantity, unit_price, unit_cost, products(name))'
+
+/* ── Pantalla ───────────────────────────────────────────── */
+
 export default function ReportesPage() {
-    const supabase = createClient()
-    const { data: store, isLoading: storeLoading } = useStore()
+    const { data: store } = useStore()
     const storeId = store?.id || null
 
     const [period, setPeriod] = useState<Period>('month')
     const [fromDate, setFromDate] = useState('')
     const [toDate, setToDate] = useState('')
-    const [sortKey, setSortKey] = useState<SortKey>('profit')
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-    const { data: reportData, isLoading: reportLoading } = useSWR(
-        storeId ? ['reports', storeId, period, fromDate, toDate] : null,
+    const range = useMemo(() => getRange(period, fromDate, toDate), [period, fromDate, toDate])
+
+    const { data, isLoading } = useSWR<ReportData>(
+        storeId ? ['reportes', storeId, range.from, range.to] : null,
         async () => {
-            const range = getRange(period, fromDate, toDate)
+            const prev = previousRange(range)
+            const inRange = (query: any, column = 'created_at', r: Range = range) =>
+                query.gte(column, r.from).lte(column, r.to)
 
-            // Parallel fetch for stats and items
-            const [salesRes, stockRes] = await Promise.all([
-                supabase.from('sale_items')
-                    .select('quantity, unit_price, unit_cost, product_id, products(name, image_url), sales!inner(store_id, is_credit, created_at)')
-                    .eq('sales.store_id', storeId)
-                    .eq('sales.is_credit', false)
-                    .gte('sales.created_at', range.from || '1970-01-01')
-                    .lte('sales.created_at', range.to || '9999-12-31'),
-                supabase.from('products').select('stock').eq('store_id', storeId).eq('is_active', true)
+            const [sales, prevSales, expenses, prevExpenses, purchases, prevPurchases, customers, providers, products] = await Promise.all([
+                inRange(supabase.from('sales').select(SALE_SELECT).eq('store_id', storeId)),
+                inRange(supabase.from('sales').select(SALE_SELECT).eq('store_id', storeId), 'created_at', prev),
+                inRange(supabase.from('expenses').select('amount, category').eq('store_id', storeId)),
+                inRange(supabase.from('expenses').select('amount').eq('store_id', storeId), 'created_at', prev),
+                inRange(supabase.from('purchases').select('total').eq('store_id', storeId)),
+                inRange(supabase.from('purchases').select('total').eq('store_id', storeId), 'created_at', prev),
+                supabase.from('customers').select('id, name, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }),
+                supabase.from('providers').select('id, name, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }),
+                supabase.from('products').select('id, name, stock, cpp, low_stock_threshold').eq('store_id', storeId).eq('is_active', true),
             ])
 
-            if (salesRes.error) throw salesRes.error
-            if (stockRes.error) throw stockRes.error
+            const currentSales = (sales.data ?? []) as unknown as SaleRow[]
+            const lines = productLines(currentSales)
+            const sold = new Set(lines.map(line => line.id))
 
-            const map: Record<string, ProductRow> = {}
-            for (const item of (salesRes.data || [])) {
-                const pid = item.product_id
-                if (!map[pid]) {
-                    map[pid] = {
-                        id: pid,
-                        name: (item.products as any)?.name || 'Producto',
-                        image_url: (item.products as any)?.image_url || null,
-                        units: 0, revenue: 0, cost: 0, profit: 0, margin: 0, profitPerUnit: 0,
-                    }
-                }
-                map[pid].units += item.quantity
-                map[pid].revenue += item.unit_price * item.quantity
-                map[pid].cost += item.unit_cost * item.quantity
+            const expenseRows = (expenses.data ?? []) as { amount: number; category: string }[]
+            const byCategory = new Map<string, number>()
+            for (const expense of expenseRows) {
+                const label = EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label ?? 'Otros'
+                byCategory.set(label, (byCategory.get(label) ?? 0) + (Number(expense.amount) || 0))
             }
 
-            const rows = Object.values(map).map(r => {
-                const profit = r.revenue - r.cost
-                return {
-                    ...r,
-                    profit,
-                    margin: r.revenue > 0 ? (profit / r.revenue) * 100 : 0,
-                    profitPerUnit: r.units > 0 ? profit / r.units : 0,
-                }
-            })
+            const productRows = (products.data ?? []) as { id: string; name: string; stock: number; cpp: number; low_stock_threshold: number | null }[]
+            const inventoryValue = productRows.reduce((sum, p) => sum + (Number(p.stock) || 0) * (Number(p.cpp) || 0), 0)
 
             return {
-                rows,
-                totalStock: (stockRes.data || []).reduce((s, p) => s + p.stock, 0)
+                current: totalsFrom(currentSales, expenseRows, (purchases.data ?? []) as { total: number }[]),
+                previous: totalsFrom(
+                    (prevSales.data ?? []) as unknown as SaleRow[],
+                    (prevExpenses.data ?? []) as { amount: number }[],
+                    (prevPurchases.data ?? []) as { total: number }[],
+                ),
+                expensesByCategory: [...byCategory.entries()]
+                    .map(([label, amount]) => ({ label, amount: Math.round(amount) }))
+                    .sort((a, b) => b.amount - a.amount),
+                topProducts: [...lines].sort((a, b) => b.profit - a.profit).slice(0, 8),
+                worstProducts: [...lines].filter(l => l.units > 0).sort((a, b) => a.margin - b.margin).slice(0, 5),
+                receivables: {
+                    total: Math.round((customers.data ?? []).reduce((sum, c) => sum + Number(c.total_debt), 0)),
+                    top: (customers.data ?? []).slice(0, 3).map(c => ({ id: c.id, name: c.name, amount: Math.round(Number(c.total_debt)) })),
+                },
+                payables: {
+                    total: Math.round((providers.data ?? []).reduce((sum, p) => sum + Number(p.total_debt), 0)),
+                    top: (providers.data ?? []).slice(0, 3).map(p => ({ id: p.id, name: p.name, amount: Math.round(Number(p.total_debt)) })),
+                },
+                inventory: {
+                    value: Math.round(inventoryValue),
+                    units: productRows.reduce((sum, p) => sum + (Number(p.stock) || 0), 0),
+                    lowStock: productRows.filter(p => Number(p.stock) > 0 && Number(p.stock) <= (p.low_stock_threshold ?? 5)).length,
+                    stale: productRows
+                        .filter(p => Number(p.stock) > 0 && !sold.has(p.id))
+                        .map(p => ({ id: p.id, name: p.name, stock: Number(p.stock), value: Math.round(Number(p.stock) * (Number(p.cpp) || 0)) }))
+                        .sort((a, b) => b.value - a.value)
+                        .slice(0, 5),
+                },
             }
         },
-        { revalidateOnFocus: false, dedupingInterval: 30000 }
+        { revalidateOnFocus: false, dedupingInterval: 60_000, keepPreviousData: true },
     )
 
-    const loading = reportLoading || storeLoading
-    const rows = reportData?.rows || []
-    const totalStock = reportData?.totalStock || 0
-
-    const sorted = useMemo(() => {
-        const copy = [...rows]
-        copy.sort((a, b) => {
-            const valA = a[sortKey] as number
-            const valB = b[sortKey] as number
-            const diff = valA - valB
-            return sortDir === 'desc' ? -diff : diff
-        })
-        return copy
-    }, [rows, sortKey, sortDir])
-
-    function toggleSort(key: SortKey) {
-        if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
-        else { setSortKey(key); setSortDir('desc') }
-    }
-
-    const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0)
-    const totalProfit = rows.reduce((s, r) => s + r.profit, 0)
-
-    const PERIODS: { value: Period; label: string }[] = [
-        { value: 'today', label: 'Hoy' },
-        { value: 'week', label: 'Semana' },
-        { value: 'month', label: 'Mes' },
-        { value: 'total', label: 'Todo' },
-        { value: 'custom', label: 'Rango' },
-    ]
-
-    function SortIcon({ k }: { k: SortKey }) {
-        if (sortKey !== k) return <ChevronDown size={12} style={{ opacity: 0.3 }} />
-        return sortDir === 'desc' ? <ChevronDown size={12} style={{ color: 'var(--toul-accent)' }} /> : <ChevronUp size={12} style={{ color: 'var(--toul-accent)' }} />
-    }
+    const periodLabel = PERIODS.find(p => p.value === period)?.label ?? 'Este mes'
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-8" style={{ position: 'relative' }}>
+        <div className="px-4 md:px-8 pt-6 pb-10 max-w-3xl mx-auto" style={{ position: 'relative' }}>
             <div className="toul-ambient" />
-            {/* Header */}
+
             <motion.div variants={fadeUp} initial="hidden" animate="visible" className="mb-5" style={{ position: 'relative' }}>
-                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px 0' }}>Inteligencia</p>
+                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px' }}>Inteligencia</p>
                 <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Reportes</h1>
             </motion.div>
 
-            {/* Period tabs */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ ...t.base, delay: 0.04 }}
-                className="flex gap-1.5 mb-4 flex-wrap">
-                {PERIODS.map(p => (
-                    <motion.button
-                        key={p.value}
-                        onClick={() => setPeriod(p.value)}
-                        whileTap={{ scale: 0.96 }}
-                        transition={{ type: 'spring', stiffness: 420, damping: 26 }}
-                        style={{
-                            padding: '8px 14px',
-                            borderRadius: 12,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            letterSpacing: '-0.01em',
-                            border: `1px solid ${period === p.value ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
-                            background: period === p.value ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
-                            color: period === p.value ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
-                            transition: 'background var(--toul-transition), border-color var(--toul-transition), color var(--toul-transition)',
-                            fontFamily: 'inherit',
-                            cursor: 'pointer',
-                        }}>
-                        {p.label}
-                    </motion.button>
-                ))}
-            </motion.div>
+            <div className="flex gap-1.5 flex-wrap mb-4">
+                {PERIODS.map(p => {
+                    const active = period === p.value
+                    return (
+                        <button key={p.value} onClick={() => setPeriod(p.value)}
+                            style={{
+                                padding: '9px 15px', borderRadius: 12, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                                background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
+                                transition: 'background var(--toul-transition), border-color var(--toul-transition), color var(--toul-transition)',
+                            }}>
+                            {p.label}
+                        </button>
+                    )
+                })}
+            </div>
 
-            {/* Custom date range */}
             {period === 'custom' && (
-                <motion.div variants={fadeUp} initial="hidden" animate="visible"
-                    className="toul-card mb-4 flex flex-col sm:flex-row gap-3 items-end">
+                <div className="toul-card mb-4 flex flex-col sm:flex-row gap-3">
                     <div className="flex-1">
-                        <label className="text-xs mb-1 block" style={{ color: 'var(--toul-text-muted)' }}>Desde</label>
-                        <input type="date" className="toul-input text-sm" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+                        <label htmlFor="desde" className="text-xs mb-1 block" style={{ color: 'var(--toul-text-muted)' }}>Desde</label>
+                        <input id="desde" type="date" className="toul-input text-sm" value={fromDate} onChange={e => setFromDate(e.target.value)} />
                     </div>
                     <div className="flex-1">
-                        <label className="text-xs mb-1 block" style={{ color: 'var(--toul-text-muted)' }}>Hasta</label>
-                        <input type="date" className="toul-input text-sm" value={toDate} onChange={e => setToDate(e.target.value)} />
+                        <label htmlFor="hasta" className="text-xs mb-1 block" style={{ color: 'var(--toul-text-muted)' }}>Hasta</label>
+                        <input id="hasta" type="date" className="toul-input text-sm" value={toDate} onChange={e => setToDate(e.target.value)} />
                     </div>
-                </motion.div>
+                </div>
             )}
 
-            {/* KPIs */}
-            <motion.div variants={staggerContainer} initial="hidden" animate="visible"
-                className="grid grid-cols-3 gap-3 mb-6">
-                {[
-                    { label: 'Total facturado', value: totalRevenue, color: 'var(--toul-text)', icon: <TrendingUp size={14} />, accent: 'var(--toul-accent)' },
-                    { label: 'Utilidad bruta', value: totalProfit, color: 'var(--toul-text)', icon: <BarChart2 size={14} />, accent: 'var(--toul-accent)' },
-                    { label: 'Unidades en stock', value: totalStock, color: 'var(--toul-text)', icon: <Package size={14} />, accent: '#F59E0B', raw: true },
-                ].map(kpi => (
-                    <motion.div key={kpi.label} variants={staggerItem} className="toul-card py-3 px-3">
-                        <div className="flex items-center gap-1.5 mb-1" style={{ color: kpi.accent }}>{kpi.icon}
-                            <span className="text-[10px] font-medium">{kpi.label}</span>
-                        </div>
-                        {loading ? <div className="skeleton h-6 w-20 rounded" /> : (
-                            kpi.raw
-                                ? <p className="text-xl font-bold" style={{ color: kpi.color }}>{kpi.value}</p>
-                                : <AnimatedNumber value={kpi.value} formatter={formatCOP}
-                                    className="text-xl font-bold"
-                                    style={{ color: kpi.color } as React.CSSProperties} duration={0.5} />
-                        )}
-                    </motion.div>
-                ))}
-            </motion.div>
-
-            {/* Profitability Table */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ ...t.base, delay: 0.1 }}>
-                <h2 className="text-sm font-bold mb-3" style={{ color: 'var(--toul-text)' }}>Rentabilidad por producto</h2>
-
-                {loading ? (
-                    <div className="flex flex-col gap-2">{[1, 2, 3, 4].map(n => <div key={n} className="skeleton h-14 rounded-2xl" />)}</div>
-                ) : sorted.length === 0 ? (
-                    <div className="toul-card text-center py-10">
-                        <BarChart2 size={28} className="mx-auto mb-2" style={{ color: 'var(--toul-border-2)' }} />
-                        <p className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Sin ventas en este período</p>
-                    </div>
-                ) : (
-                    <>
-                        {/* Desktop table */}
-                        <div className="hidden md:block rounded-2xl overflow-hidden" style={{ border: '1px solid var(--toul-border)', background: 'var(--toul-surface)' }}>
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr style={{ borderBottom: '1px solid var(--toul-border)' }}>
-                                        <th className="text-left px-4 py-3 text-xs font-semibold" style={{ color: 'var(--toul-text-muted)' }}>Producto</th>
-                                        {([
-                                            { key: 'units' as SortKey, label: 'Unidades' },
-                                            { key: 'revenue' as SortKey, label: 'Ingresos' },
-                                            { key: 'profit' as SortKey, label: 'Utilidad' },
-                                            { key: 'margin' as SortKey, label: 'Margen' },
-                                        ]).map(col => (
-                                            <th key={col.key}
-                                                className="text-right px-4 py-3 text-xs font-semibold cursor-pointer select-none"
-                                                style={{ color: sortKey === col.key ? 'var(--toul-accent)' : 'var(--toul-text-muted)' }}
-                                                onClick={() => toggleSort(col.key)}>
-                                                <span className="inline-flex items-center gap-1 justify-end">
-                                                    {col.label} <SortIcon k={col.key} />
-                                                </span>
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {sorted.map((row, i) => (
-                                        <tr key={row.id} style={{ borderBottom: i < sorted.length - 1 ? '1px solid var(--toul-border)' : 'none' }}>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-3">
-                                                    {row.image_url
-                                                        ? <img src={row.image_url} alt={row.name} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
-                                                        : <div className="w-9 h-9 rounded-lg flex items-center justify-center text-base flex-shrink-0" style={{ background: 'var(--toul-border)' }}>📦</div>
-                                                    }
-                                                    <span className="font-medium" style={{ color: 'var(--toul-text)' }}>{row.name}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 text-right" style={{ color: 'var(--toul-text-muted)' }}>{row.units}</td>
-                                            <td className="px-4 py-3 text-right font-medium" style={{ color: 'var(--toul-text)' }}>{formatCOP(row.revenue)}</td>
-                                            <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--toul-accent)' }}>{formatCOP(row.profit)}</td>
-                                            <td className="px-4 py-3 text-right">
-                                                <span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold"
-                                                    style={{ background: row.margin >= 30 ? 'var(--toul-accent-dim)' : 'rgba(245,158,11,0.1)', color: row.margin >= 30 ? 'var(--toul-accent)' : '#F59E0B' }}>
-                                                    {row.margin.toFixed(1)}%
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Mobile cards */}
-                        <div className="md:hidden flex flex-col gap-2">
-                            {sorted.map(row => (
-                                <div key={row.id} className="toul-card flex items-center gap-3 py-3">
-                                    {row.image_url
-                                        ? <img src={row.image_url} alt={row.name} className="w-11 h-11 rounded-xl object-cover flex-shrink-0" />
-                                        : <div className="w-11 h-11 rounded-xl flex items-center justify-center text-lg flex-shrink-0" style={{ background: 'var(--toul-surface)' }}>📦</div>
-                                    }
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-semibold text-sm truncate" style={{ color: 'var(--toul-text)' }}>{row.name}</p>
-                                        <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>{row.units} unid. · Costo {formatCOP(row.cost)}</p>
-                                    </div>
-                                    <div className="text-right flex-shrink-0">
-                                        <p className="font-bold text-sm" style={{ color: 'var(--toul-accent)' }}>{formatCOP(row.profit)}</p>
-                                        <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>{row.margin.toFixed(1)}% margen</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </>
-                )}
-            </motion.div>
+            <ReportsView
+                data={data ?? null}
+                loading={isLoading && !data}
+                period={period}
+                periodLabel={periodLabel}
+            />
         </div>
     )
 }
+
+export { EMPTY_TOTALS }

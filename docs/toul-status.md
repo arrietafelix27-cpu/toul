@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 29 de septiembre de 2026 (sesión 11 — una sola caja y pulido general)*
+*Última actualización: 29 de septiembre de 2026 (sesión 12 — métodos de pago solo en ventas y reportes nuevos)*
 
 ---
 
@@ -388,6 +388,24 @@ Modals base rediseñados:
 ⚠️ **Acción requerida antes de publicar:** ejecutar `supabase/rpc/process_purchase.sql` en el SQL Editor de Supabase. Sin eso, las compras fallan con la versión nueva del código.
 
 `npm run build` pasa sin errores.
+
+### Sesión 12 — 29 de septiembre de 2026 ✅ Dinero fuera de donde no aplica + Reportes nuevos
+
+**Los métodos de pago quedan solo para las ventas** (decisión de producto):
+- Compras: "Ya la pagué" o "Queda debiendo" (abono + fecha). Sin carteras ni capital propio. `process_purchase` recibe `paidNow`; sigue aceptando `payments[]` por compatibilidad. SQL: `supabase/deploy_compras_simples.sql`
+- Gastos, abonos de clientes y abonos a proveedores: sin selector de método ni validación de saldo. Los movimientos se guardan con método `General`
+- Una sola entrada al POS: el botón "+" (se quitó del menú lateral y de Ajustes)
+
+**Reportes rehechos desde cero** (`components/reports/ReportsView.tsx` + `lib/reports/types.ts`):
+- Arriba, la única pregunta que importa: **ganaste o perdiste**, con comparación contra el período anterior
+- **La cadena**: vendiste → te costó la mercancía → ganancia bruta → gastos → te quedó
+- **Dónde se va la plata**: gastos por categoría con barras; aviso de que comprar inventario NO es gasto
+- **Lo que más y lo que menos te deja**, por utilidad y margen (no por volumen)
+- **Te deben / debes** (saldo de hoy) e **inventario**: valor al costo, unidades, stock bajo y "plata quieta" (con stock y sin ventas en el período)
+- Sección desplegable "¿Cómo se calculan estos números?" para que nadie tenga que adivinar
+- Períodos: hoy, semana, mes, año y rango. Gastos a la baja se muestran en verde (bajar gastos es bueno)
+
+**Pendiente de esta sesión:** catálogo (detalle unificado de producto simple/variantes/combo y tipos de producto), distribución de inventario y diseño del menú de Caja y de Gastos.
 
 ### Sesión 11 (continuación) — Tanda 2 de pulido ✅
 
