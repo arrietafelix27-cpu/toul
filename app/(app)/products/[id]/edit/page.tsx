@@ -346,7 +346,7 @@ export default function EditProductPage() {
         }
 
         toast.success('Variantes actualizadas')
-        router.push(`/products/variant-group/${id}`)
+        router.push(`/products/${id}`)
     }
 
     async function handleSheetSave(data: { name: string; reference: string; categoryId: string; imageFile: File | null; imagePreview: string | null; originalImageUrl: string | null }) {
@@ -425,7 +425,7 @@ export default function EditProductPage() {
                     gap: 10,
                 }}>
                     <div style={{ justifySelf: 'start' }}>
-                        <Link href={hasVariants ? `/products/variant-group/${id}` : `/products/${id}`}
+                        <Link href={`/products/${id}`}
                             className="active:scale-90"
                             style={{
                                 width: 30, height: 30, borderRadius: 9,

@@ -202,7 +202,7 @@ export default function NewVariantProductPage() {
         if (!activeAttrs.length) { toast.error('Agrega al menos un atributo con valores'); return }
         if (!variantNames.length) { toast.error('Define los valores de los atributos'); return }
         if (variantNames.some(n => !Number(variantPrices[n]?.price))) {
-            toast.error('Todas las variantes deben tener precio'); return
+            toast.error('Todas las presentaciones deben tener precio'); return
         }
 
         setLoading(true)
@@ -312,7 +312,7 @@ export default function NewVariantProductPage() {
                         color: 'var(--toul-text)',
                         letterSpacing: '-0.02em', margin: 0,
                     }}>
-                        Producto con variantes
+                        Producto con presentaciones
                     </h1>
                 </motion.div>
 
@@ -623,7 +623,7 @@ export default function NewVariantProductPage() {
                                 style={{ marginTop: 22 }}>
 
                                 <h2 className="toul-section-label">
-                                    Variantes <span style={{ color: 'var(--toul-text-faint)', fontWeight: 500 }}>· {variantNames.length}</span>
+                                    Presentaciones <span style={{ color: 'var(--toul-text-faint)', fontWeight: 500 }}>· {variantNames.length}</span>
                                 </h2>
 
                                 <div style={{
@@ -641,7 +641,7 @@ export default function NewVariantProductPage() {
                                         borderBottom: '1px solid var(--toul-divider)',
                                     }}>
                                         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--toul-text-dim)', letterSpacing: '0.01em' }}>
-                                            Variante
+                                            Presentación
                                         </span>
                                         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--toul-text-dim)', letterSpacing: '0.01em', textAlign: 'center' }}>
                                             Venta

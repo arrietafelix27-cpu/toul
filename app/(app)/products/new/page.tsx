@@ -9,7 +9,7 @@ const SPRING_PRESS = { type: 'spring' as const, stiffness: 420, damping: 26 }
 
 const OPTIONS = [
     { href: '/products/new/simple', icon: Package, label: 'Producto simple' },
-    { href: '/products/new/variant', icon: Layers, label: 'Con variantes' },
+    { href: '/products/new/variant', icon: Layers, label: 'Con presentaciones' },
     { href: '/products/new/combo', icon: Gift, label: 'Combo / Paquete' },
 ]
 

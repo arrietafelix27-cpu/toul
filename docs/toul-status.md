@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 29 de septiembre de 2026 (sesión 12 — métodos de pago solo en ventas y reportes nuevos)*
+*Última actualización: 29 de septiembre de 2026 (sesión 13 — catálogo unificado)*
 
 ---
 
@@ -388,6 +388,15 @@ Modals base rediseñados:
 ⚠️ **Acción requerida antes de publicar:** ejecutar `supabase/rpc/process_purchase.sql` en el SQL Editor de Supabase. Sin eso, las compras fallan con la versión nueva del código.
 
 `npm run build` pasa sin errores.
+
+### Sesión 13 — 29 de septiembre de 2026 ✅ Catálogo unificado
+
+**Dos tipos de producto, no tres.** Las "variantes" ahora se llaman **presentaciones** (60 ml, 100 ml): son el mismo producto en otra medida, no otro producto.
+- **Un solo detalle** (`components/products/ProductDetailView.tsx`) para producto simple, con presentaciones y combo: misma estructura, cambia solo el bloque del medio
+- `/products/variant-group/[id]` redirige a `/products/[id]`: un producto con presentaciones ya no tiene pantalla aparte (se eliminaron ~490 líneas duplicadas)
+- Estructura del detalle: foto → chips (tipo, categoría, referencia) → nombre y precio → números (costo, margen, stock, valor guardado) → presentaciones o "qué trae" → cómo se está vendiendo → movimientos recientes
+- Sin foto, el encabezado ya no reserva media pantalla
+- Copys actualizados en catálogo y creación
 
 ### Sesión 12 — 29 de septiembre de 2026 ✅ Dinero fuera de donde no aplica + Reportes nuevos
 

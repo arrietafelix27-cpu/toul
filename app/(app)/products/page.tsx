@@ -27,7 +27,7 @@ type SortOrder = 'az' | 'za' | 'mas_caros' | 'mas_baratos' | 'mas_vendidos' | 'r
 const TYPE_FILTER_OPTIONS: { value: TypeFilter; label: string }[] = [
     { value: 'todos', label: 'Todos' },
     { value: 'simples', label: 'Simples' },
-    { value: 'variantes', label: 'Con variantes' },
+    { value: 'variantes', label: 'Con presentaciones' },
     { value: 'combos', label: 'Combos' },
 ]
 
@@ -531,7 +531,7 @@ export default function ProductsPage() {
                                 )}
                                 {variantProducts.length > 0 && (
                                     <>
-                                        <SectionDivider label="Con variantes" />
+                                        <SectionDivider label="Con presentaciones" />
                                         <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                                             className="grid gap-4" style={{ gridTemplateColumns: GRID_COLS }}>
                                             {variantProducts.map(p => (
@@ -612,7 +612,7 @@ export default function ProductsPage() {
 const PANEL_TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
     { value: 'todos', label: 'Todos' },
     { value: 'simples', label: 'Individuales' },
-    { value: 'variantes', label: 'Variantes' },
+    { value: 'variantes', label: 'Presentaciones' },
     { value: 'combos', label: 'Combos' },
 ]
 
@@ -849,7 +849,7 @@ function VariantDrawer({
                         <p className="font-bold text-sm leading-tight mb-0.5 truncate"
                             style={{ color: 'var(--toul-text)' }}>{productName}</p>
                         <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>
-                            Selecciona una variante
+                            Selecciona una presentación
                         </p>
                     </div>
                     <button
@@ -883,7 +883,7 @@ function VariantDrawer({
                     ))}
                 </div>
                 <div className="p-4" style={{ borderTop: '1px solid var(--toul-border)' }}>
-                    <Link href={`/products/variant-group/${productId}`} style={{ textDecoration: 'none' }}>
+                    <Link href={`/products/${productId}`} style={{ textDecoration: 'none' }}>
                         <button
                             className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]"
                             style={{
@@ -1022,7 +1022,7 @@ function MobileProductCard({ item, index }: { item: MobileItem; index: number })
     const href = item.kind === 'combo'
         ? `/products/combo/${item.data.id}`
         : item.kind === 'variant'
-        ? `/products/variant-group/${item.data.id}`
+        ? `/products/${item.data.id}`
         : `/products/${item.data.id}`
 
     const { bg, text } = hashColor(name)
