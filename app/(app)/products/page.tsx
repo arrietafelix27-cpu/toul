@@ -139,7 +139,9 @@ export default function ProductsPage() {
                 image: product.images?.[0] || product.image_url || null,
                 stock: Number(product.stock) || 0,
                 presentations: variants.length,
-                badge: signal && signalStyle ? { label: signal.label, bg: signalStyle.bg, text: signalStyle.text } : null,
+                badge: signal && signalStyle && !/stock/i.test(signal.label)
+                    ? { label: signal.label, bg: signalStyle.bg, text: signalStyle.text }
+                    : null,
                 href: `/products/${product.id}`,
                 sortName: product.name,
                 sortPrice: max,
@@ -248,7 +250,7 @@ export default function ProductsPage() {
 
             {/* ── Grilla ── */}
             {isLoading ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(140px, 22vw, 210px), 1fr))', gap: 12 }}>
                     {Array.from({ length: 8 }).map((_, i) => (
                         <div key={i} className="skeleton" style={{ aspectRatio: '1 / 1.45', borderRadius: 18 }} />
                     ))}
@@ -274,8 +276,7 @@ export default function ProductsPage() {
             ) : (
                 <motion.div
                     key={typeFilter + sortOrder}
-                    variants={staggerContainer} initial="hidden" animate="visible"
-                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 12, alignItems: 'stretch' }}>
+                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(140px, 22vw, 210px), 1fr))', gap: 12, alignItems: 'stretch' }}>
                     {items.map((item, index) => (
                         <CatalogCard key={`${item.kind}-${item.id}`} item={item} index={index} />
                     ))}
@@ -283,11 +284,11 @@ export default function ProductsPage() {
             )}
 
             {/* ── Nuevo producto (celular) ── */}
-            <Link href="/products/new" className="sm:hidden"
+            <Link href="/products/new" className="flex sm:hidden"
                 style={{
                     position: 'fixed', left: 16, right: 16, bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))', zIndex: 30,
                     height: 52, borderRadius: 16, background: 'var(--toul-accent)', color: '#000',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    alignItems: 'center', justifyContent: 'center', gap: 8,
                     fontSize: 15, fontWeight: 600, textDecoration: 'none', boxShadow: '0 8px 30px var(--toul-accent-glow)',
                 }}>
                 <Plus size={18} strokeWidth={2.6} /> Nuevo producto
