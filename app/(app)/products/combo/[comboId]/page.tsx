@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Edit3 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { ProductDetailView, type ComboComponent } from '@/components/products/ProductDetailView'
+import { ProductDetailView, ProductDetailSkeleton, type ComboComponent } from '@/components/products/ProductDetailView'
 
 const supabase = createClient()
 
@@ -34,14 +34,7 @@ export default function ComboDetailPage({ params }: { params: Promise<{ comboId:
         return combo as Record<string, unknown> | null
     }, { revalidateOnFocus: false })
 
-    if (isLoading || !data) {
-        return (
-            <div className="px-4 md:px-8 pt-6 max-w-2xl mx-auto flex flex-col gap-3">
-                <div className="skeleton" style={{ height: 220, borderRadius: 20 }} />
-                <div className="skeleton" style={{ height: 90, borderRadius: 16 }} />
-            </div>
-        )
-    }
+    if (isLoading || !data) return <ProductDetailSkeleton />
 
     const combo = data as unknown as {
         id: string; name: string; sale_price: number; image_url: string | null

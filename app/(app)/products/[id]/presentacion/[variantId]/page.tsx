@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Edit3, PackageMinus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { ProductDetailView, type MovementLine, type Presentation } from '@/components/products/ProductDetailView'
+import { ProductDetailView, ProductDetailSkeleton, type MovementLine, type Presentation } from '@/components/products/ProductDetailView'
 import { REASON_LABEL, formatMovementDate } from '@/lib/products/movements'
 
 const supabase = createClient()
@@ -77,15 +77,7 @@ export default function PresentationDetailPage({ params }: { params: Promise<{ i
         }
     }, { revalidateOnFocus: false })
 
-    if (isLoading) {
-        return (
-            <div className="px-4 md:px-8 pt-6 max-w-2xl mx-auto flex flex-col gap-3">
-                <div className="skeleton" style={{ height: 220, borderRadius: 20 }} />
-                <div className="skeleton" style={{ height: 90, borderRadius: 16 }} />
-                <div className="skeleton" style={{ height: 160, borderRadius: 16 }} />
-            </div>
-        )
-    }
+    if (isLoading) return <ProductDetailSkeleton />
 
     if (!data) {
         return (
