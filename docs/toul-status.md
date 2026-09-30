@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 29 de septiembre de 2026 (sesión 13 — catálogo unificado)*
+*Última actualización: 30 de septiembre de 2026 (sesión 14 — catálogo con una sola tarjeta y una sola grilla)*
 
 ---
 
@@ -388,6 +388,21 @@ Modals base rediseñados:
 ⚠️ **Acción requerida antes de publicar:** ejecutar `supabase/rpc/process_purchase.sql` en el SQL Editor de Supabase. Sin eso, las compras fallan con la versión nueva del código.
 
 `npm run build` pasa sin errores.
+
+### Sesión 14 — 30 de septiembre de 2026 ✅ Catálogo, de verdad unificado
+
+Félix reportó que el catálogo seguía inconsistente. Causas reales encontradas:
+- Los productos con presentaciones abrían un **panel lateral** (`VariantDrawer`) en vez de su detalle, y al volver caían en otra pantalla
+- Había **dos diseños**: lista en celular (`MobileProductCard`) y grilla en computador (`DesktopProductCard`)
+- Las tarjetas mostraban cosas distintas según el tipo (unas precio, otras un chip), así que ni el alto ni el contenido coincidían
+
+**Rehecho:**
+- `components/products/CatalogCard.tsx`: **una sola tarjeta** para producto, presentaciones y combo. Imagen cuadrada, nombre de 2 líneas con alto fijo, precio en una línea y pie con stock / N presentaciones / Combo
+- Rangos de precio se muestran como "Desde $X" — así el precio nunca salta a dos líneas y la grilla queda pareja
+- Chip de tipo arriba-izquierda; etiqueta de señal (ej. "Más vendido") abajo-derecha, para que no choquen
+- **Una sola grilla** (`auto-fill minmax(165px, 1fr)`) en celular y computador: 2 columnas en teléfono
+- Se eliminaron `VariantDrawer`, `MobileProductCard`, `DesktopProductCard`, `FilterPanel` y el placeholder emoji (~700 líneas menos). Tocar cualquier tarjeta lleva siempre al detalle
+- Estados de presión (scale 0.98) en vez de hover
 
 ### Sesión 13 (continuación) — Gastos e Inventario ✅
 
