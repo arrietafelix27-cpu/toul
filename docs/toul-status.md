@@ -389,6 +389,16 @@ Modals base rediseñados:
 
 `npm run build` pasa sin errores.
 
+### Sesión 13 (continuación) — Gastos e Inventario ✅
+
+**Gastos, rehecho** (`app/(app)/expenses/page.tsx`): era la última pantalla con el estilo viejo (slate).
+- Filtro por período (semana / mes / año / todo) y total del período como número protagonista
+- Reparto por categoría en chips, con ícono y color propio por categoría
+- Lista agrupada por día ("Hoy", "Ayer", fecha) con subtotal diario
+- "Nuevo gasto" pasa de formulario embebido a hoja: categorías como chips táctiles, `PriceField` para el monto y descripción opcional
+
+**Inventario:** las tarjetas del resumen ahora son **filtros**. Tocar "Stock bajo" o "Sin stock" filtra la lista; los estados vacíos responden al filtro activo en vez de mostrar siempre el mismo texto.
+
 ### Sesión 13 — 29 de septiembre de 2026 ✅ Catálogo unificado
 
 **Dos tipos de producto, no tres.** Las "variantes" ahora se llaman **presentaciones** (60 ml, 100 ml): son el mismo producto en otra medida, no otro producto.

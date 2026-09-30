@@ -40,6 +40,8 @@ export default function InventoryPage() {
     const [limit, setLimit] = useState(PAGE_SIZE)
     const [hasMore, setHasMore] = useState(true)
     const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
+    // Filtro rápido: las tarjetas de arriba son botones, no adornos
+    const [stockFilter, setStockFilter] = useState<'todos' | 'bajo' | 'sin'>('todos')
 
     // Products (paginated)
     const { data: products, isLoading: productsLoading, isValidating, mutate } = useSWR(
@@ -117,6 +119,14 @@ export default function InventoryPage() {
 
     const isLoading = productsLoading || storeLoading
 
+    // Lo que se muestra: búsqueda del servidor + filtro rápido de arriba
+    const visibleProducts = (products || []).filter(product => {
+        if (stockFilter === 'todos') return true
+        const stock = Number(product.stock) || 0
+        const threshold = product.low_stock_threshold ?? 5
+        return stockFilter === 'sin' ? stock === 0 : stock > 0 && stock <= threshold
+    })
+
     function toggleExpand(productId: string) {
         setExpandedProducts(prev => {
             const next = new Set(prev)
@@ -162,38 +172,43 @@ export default function InventoryPage() {
                 </div>
             </motion.div>
 
-            {/* Stats Card */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="toul-card p-4 mb-6">
-                <div className="grid grid-cols-2 gap-y-4">
-                    <div>
-                        <p className="text-xs mb-1" style={{ color: 'var(--toul-text-muted)' }}>Valor inventario</p>
-                        {!stats ? <Skeleton height="1.5rem" width="110px" className="rounded" /> : (
-                            <p className="text-xl font-bold" style={{ color: 'var(--toul-text)' }}>{formatCOP(stats.totalValue)}</p>
-                        )}
-                    </div>
-                    <div>
-                        <p className="text-xs mb-1" style={{ color: 'var(--toul-text-muted)' }}>Productos</p>
-                        {!stats ? <Skeleton height="1.5rem" width="50px" className="rounded" /> : (
-                            <p className="text-xl font-bold" style={{ color: 'var(--toul-text)' }}>{stats.totalCount}</p>
-                        )}
-                    </div>
-                    <div>
-                        <p className="text-xs mb-1" style={{ color: 'var(--toul-text-muted)' }}>Sin stock</p>
-                        {!stats ? <Skeleton height="1.25rem" width="40px" className="rounded" /> : (
-                            <p className="text-lg font-bold" style={{ color: stats.zeroStock > 0 ? 'var(--toul-error)' : 'var(--toul-text-muted)' }}>
-                                {stats.zeroStock}
-                            </p>
-                        )}
-                    </div>
-                    <div>
-                        <p className="text-xs mb-1" style={{ color: 'var(--toul-text-muted)' }}>Stock bajo</p>
-                        {!stats ? <Skeleton height="1.25rem" width="40px" className="rounded" /> : (
-                            <p className="text-lg font-bold" style={{ color: stats.lowStock > 0 ? 'var(--toul-warning)' : 'var(--toul-text-muted)' }}>
-                                {stats.lowStock}
-                            </p>
-                        )}
-                    </div>
+            {/* Resumen — cada tarjeta filtra la lista */}
+            <motion.div variants={fadeUp} initial="hidden" animate="visible"
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 14 }}>
+                <div className="toul-card" style={{ padding: '14px 16px' }}>
+                    <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: 0 }}>Valor del inventario</p>
+                    {!stats ? <Skeleton height="1.6rem" width="110px" className="rounded" /> : (
+                        <p style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: '2px 0 0' }}>
+                            {formatCOP(stats.totalValue)}
+                        </p>
+                    )}
+                    <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>{stats?.totalCount ?? 0} productos</p>
                 </div>
+
+                {([
+                    { key: 'bajo' as const, label: 'Stock bajo', value: stats?.lowStock ?? 0, color: 'var(--toul-warning)', hint: 'Quedan pocas' },
+                    { key: 'sin' as const, label: 'Sin stock', value: stats?.zeroStock ?? 0, color: 'var(--toul-error)', hint: 'No se pueden vender' },
+                ]).map(tile => {
+                    const active = stockFilter === tile.key
+                    return (
+                        <button key={tile.key}
+                            onClick={() => { setStockFilter(active ? 'todos' : tile.key); setLimit(PAGE_SIZE) }}
+                            className="toul-card toul-card-interactive"
+                            style={{
+                                padding: '14px 16px', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                                background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                borderColor: active ? 'var(--toul-border-focused)' : 'var(--toul-border)',
+                            }}>
+                            <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: 0 }}>{tile.label}</p>
+                            <p style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.03em', margin: '2px 0 0', color: tile.value > 0 ? tile.color : 'var(--toul-text-muted)' }}>
+                                {tile.value}
+                            </p>
+                            <p style={{ fontSize: 12, color: active ? 'var(--toul-accent)' : 'var(--toul-text-dim)', margin: '2px 0 0' }}>
+                                {active ? 'Mostrando solo estos' : tile.hint}
+                            </p>
+                        </button>
+                    )
+                })}
             </motion.div>
 
             {/* Search */}
@@ -214,12 +229,17 @@ export default function InventoryPage() {
                 <div className="flex flex-col gap-3">
                     {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height="80px" className="rounded-2xl" />)}
                 </div>
-            ) : (products || []).length === 0 ? (
+            ) : visibleProducts.length === 0 ? (
                 <EmptyState
                     icon={Package}
                     title="Sin productos"
-                    description={searchQuery ? 'No hay resultados para tu búsqueda.' : 'Parece que aún no tienes productos en tu inventario.'}
-                    action={!searchQuery && (
+                    description={
+                        stockFilter === 'bajo' ? 'Ningún producto está por acabarse. Buena señal.'
+                            : stockFilter === 'sin' ? 'Todos tus productos tienen stock.'
+                                : searchQuery ? 'No hay resultados para tu búsqueda.'
+                                    : 'Aún no tienes productos en tu inventario.'
+                    }
+                    action={!searchQuery && stockFilter === 'todos' && (
                         <Link href="/products/new"
                             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all active:scale-95"
                             style={{ background: 'var(--toul-accent)', color: '#000', textDecoration: 'none', boxShadow: '0 4px 16px var(--toul-accent-glow)' }}>
@@ -230,7 +250,7 @@ export default function InventoryPage() {
             ) : (
                 <>
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="flex flex-col gap-3">
-                        {(products || []).map(product => {
+                        {visibleProducts.map(product => {
                             const hasVariants = variantProductIds?.has(product.id) ?? false
                             const imageSrc = getProductImage(product)
                             const threshold = product.low_stock_threshold || 5
