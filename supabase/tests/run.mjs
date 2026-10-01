@@ -20,9 +20,10 @@ const MIGRATIONS = [
     'migration_v5.sql', 'migration_v5_hotfix.sql', 'migration_v6.sql', 'migration_v7.sql',
     'migration_v7_hotfix.sql', 'migration_v8.sql', 'migration_v9.sql',
     'deploy_isla.sql', 'deploy_offline_conteo.sql', 'deploy_compras_simples.sql',
+    'deploy_catalogo_publico.sql',
 ]
 
-const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs']
+const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs']
 
 async function runSuite(file) {
     const db = new PGlite()

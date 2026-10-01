@@ -7,6 +7,8 @@ export type { FieldProps } from './Field'
 export { PriceField } from './PriceField'
 export type { PriceFieldProps } from './PriceField'
 
+export { Switch } from './Switch'
+
 export { CategoryPicker } from './CategoryPicker'
 export type { CategoryPickerProps, PickerItem } from './CategoryPicker'
 

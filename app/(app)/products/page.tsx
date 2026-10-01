@@ -5,7 +5,7 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Search, Package, Share, Tag, ArrowUpDown } from 'lucide-react'
+import { Plus, Search, Package, Share, Tag, ArrowUpDown, Link2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useToulData, useStore } from '@/lib/hooks/useData'
@@ -201,6 +201,9 @@ export default function ProductsPage() {
                     <button onClick={() => setShowExport(true)} aria-label="Exportar catálogo" style={iconButton}>
                         <Share size={17} />
                     </button>
+                    <Link href="/settings/catalogo" aria-label="Catálogo por link" style={{ ...iconButton, textDecoration: 'none' }}>
+                        <Link2 size={17} />
+                    </Link>
                     <Link href="/products/new" className="hidden sm:flex"
                         style={{
                             alignItems: 'center', gap: 7, height: 42, padding: '0 16px', borderRadius: 12,

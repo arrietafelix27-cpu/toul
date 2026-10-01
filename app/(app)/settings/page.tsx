@@ -4,7 +4,8 @@ import { explainError } from '@/lib/errors'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { LogOut, Store, User } from 'lucide-react'
+import Link from 'next/link'
+import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User } from 'lucide-react'
 import { TeamSection } from '@/components/isla/TeamSection'
 import { ReceiptSettings } from '@/components/isla/ReceiptSettings'
 import { PushPrompt } from '@/components/isla/PushPrompt'
@@ -98,6 +99,19 @@ export default function SettingsPage() {
                     </button>
                 </div>
             </div>
+
+            {/* Catálogo por link */}
+            <Link href="/settings/catalogo" className="toul-card mb-4"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--toul-surface-2)', color: 'var(--toul-text-muted)' }}>
+                    <LinkIcon size={17} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Catálogo por link</p>
+                    <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>Comparte tus productos por WhatsApp e Instagram</p>
+                </div>
+                <ChevronRight size={16} style={{ color: 'var(--toul-text-faint)', flexShrink: 0 }} />
+            </Link>
 
             {/* Modo isla */}
             <p className="toul-section-label" style={{ marginTop: 24 }}>Punto de venta (isla)</p>
