@@ -56,11 +56,13 @@ const CSS = `
 }
 .fs-body { position: relative; z-index: 2; display: flex; flex-direction: column; height: 100%; padding: 18px 20px; }
 
-.fs-add { width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0; border: 1px solid var(--toul-border);
-    background: transparent; color: var(--toul-text-dim); cursor: pointer;
-    display: flex; align-items: center; justify-content: center; text-decoration: none;
-    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1); }
-.fs-add:active { transform: scale(0.92); }
+.fs-add { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+    height: 28px; padding: 0 11px 0 8px; border-radius: 999px; text-decoration: none;
+    border: 1px solid var(--toul-border-2, rgba(255,255,255,0.14)); background: rgba(255,255,255,0.07);
+    color: var(--toul-text-muted); font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em;
+    white-space: nowrap; cursor: pointer;
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), color 160ms cubic-bezier(0.23,1,0.32,1), border-color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1); }
+.fs-add:active { transform: scale(0.96); }
 
 .fs-switch { display: inline-flex; align-items: center; gap: 3px; border: none; background: transparent; padding: 0;
     font-family: inherit; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
@@ -70,7 +72,7 @@ const CSS = `
     transition: color 160ms cubic-bezier(0.23,1,0.32,1); }
 
 @media (hover: hover) and (pointer: fine) {
-    .fs-add:hover { background: var(--toul-accent-dim); color: var(--toul-accent); border-color: var(--toul-accent-dim); }
+    .fs-add:hover { background: rgba(255,255,255,0.12); color: var(--toul-text); border-color: rgba(255,255,255,0.2); }
     .fs-switch:hover, .fs-info:hover { color: var(--toul-text-muted); }
 }
 @media (prefers-reduced-motion: reduce) { .fs-add:active { transform: none; } }
@@ -163,8 +165,8 @@ export function FinancialSummary({ metrics, loading, periodLabel }: {
                 <Block
                     label="Gastos"
                     action={
-                        <Link href="/expenses" className="fs-add" aria-label="Registrar un gasto" title="Registrar un gasto">
-                            <Plus size={15} strokeWidth={2.4} />
+                        <Link href="/expenses" className="fs-add">
+                            <Plus size={14} strokeWidth={2.6} /> Registrar gasto
                         </Link>
                     }>
                     {loading ? <Skeleton width="90px" height="1.75rem" /> : (
