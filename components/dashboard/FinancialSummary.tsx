@@ -55,6 +55,8 @@ const CSS = `
     mask-image: linear-gradient(to bottom, transparent, #000 40%, #000);
 }
 .fs-body { position: relative; z-index: 2; display: flex; flex-direction: column; height: 100%; padding: 18px 20px; }
+.fs-band { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
+.fs-line { height: 1px; background: var(--toul-divider); flex-shrink: 0; }
 
 .fs-add { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
     height: 28px; padding: 0 11px 0 8px; border-radius: 999px; text-decoration: none;
@@ -141,6 +143,7 @@ export function FinancialSummary({ metrics, loading, periodLabel }: {
                 </p>
 
                 {/* ── Ventas ── */}
+                <div className="fs-band">
                 <Block label="Ventas">
                     {loading ? <Skeleton width="60px" height="1.75rem" /> : (
                         <>
@@ -158,10 +161,12 @@ export function FinancialSummary({ metrics, loading, periodLabel }: {
                         </>
                     )}
                 </Block>
+                </div>
 
-                <div style={{ height: 1, background: 'var(--toul-divider)', margin: '14px 0' }} />
+                <div className="fs-line" />
 
                 {/* ── Gastos ── */}
+                <div className="fs-band">
                 <Block
                     label="Gastos"
                     action={
@@ -184,11 +189,12 @@ export function FinancialSummary({ metrics, loading, periodLabel }: {
                         </>
                     )}
                 </Block>
+                </div>
 
-                <div style={{ height: 1, background: 'var(--toul-divider)', margin: '14px 0' }} />
+                <div className="fs-line" />
 
                 {/* ── Utilidad ── */}
-                <div style={{ marginTop: 'auto' }}>
+                <div className="fs-band">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
                         <button className="fs-switch" onClick={switchKind}
                             title="Cambiar entre utilidad bruta y neta">
