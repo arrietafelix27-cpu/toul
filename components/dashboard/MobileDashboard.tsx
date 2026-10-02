@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PendingPanel, type PendingData } from './PendingPanel'
 import { formatCOP } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { fadeUp } from '@/lib/motion'
@@ -25,6 +26,7 @@ interface MobileDashboardProps {
         avgTicket: number
     }
     topProduct: { name: string; image_url: string | null; units: number } | null
+    pending: PendingData
     insight: AIInsight | null
     loading: boolean
     insightsLoading: boolean
@@ -40,7 +42,7 @@ const PERIODS: { value: Period; label: string }[] = [
 export default function MobileDashboard({
     storeName, currentDate, storeId, period, setPeriod,
     customRange, setCustomRange,
-    metrics, topProduct, insight,
+    metrics, topProduct, pending, insight,
     loading, insightsLoading
 }: MobileDashboardProps) {
     const [showCalendar, setShowCalendar] = useState(false)
@@ -282,7 +284,15 @@ export default function MobileDashboard({
                 )}
             </motion.div>
 
-            {/* 5️⃣ Insight TOUL AI */}
+            {/* 5️⃣ Plata pendiente */}
+            {!loading && (pending.customerDebts.length > 0 || pending.providerDebts.length > 0) && (
+                <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.14 }}
+                    className="toul-card" style={{ padding: 16 }}>
+                    <PendingPanel pending={pending} storeName={storeName} compact />
+                </motion.div>
+            )}
+
+            {/* 6️⃣ Insight TOUL AI */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.16 }}>
                 {(insightsLoading || loading) ? (
                     <div className="toul-card p-5 flex flex-col gap-3">

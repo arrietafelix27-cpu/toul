@@ -54,11 +54,6 @@ DashboardMetrics.MiniStrip = function MiniStrip({ metrics, loading }: { metrics:
                         <span className="text-[10px] font-bold ml-1.5 uppercase tracking-wide" style={{ color: 'var(--toul-text-subtle)' }}>operaciones</span>
                     </div>
                 )}
-                {!loading && (
-                    <div className="text-[10px] font-medium" style={{ color: 'var(--toul-text-subtle)' }}>
-                        Ticket promedio: <span style={{ color: 'var(--toul-text-muted)' }}>{formatCOP(metrics.avgTicket)}</span>
-                    </div>
-                )}
             </div>
 
             {/* 2. Expenses — Cost */}

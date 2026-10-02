@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Package, Brain, ChevronRight, Sparkles, Wallet, TrendingUp, AlertTriangle, Clock } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
+import { PendingPanel, type PendingData } from './PendingPanel'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { staggerItem } from '@/lib/motion'
 import type { AIInsight } from '@/lib/types'
@@ -31,16 +32,15 @@ export default function OperationalMetrics({
     insights,
     loading,
     insightsLoading,
-    pending
+    pending,
+    storeName
 }: {
     products: { topUnits: ProductRow[]; topProfit: ProductRow[]; lowStock: ProductRow[]; slowMoving: ProductRow[] };
     insights: AIInsight[];
     loading: boolean;
     insightsLoading: boolean;
-    pending: {
-        customerDebts: { id: string; name: string; amount: number; createdAt: string; isOverdue: boolean }[];
-        providerDebts: { id: string; name: string; amount: number; dueDate: string | null; isOverdue: boolean }[];
-    };
+    pending: PendingData;
+    storeName?: string | null;
 }) {
     return (
         <div className="grid grid-cols-12 gap-6 items-stretch">
@@ -51,7 +51,7 @@ export default function OperationalMetrics({
 
             {/* Right — TOUL AI Copilot + Pendientes */}
             <div className="col-span-12 lg:col-span-6 flex flex-col">
-                <AICopilotPanel insights={insights} loading={insightsLoading || loading} pending={pending} />
+                <AICopilotPanel insights={insights} loading={insightsLoading || loading} pending={pending} storeName={storeName} />
             </div>
         </div>
     )
@@ -205,19 +205,10 @@ function SmartProductsPanel({ products, loading }: {
     )
 }
 
-// ── TOUL AI COPILOT PANEL + PENDIENTES ─────────────────────────────────────
-type PendingData = {
-    customerDebts: { id: string; name: string; amount: number; createdAt: string; isOverdue: boolean }[];
-    providerDebts: { id: string; name: string; amount: number; dueDate: string | null; isOverdue: boolean }[];
-}
-
-function AICopilotPanel({ insights, loading, pending }: { insights: AIInsight[]; loading: boolean; pending: PendingData }) {
-    const [pendingTab, setPendingTab] = useState<'cobrar' | 'pagar'>('cobrar')
-
-    const totalCobrar = pending.customerDebts.reduce((s, c) => s + c.amount, 0)
-    const totalPagar = pending.providerDebts.reduce((s, p) => s + p.amount, 0)
-    const currentList = pendingTab === 'cobrar' ? pending.customerDebts : pending.providerDebts
-    const accentColor = pendingTab === 'cobrar' ? 'var(--toul-error, #ef4444)' : '#F59E0B'
+// ── TOUL AI COPILOT PANEL + PLATA PENDIENTE ────────────────────────────────
+function AICopilotPanel({ insights, loading, pending, storeName }: {
+    insights: AIInsight[]; loading: boolean; pending: PendingData; storeName?: string | null
+}) {
 
     if (loading) return (
         <div className="toul-card p-5 h-full flex flex-col gap-4">
@@ -306,118 +297,11 @@ function AICopilotPanel({ insights, loading, pending }: { insights: AIInsight[];
             {/* ─── Divider ─── */}
             <div style={{ height: '0.5px', background: 'var(--toul-border)', margin: '0 -20px', width: 'calc(100% + 40px)' }} />
 
-            {/* ─── Pendientes Section ─── */}
-            <div className="flex-1 flex flex-col mt-3">
-                {/* Header + Toggle */}
-                <div className="flex items-center justify-between mb-3">
-                    <span className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--toul-text-subtle)' }}>Pendientes</span>
-                    <div className="flex p-0.5 rounded-md" style={{ background: 'var(--toul-bg)' }}>
-                        <button
-                            onClick={() => setPendingTab('cobrar')}
-                            className="px-2.5 py-1 rounded text-[9px] font-bold"
-                            style={{
-                                transition: 'var(--toul-transition)',
-                                ...(pendingTab === 'cobrar'
-                                    ? { background: 'var(--toul-surface-2)', color: 'var(--toul-accent)' }
-                                    : { color: 'var(--toul-text-subtle)' })
-                            }}>
-                            Por cobrar
-                        </button>
-                        <button
-                            onClick={() => setPendingTab('pagar')}
-                            className="px-2.5 py-1 rounded text-[9px] font-bold"
-                            style={{
-                                transition: 'var(--toul-transition)',
-                                ...(pendingTab === 'pagar'
-                                    ? { background: 'var(--toul-surface-2)', color: 'var(--toul-accent)' }
-                                    : { color: 'var(--toul-text-subtle)' })
-                            }}>
-                            Por pagar
-                        </button>
-                    </div>
-                </div>
-
-                {/* Total */}
-                <div className="mb-2">
-                    <div className="text-lg font-black tracking-tighter" style={{ color: accentColor }}>
-                        {formatCOP(pendingTab === 'cobrar' ? totalCobrar : totalPagar)}
-                    </div>
-                    <div className="text-[10px] font-medium" style={{ color: 'var(--toul-text-subtle)' }}>
-                        {pendingTab === 'cobrar'
-                            ? `${pending.customerDebts.length} cliente${pending.customerDebts.length !== 1 ? 's' : ''}`
-                            : `${pending.providerDebts.length} proveedor${pending.providerDebts.length !== 1 ? 'es' : ''}`
-                        }
-                    </div>
-                </div>
-
-                {/* List */}
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={pendingTab}
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.12 }}
-                        className="flex-1"
-                    >
-                        {currentList.length === 0 ? (
-                            <div className="flex items-center justify-center py-6">
-                                <span className="text-[11px] font-medium" style={{ color: 'var(--toul-text-subtle)' }}>Todo al día ✨</span>
-                            </div>
-                        ) : (
-                            currentList.slice(0, 3).map((item, i) => {
-                                const initials = item.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-                                const daysDiff = 'createdAt' in item
-                                    ? Math.floor((Date.now() - new Date((item as any).createdAt).getTime()) / 86400000)
-                                    : null
-                                const dueDate = 'dueDate' in item ? (item as any).dueDate : null
-                                const isOverdue = dueDate ? new Date(dueDate) < new Date() : false
-
-                                return (
-                                    <div key={item.id}>
-                                        <div className="flex items-center gap-2.5 py-2">
-                                            {/* Avatar */}
-                                            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold"
-                                                style={{
-                                                    background: pendingTab === 'cobrar' ? 'rgba(168, 85, 247, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                                                    color: pendingTab === 'cobrar' ? '#A855F7' : '#F59E0B',
-                                                }}>
-                                                {initials}
-                                            </div>
-
-                                            {/* Name + badge */}
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-[11px] font-semibold text-white truncate">{item.name}</p>
-                                                {isOverdue && (
-                                                    <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded"
-                                                        style={{ background: 'rgba(239, 68, 68, 0.12)', color: '#ef4444' }}>
-                                                        Vencido
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Amount + date */}
-                                            <div className="text-right flex-shrink-0">
-                                                <p className="text-[11px] font-bold" style={{ color: accentColor }}>
-                                                    {formatCOP(item.amount)}
-                                                </p>
-                                                <p className="text-[9px]" style={{ color: 'var(--toul-text-subtle)' }}>
-                                                    {dueDate
-                                                        ? (isOverdue ? 'Venc. ' : '') + new Date(dueDate).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
-                                                        : daysDiff !== null ? `hace ${daysDiff}d` : ''}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        {i < Math.min(currentList.length, 3) - 1 && (
-                                            <div style={{ height: '0.5px', background: 'var(--toul-border)' }} />
-                                        )}
-                                    </div>
-                                )
-                            })
-                        )}
-                    </motion.div>
-                </AnimatePresence>
+            {/* ─── Plata pendiente ─── */}
+            <div className="flex-1 flex flex-col mt-4">
+                <PendingPanel pending={pending} storeName={storeName} />
             </div>
+
         </motion.div>
     )
 }

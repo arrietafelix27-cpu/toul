@@ -48,7 +48,7 @@ export default function DashboardPage() {
             const sevenDaysAgo = new Date(todayStart); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
             // Fetch current data + new dashboard enhancement queries
-            const [sales, expenses, products, purchases, sales7d, salesStreak, salesYesterday, customersDebt, providersPending] = await Promise.all([
+            const [sales, expenses, products, purchases, sales7d, salesStreak, salesYesterday, customersDebt, providersPending, creditSales, allPurchases] = await Promise.all([
                 supabase.from('sales').select('total, created_at, sale_items(unit_price, unit_cost, quantity, product_id, products(name, image_url))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 supabase.from('expenses').select('amount, created_at').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 supabase.from('products').select('*').eq('store_id', storeId).eq('is_active', true),
@@ -60,9 +60,13 @@ export default function DashboardPage() {
                 // Mejora 1: Yesterday's total
                 supabase.from('sales').select('total').eq('store_id', storeId).gte('created_at', yesterdayStart.toISOString()).lt('created_at', todayStart.toISOString()),
                 // Mejora 2: Customers with debt > 0
-                supabase.from('customers').select('id, name, total_debt, created_at').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(10),
+                supabase.from('customers').select('id, name, phone, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(10),
                 // Mejora 2: Providers with credit purchases pending
-                supabase.from('providers').select('id, name, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(10)
+                supabase.from('providers').select('id, name, phone, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(10),
+                // Desde cuándo debe cada cliente: la fiada más vieja sin pagar
+                supabase.from('sales').select('customer_id, created_at').eq('store_id', storeId).eq('is_credit', true).not('customer_id', 'is', null).order('created_at', { ascending: true }),
+                // Desde cuándo le debes a cada proveedor
+                supabase.from('purchases').select('provider_id, created_at').eq('store_id', storeId).not('provider_id', 'is', null).order('created_at', { ascending: true })
             ])
 
             // Fetch previous data for variations
@@ -156,22 +160,36 @@ export default function DashboardPage() {
             // ── Mejora 1: Yesterday's total ──────────────────────────────────
             const yesterdayTotal = Math.round((salesYesterday.data || []).reduce((s, r) => s + r.total, 0))
 
-            // ── Mejora 2: Customer debts (por cobrar) ────────────────────────
+            // ── Plata pendiente ──────────────────────────────────────────────
+            // Hace cuánto quedó debiendo cada uno: la fiada o la compra más
+            // vieja. Antes se mostraba la fecha en que se creó el cliente,
+            // que no tiene nada que ver con la deuda.
+            const daysSince = (iso: string | null) =>
+                iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)) : null
+
+            const firstCreditSale = new Map<string, string>()
+            for (const row of (creditSales.data || [])) {
+                if (row.customer_id && !firstCreditSale.has(row.customer_id)) firstCreditSale.set(row.customer_id, row.created_at)
+            }
+            const firstPurchase = new Map<string, string>()
+            for (const row of (allPurchases.data || [])) {
+                if (row.provider_id && !firstPurchase.has(row.provider_id)) firstPurchase.set(row.provider_id, row.created_at)
+            }
+
             const customerDebts = (customersDebt.data || []).map(c => ({
                 id: c.id,
                 name: c.name,
                 amount: Math.round(c.total_debt),
-                createdAt: c.created_at,
-                isOverdue: false, // Clients don't have due_date; use 'hace X días' instead
+                phone: c.phone ?? null,
+                days: daysSince(firstCreditSale.get(c.id) ?? null),
             }))
 
-            // ── Mejora 2: Provider debts (por pagar) ─────────────────────────
             const providerDebts = (providersPending.data || []).map(p => ({
                 id: p.id,
                 name: p.name,
                 amount: Math.round(p.total_debt),
-                dueDate: null as string | null, // We'll enrich this in a future iteration if needed
-                isOverdue: false,
+                phone: p.phone ?? null,
+                days: daysSince(firstPurchase.get(p.id) ?? null),
             }))
 
             return {
@@ -250,6 +268,7 @@ export default function DashboardPage() {
                         avgTicket: dashboardData?.metrics.avgTicket || 0,
                     }}
                     topProduct={topProduct}
+                    pending={dashboardData?.pending || { customerDebts: [], providerDebts: [] }}
                     insight={insights?.[0] || null}
                     loading={loading}
                     insightsLoading={insightsLoading || false}
@@ -315,6 +334,7 @@ export default function DashboardPage() {
                     loading={loading}
                     insightsLoading={insightsLoading}
                     pending={dashboardData?.pending || { customerDebts: [], providerDebts: [] }}
+                    storeName={storeName}
                 />
             </motion.div>
         </>
