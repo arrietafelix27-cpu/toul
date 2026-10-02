@@ -6,6 +6,7 @@ import {
     Sparkles, BarChart3, Settings, Menu, ChevronRight, Plus, ShieldCheck, LockKeyhole,
 } from 'lucide-react'
 import { usePendingApprovalsCount } from '@/lib/isla/useSession'
+import { FullscreenToggle } from './FullscreenToggle'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence, useDragControls, type PanInfo } from 'framer-motion'
 
@@ -133,12 +134,13 @@ export function Sidebar() {
             <style>{NAV_CSS}</style>
 
             {/* Marca */}
-            <div className="flex items-center gap-2.5 px-5" style={{ height: 64, flexShrink: 0 }}>
+            <div className="flex items-center gap-2.5 pl-5 pr-3" style={{ height: 64, flexShrink: 0 }}>
                 <div className="flex items-center justify-center"
                     style={{ width: 28, height: 28, borderRadius: 9, background: 'var(--toul-accent)', boxShadow: '0 2px 12px var(--toul-accent-glow)' }}>
                     <span style={{ color: '#000', fontWeight: 800, fontSize: 13 }}>T</span>
                 </div>
-                <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--toul-text)' }}>TOUL</span>
+                <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--toul-text)', flex: 1 }}>TOUL</span>
+                <FullscreenToggle />
             </div>
 
             {/* Acción principal */}
