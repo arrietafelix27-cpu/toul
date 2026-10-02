@@ -14,9 +14,28 @@ import type { AIInsight } from '@/lib/types'
 const CSS = `
 /* Una sola superficie para los tres, como el resumen de arriba:
    lo que separa por dentro son líneas que se desvanecen */
-.ir-row { display: grid; gap: 30px; align-items: stretch;
-    padding: 20px 24px; border-radius: 20px;
-    background: var(--toul-surface); border: 1px solid var(--toul-border); }
+.ir-row { position: relative; display: grid; gap: 30px; align-items: stretch;
+    padding: 20px 24px; border-radius: 20px; isolation: isolate; }
+
+/* Entra desde la zona del gráfico: arriba a la izquierda no hay
+   superficie, y se va volviendo sólida hacia abajo y a la derecha */
+.ir-row::before {
+    content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(142deg,
+        rgba(255,255,255,0) 0%,
+        rgba(255,255,255,0.008) 20%,
+        rgba(255,255,255,0.028) 38%,
+        var(--toul-surface) 62%,
+        var(--toul-surface) 100%);
+}
+/* El borde también aparece: no arranca hasta pasada esa esquina */
+.ir-row::after {
+    content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+    border: 1px solid var(--toul-border);
+    -webkit-mask-image: linear-gradient(142deg, transparent 8%, #000 48%, #000 100%);
+    mask-image: linear-gradient(142deg, transparent 8%, #000 48%, #000 100%);
+}
+
 .ir-col { position: relative; min-width: 0; }
 
 .ir-col::before {
