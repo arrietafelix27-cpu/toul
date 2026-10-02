@@ -2,10 +2,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PendingPanel, type PendingData } from './PendingPanel'
+import { AIAdvisor } from './AIAdvisor'
 import { formatCOP } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { fadeUp } from '@/lib/motion'
-import { Sparkles, ChevronRight, Package, Brain, Wallet, Calendar } from 'lucide-react'
+import { Package, Calendar } from 'lucide-react'
 import Link from 'next/link'
 import type { AIInsight } from '@/lib/types'
 import HeroChart from './HeroChart'
@@ -292,71 +293,9 @@ export default function MobileDashboard({
                 </motion.div>
             )}
 
-            {/* 6️⃣ Insight TOUL AI */}
+            {/* 6️⃣ TOUL AI */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.16 }}>
-                {(insightsLoading || loading) ? (
-                    <div className="toul-card p-5 flex flex-col gap-3">
-                        <Skeleton width="100px" height="12px" className="opacity-10" />
-                        <Skeleton width="100%" height="16px" className="opacity-10" />
-                        <Skeleton width="80%" height="14px" className="opacity-10" />
-                        <Skeleton width="100%" height="40px" className="rounded-xl opacity-10 mt-2" />
-                    </div>
-                ) : insight ? (
-                    <div className="toul-card flex flex-col gap-3" style={{ padding: 18 }}>
-                        <div className="flex items-center gap-2">
-                            <div className="rounded-full animate-pulse"
-                                style={{ width: 6, height: 6, background: 'var(--toul-accent)', boxShadow: '0 0 8px var(--toul-accent-glow)' }} />
-                            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--toul-text-dim)' }}>TOUL AI</span>
-                        </div>
-                        <div className="flex items-start gap-2.5">
-                            <span style={{ fontSize: 18 }}>{insight.icon}</span>
-                            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--toul-text)', lineHeight: 1.45, letterSpacing: '-0.01em', flex: 1 }}>
-                                {insight.interpretation}
-                            </p>
-                        </div>
-                        <Link href="/toul-ai"
-                            className="flex items-center justify-center gap-2 active:scale-[0.98]"
-                            style={{
-                                height: 50,
-                                borderRadius: 14,
-                                color: '#000',
-                                fontSize: 15,
-                                fontWeight: 600,
-                                letterSpacing: '-0.01em',
-                                background: 'var(--toul-accent)',
-                                boxShadow: '0 4px 24px var(--toul-accent-glow)',
-                                textDecoration: 'none',
-                                transition: 'transform 0.15s var(--toul-ease)',
-                            }}>
-                            <Sparkles size={16} strokeWidth={2.4} />
-                            Habla con TOUL IA
-                        </Link>
-                    </div>
-                ) : (
-                    <div className="toul-card flex flex-col items-center gap-3 text-center" style={{ padding: 18 }}>
-                        <Brain size={24} color="rgba(255,255,255,0.25)" />
-                        <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--toul-text-dim)' }}>
-                            Analizando tus movimientos...
-                        </p>
-                        <Link href="/toul-ai"
-                            className="flex items-center justify-center gap-2 w-full active:scale-[0.98]"
-                            style={{
-                                height: 50,
-                                borderRadius: 14,
-                                color: '#000',
-                                fontSize: 15,
-                                fontWeight: 600,
-                                letterSpacing: '-0.01em',
-                                background: 'var(--toul-accent)',
-                                boxShadow: '0 4px 24px var(--toul-accent-glow)',
-                                textDecoration: 'none',
-                                transition: 'transform 0.15s var(--toul-ease)',
-                            }}>
-                            <Sparkles size={16} strokeWidth={2.4} />
-                            Habla con TOUL IA
-                        </Link>
-                    </div>
-                )}
+                <AIAdvisor insight={insight} loading={insightsLoading || loading} />
             </motion.div>
 
         </div>

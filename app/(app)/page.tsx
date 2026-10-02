@@ -10,7 +10,7 @@ import useSWR from 'swr'
 // Components
 import HeroChart from '@/components/dashboard/HeroChart'
 import { FinancialSummary } from '@/components/dashboard/FinancialSummary'
-import OperationalMetrics from '@/components/dashboard/OperationalMetrics'
+import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Star } from 'lucide-react'
@@ -82,7 +82,7 @@ export default function DashboardPage() {
             const avgTicket = salesCount > 0 ? Math.round(currentRevenue / salesCount) : 0
 
             let currentCost = 0
-            const productUnitsMap: Record<string, { name: string; image_url: string | null; units: number; profit: number; stock: number; last_sale: string }> = {}
+            const productUnitsMap: Record<string, { name: string; image_url: string | null; units: number; profit: number; revenue: number; stock: number; last_sale: string }> = {}
 
             for (const s of (sales.data || [])) {
                 for (const item of (s.sale_items as any || [])) {
@@ -96,12 +96,14 @@ export default function DashboardPage() {
                             image_url: item.products?.image_url || null,
                             units: 0,
                             profit: 0,
+                            revenue: 0,
                             stock: 0,
                             last_sale: s.created_at
                         }
                     }
                     productUnitsMap[pid].units += item.quantity
                     productUnitsMap[pid].profit += profitVal
+                    productUnitsMap[pid].revenue += Math.round(item.unit_price * item.quantity)
                 }
             }
 
@@ -141,15 +143,15 @@ export default function DashboardPage() {
             const pGrossProfit = Math.round(pRev - pCost)
 
             // 2. OPERATIONAL DATA: PRODUCTS
-            const sortedByUnits = Object.entries(productUnitsMap).map(([id, p]) => ({ id, ...p, value: p.units, units: p.units, subValue: `${p.units} unidades` })).sort((a, b) => b.value - a.value).slice(0, 5)
-            const sortedByProfit = Object.entries(productUnitsMap).map(([id, p]) => ({ id, ...p, value: p.profit, units: p.units, subValue: formatCOP(p.profit) })).sort((a, b) => b.value - a.value).slice(0, 5)
-            const lowStock = (products.data || []).filter(p => p.stock <= (p.low_stock_threshold || 5)).map(p => ({ id: p.id, name: p.name, image_url: p.image_url, value: p.stock, units: 0, subValue: `${p.stock} disponibles` })).sort((a, b) => a.value - b.value).slice(0, 5)
+            const sortedByUnits = Object.entries(productUnitsMap).map(([id, p]) => ({ id, ...p, value: p.units, units: p.units, subValue: `${p.units} ${p.units === 1 ? 'vendido' : 'vendidos'} · ${formatCOP(p.revenue)}` })).sort((a, b) => b.value - a.value).slice(0, 5)
+            const sortedByProfit = Object.entries(productUnitsMap).map(([id, p]) => ({ id, ...p, value: p.profit, units: p.units, subValue: `te dejó ${formatCOP(p.profit)} en ${p.units} ${p.units === 1 ? 'venta' : 'ventas'}` })).sort((a, b) => b.value - a.value).slice(0, 5)
+            const lowStock = (products.data || []).filter(p => p.stock <= (p.low_stock_threshold || 5)).map(p => ({ id: p.id, name: p.name, image_url: p.image_url, value: p.stock, units: 0, subValue: p.stock === 0 ? 'se agotó' : `quedan ${p.stock} ${p.stock === 1 ? 'unidad' : 'unidades'}` })).sort((a, b) => a.value - b.value).slice(0, 5)
 
             // Slow moving (all active products - those sold)
             const soldIds = new Set(Object.keys(productUnitsMap))
             const slowMoving = (products.data || []).filter(p => !soldIds.has(p.id) && p.stock > 0).map(p => {
                 const days = getDaysDiff(p.created_at, new Date().toISOString())
-                return { id: p.id, name: p.name, image_url: p.image_url, value: days, units: 0, subValue: `${days} días sin rotación` }
+                return { id: p.id, name: p.name, image_url: p.image_url, value: days, units: 0, subValue: `${days} días sin venderse · ${p.stock} en bodega` }
             }).sort((a, b) => b.value - a.value).slice(0, 5)
 
             // ── Mejora 1: Compute 7-day average ────────────────────────────
@@ -370,14 +372,14 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Row 2: Operational + Cash + AI — with breathing room */}
-                <OperationalMetrics
+                {/* Fila 2: productos, plata pendiente y TOUL AI */}
+                <InsightsRow
                     products={dashboardData?.operational.products || { topUnits: [], topProfit: [], lowStock: [], slowMoving: [] }}
-                    insights={insights || []}
-                    loading={loading}
-                    insightsLoading={insightsLoading}
                     pending={dashboardData?.pending || { customerDebts: [], providerDebts: [] }}
+                    insight={insights?.[0] || null}
                     storeName={storeName}
+                    loading={loading}
+                    insightsLoading={!!insightsLoading}
                 />
             </motion.div>
         </>

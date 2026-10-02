@@ -43,8 +43,8 @@ export async function POST(request: Request) {
         { data: payments },
     ] = await Promise.all([
         supabase.from('products').select('id, name, stock, cpp, sale_price, is_active, created_at').eq('store_id', storeId).eq('is_active', true),
-        supabase.from('sales').select('id, total, created_at, payment_method').eq('store_id', storeId).eq('is_credit', false).gte('created_at', last30),
-        supabase.from('sales').select('total').eq('store_id', storeId).eq('is_credit', false).gte('created_at', last60).lt('created_at', last30),
+        supabase.from('sales').select('id, total, created_at, payment_method').eq('store_id', storeId).gte('created_at', last30),
+        supabase.from('sales').select('total').eq('store_id', storeId).gte('created_at', last60).lt('created_at', last30),
         supabase.from('expenses').select('amount, category, description, created_at').eq('store_id', storeId).gte('created_at', last30),
         supabase.from('sale_items').select('product_id, quantity, unit_price, unit_cost, sales!inner(created_at, store_id)').eq('sales.store_id', storeId).gte('sales.created_at', last30),
         supabase.from('payments').select('method, amount, type').eq('store_id', storeId).gte('created_at', last30),
@@ -120,9 +120,77 @@ export async function POST(request: Request) {
     const grossProfit = prodList.reduce((s, p) => s + p.profit, 0)
     const marginPressure = totalRevenue > 0 && grossProfit / totalRevenue < 0.3 // <30% gross margin
 
+    /* ══════════════════════════════════════════════════════════════
+       Antes de hablar, hay que tener de qué hablar.
+       Con cuatro ventas, un "dependes 62% de un producto" es cierto
+       y es absurdo: quema la credibilidad de lo único que diferencia
+       a TOUL. Por debajo del mínimo, la IA no saca conclusiones.
+       ══════════════════════════════════════════════════════════════ */
+    const MIN_SALES = 8
+    const enoughData = sales.length >= MIN_SALES
+
+    const VERDICT: Record<string, string> = {
+        health: 'Vas bien',
+        attention: 'Ojo con esto',
+        alert: 'Hay que actuar',
+        info: 'Apenas arrancando',
+    }
+
+    /** La acción la decide el servidor: así el enlace siempre existe. */
+    function actionFor(insight: any) {
+        const secondBest = prodList.filter(p => p.id !== starProduct?.id).sort((a, b) => b.margin - a.margin)[0]
+        if (outOfStock.length > 0 || lowStockProds.length > 0) {
+            if (insight.category === 'alert' && /stock|inventario|agot/i.test(`${insight.interpretation} ${insight.suggestion}`)) {
+                return { label: 'Comprar', href: '/inventory/purchase' }
+            }
+        }
+        switch (insight.category) {
+            case 'dependency':
+                return secondBest ? { label: `Ver ${secondBest.name}`, href: `/products/${secondBest.id}` } : { label: 'Ver catálogo', href: '/products' }
+            case 'opportunity':
+                return highMarginProduct ? { label: `Ver ${highMarginProduct.name}`, href: `/products/${highMarginProduct.id}` } : { label: 'Ver catálogo', href: '/products' }
+            case 'alert':
+                return { label: 'Revisar precios', href: '/products' }
+            default:
+                return { label: 'Ver reportes', href: '/reportes' }
+        }
+    }
+
+    /** Deja el chat listo con la pregunta ya escrita. */
+    const questionFor = (insight: any) =>
+        `${insight.interpretation} ¿Por qué pasa eso y qué me recomiendas hacer?`
+
+    function enrich(list: any[]) {
+        return list.map(insight => ({
+            ...insight,
+            verdict: VERDICT[insight.severity] ?? VERDICT.info,
+            action: actionFor(insight),
+            question: questionFor(insight),
+        }))
+    }
+
+    // Sin datos suficientes no se opina: se dice la verdad
+    if (!enoughData) {
+        const starting = [{
+            id: 'starting',
+            category: 'status',
+            severity: 'info',
+            status_label: 'Primeros pasos',
+            icon: '🌱',
+            interpretation: sales.length === 0
+                ? 'Todavía no hay ventas registradas este mes.'
+                : `Llevas ${sales.length} ${sales.length === 1 ? 'venta registrada' : 'ventas registradas'} este mes.`,
+            implication: `Con ${MIN_SALES} ventas ya puedo decirte en qué estás ganando plata y en qué la estás perdiendo.`,
+            suggestion: 'Registra tus ventas en la caja, aunque sean las que haces por WhatsApp.',
+        }]
+        const enriched = enrich(starting).map(i => ({ ...i, action: { label: 'Abrir caja', href: '/caja' } }))
+        await supabase.from('ai_insights').upsert({ store_id: storeId, insights: enriched, generated_at: new Date().toISOString() }, { onConflict: 'store_id' })
+        return NextResponse.json({ insights: enriched })
+    }
+
     // ── Fallback (no OpenAI) — rich and varied ────────────────────────────────
     if (!process.env.OPENAI_API_KEY) {
-        return NextResponse.json({ insights: generateRichFallback({ sales, totalRevenue, prevRevenue, revGrowth, avgTicket, starProduct, highMarginProduct, highTrapped, lowRotation, lowStockProds, outOfStock, bestDay, bestHour, topMethod, topExpenseCat, totalExpenses, inventoryValue, grossProfit, marginPressure, prods }) })
+        return NextResponse.json({ insights: enrich(generateRichFallback({ sales, totalRevenue, prevRevenue, revGrowth, avgTicket, starProduct, highMarginProduct, highTrapped, lowRotation, lowStockProds, outOfStock, bestDay, bestHour, topMethod, topExpenseCat, totalExpenses, inventoryValue, grossProfit, marginPressure, prods })) })
     }
 
     // ── OpenAI — rich prompt ──────────────────────────────────────────────────
@@ -160,6 +228,7 @@ Responde con un JSON array de objetos con este esquema:
 }
 
 Prioriza temas de: rentabilidad, dependencia de productos, capital atrapado o alertas financieras.
+Cuando la sugerencia se refiera a un producto, NÓMBRALO con su nombre exacto de la lista. Nunca digas "un producto con buen margen": di cuál.
 Responde SOLO el JSON array persistiendo el esquema exacto.`
 
         const response = await openai.chat.completions.create({
@@ -183,13 +252,13 @@ Responde SOLO el JSON array persistiendo el esquema exacto.`
             return scoreB - scoreA
         })
 
-        const finalInsights = ranked.slice(0, 1)
+        const finalInsights = enrich(ranked.slice(0, 1))
 
         await supabase.from('ai_insights').upsert({ store_id: storeId, insights: finalInsights, generated_at: new Date().toISOString() }, { onConflict: 'store_id' })
         return NextResponse.json({ insights: finalInsights })
     } catch (error) {
         console.error('AI insights error:', error)
-        const fallback = generateRichFallback({ sales, totalRevenue, prevRevenue, revGrowth, avgTicket, starProduct, highMarginProduct, highTrapped, lowRotation, lowStockProds, outOfStock, bestDay, bestHour, topMethod, topExpenseCat, totalExpenses, inventoryValue, grossProfit, marginPressure, prods })
+        const fallback = enrich(generateRichFallback({ sales, totalRevenue, prevRevenue, revGrowth, avgTicket, starProduct, highMarginProduct, highTrapped, lowRotation, lowStockProds, outOfStock, bestDay, bestHour, topMethod, topExpenseCat, totalExpenses, inventoryValue, grossProfit, marginPressure, prods }))
         return NextResponse.json({ insights: fallback.slice(0, 1) })
     }
 }

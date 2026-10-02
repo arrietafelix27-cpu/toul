@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef, useEffect, Fragment } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useStore } from '@/lib/hooks/useData'
@@ -159,6 +160,16 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
     useEffect(() => {
         inputRef.current?.focus()
     }, [])
+
+    // Si se llega desde una observación del inicio, la pregunta ya viene escrita
+    const searchParams = useSearchParams()
+    useEffect(() => {
+        const prefill = searchParams.get('q')
+        if (prefill) {
+            setInput(prefill)
+            inputRef.current?.focus()
+        }
+    }, [searchParams])
 
     const suggestions = [
         { text: '¿Cómo va mi negocio?', icon: <TrendingUp className="w-3.5 h-3.5" /> },

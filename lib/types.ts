@@ -315,6 +315,12 @@ export interface AIInsight {
     confidence?: 'high' | 'medium' | 'low'
     supporting_metric?: string
     icon: string
+    /** Cómo va el negocio en una frase: "Vas bien", "Ojo con esto"… */
+    verdict?: string
+    /** A dónde lleva la sugerencia. La arma el servidor, nunca el modelo. */
+    action?: { label: string; href: string }
+    /** La pregunta con la que abre el chat */
+    question?: string
 }
 
 export interface CartItem {
