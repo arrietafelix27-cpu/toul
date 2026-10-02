@@ -110,7 +110,7 @@ export default function HeroChart({ storeId, period, setPeriod, revenue, loading
             todayStart.setHours(0, 0, 0, 0)
             const { data: sales } = await supabase
                 .from('sales').select('total, created_at')
-                .eq('store_id', storeId).eq('is_credit', false)
+                .eq('store_id', storeId)
                 .gte('created_at', todayStart.toISOString())
                 .order('created_at')
 
@@ -126,7 +126,7 @@ export default function HeroChart({ storeId, period, setPeriod, revenue, loading
         } else if (period === 'custom' && customRange) {
             const { data: sales } = await supabase
                 .from('sales').select('total, created_at')
-                .eq('store_id', storeId).eq('is_credit', false)
+                .eq('store_id', storeId)
                 .gte('created_at', customRange.from)
                 .lte('created_at', customRange.to)
                 .order('created_at')
@@ -139,7 +139,7 @@ export default function HeroChart({ storeId, period, setPeriod, revenue, loading
             setData(Object.entries(grouped).map(([label, total]) => ({ label, total })))
         } else {
             const { from, to } = getDateRange(period)
-            let q = supabase.from('sales').select('total, created_at').eq('store_id', storeId).eq('is_credit', false).order('created_at')
+            let q = supabase.from('sales').select('total, created_at').eq('store_id', storeId).order('created_at')
             if (from) q = q.gte('created_at', from)
             if (to) q = q.lte('created_at', to)
             const { data: sales } = await q

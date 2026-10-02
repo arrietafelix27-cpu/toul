@@ -9,7 +9,7 @@ import useSWR from 'swr'
 
 // Components
 import HeroChart from '@/components/dashboard/HeroChart'
-import DashboardMetrics from '@/components/dashboard/DashboardMetrics'
+import { FinancialSummary } from '@/components/dashboard/FinancialSummary'
 import OperationalMetrics from '@/components/dashboard/OperationalMetrics'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -49,8 +49,8 @@ export default function DashboardPage() {
 
             // Fetch current data + new dashboard enhancement queries
             const [sales, expenses, products, purchases, sales7d, salesStreak, salesYesterday, customersDebt, providersPending, creditSales, allPurchases] = await Promise.all([
-                supabase.from('sales').select('total, created_at, sale_items(unit_price, unit_cost, quantity, product_id, products(name, image_url))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
-                supabase.from('expenses').select('amount, created_at').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
+                supabase.from('sales').select('total, created_at, is_credit, sale_items(unit_price, unit_cost, quantity, product_id, products(name, image_url))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
+                supabase.from('expenses').select('amount, category, created_at').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 supabase.from('products').select('*').eq('store_id', storeId).eq('is_active', true),
                 supabase.from('purchases').select('total, created_at, provider_id, due_date').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 // Mejora 1: 7-day average
@@ -106,6 +106,25 @@ export default function DashboardPage() {
             }
 
             const currentNetProfit = Math.round(currentRevenue - currentCost - currentExpenses)
+            const currentGrossProfit = Math.round(currentRevenue - currentCost)
+
+            // Unidades que salieron del inventario en el periodo
+            const unitsSold = (sales.data || []).reduce(
+                (sum, sale) => sum + ((sale.sale_items as any[]) || []).reduce((n, item) => n + Number(item.quantity), 0), 0)
+
+            // Lo fiado: una venta es una venta, pero esa plata todavía no entró
+            const creditAmount = Math.round((sales.data || [])
+                .filter(sale => (sale as any).is_credit)
+                .reduce((sum, sale) => sum + sale.total, 0))
+
+            // Qué categoría se llevó la mayoría de los gastos
+            const byCategory: Record<string, number> = {}
+            for (const expense of (expenses.data || [])) {
+                const key = (expense as any).category || 'otros'
+                byCategory[key] = (byCategory[key] || 0) + Number(expense.amount)
+            }
+            const topExpense = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]
+            const expensesTopCategory = topExpense ? topExpense[0] : null
 
             // Previous periods for variation
             const pRev = Math.round((prevSales.data || []).reduce((s, r) => s + r.total, 0))
@@ -119,6 +138,7 @@ export default function DashboardPage() {
                 }
             }
             const pNetProfit = Math.round(pRev - pCost - pExp)
+            const pGrossProfit = Math.round(pRev - pCost)
 
             // 2. OPERATIONAL DATA: PRODUCTS
             const sortedByUnits = Object.entries(productUnitsMap).map(([id, p]) => ({ id, ...p, value: p.units, units: p.units, subValue: `${p.units} unidades` })).sort((a, b) => b.value - a.value).slice(0, 5)
@@ -197,11 +217,17 @@ export default function DashboardPage() {
                     revenue: currentRevenue,
                     expenses: currentExpenses,
                     netProfit: currentNetProfit,
+                    grossProfit: currentGrossProfit,
+                    cost: currentCost,
                     salesCount,
+                    unitsSold,
+                    creditAmount,
+                    expensesTopCategory,
                     avgTicket,
                     prevRevenue: pRev,
                     prevExpenses: pExp,
                     prevNetProfit: pNetProfit,
+                    prevGrossProfit: pGrossProfit,
                     prevSalesCount: pSalesCount
                 },
                 operational: {
@@ -225,6 +251,11 @@ export default function DashboardPage() {
     )
 
     const loading = metricsLoading || storeLoading
+
+    const periodLabel = period === 'today' ? 'de hoy'
+        : period === 'week' ? 'de la semana'
+            : period === 'month' ? 'del mes'
+                : 'del periodo'
 
     const greeting = useMemo(() => {
         const hour = new Date().getHours()
@@ -320,9 +351,21 @@ export default function DashboardPage() {
                         />
                     </div>
                     <div className="col-span-4">
-                        <DashboardMetrics.MiniStrip
-                            metrics={dashboardData?.metrics || {}}
+                        <FinancialSummary
+                            metrics={{
+                                salesCount: dashboardData?.metrics.salesCount || 0,
+                                unitsSold: dashboardData?.metrics.unitsSold || 0,
+                                creditAmount: dashboardData?.metrics.creditAmount || 0,
+                                expenses: dashboardData?.metrics.expenses || 0,
+                                expensesTopCategory: dashboardData?.metrics.expensesTopCategory ?? null,
+                                grossProfit: dashboardData?.metrics.grossProfit || 0,
+                                netProfit: dashboardData?.metrics.netProfit || 0,
+                                revenue: dashboardData?.metrics.revenue || 0,
+                                prevGrossProfit: dashboardData?.metrics.prevGrossProfit || 0,
+                                prevNetProfit: dashboardData?.metrics.prevNetProfit || 0,
+                            }}
                             loading={loading}
+                            periodLabel={periodLabel}
                         />
                     </div>
                 </div>
