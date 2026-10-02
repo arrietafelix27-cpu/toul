@@ -295,7 +295,9 @@ export default function MobileDashboard({
 
             {/* 6️⃣ TOUL AI */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.16 }}>
-                <AIAdvisor insight={insight} loading={insightsLoading || loading} />
+                <div className="toul-card" style={{ padding: 16 }}>
+                    <AIAdvisor insight={insight} loading={insightsLoading || loading} />
+                </div>
             </motion.div>
 
         </div>

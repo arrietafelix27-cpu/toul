@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { PANEL_CSS } from './panelStyles'
 import type { AIInsight } from '@/lib/types'
 
 /* ══════════════════════════════════════════════════════════════
@@ -18,42 +19,18 @@ const TONE: Record<string, { color: string; dim: string }> = {
     info: { color: 'var(--toul-text-muted)', dim: 'rgba(255,255,255,0.07)' },
 }
 
-const CSS = `
-.ai-card { position: relative; height: 100%; display: flex; flex-direction: column;
-    padding: 18px 20px; border-radius: 18px;
-    background: var(--toul-surface); border: 1px solid var(--toul-border); }
-
-.ai-action { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
-    height: 34px; padding: 0 14px; border-radius: 11px; text-decoration: none; white-space: nowrap;
-    max-width: 100%; overflow: hidden;
-    border: 1px solid var(--toul-border-2, rgba(255,255,255,0.14)); background: rgba(255,255,255,0.07);
-    color: var(--toul-text); font-size: 13px; font-weight: 600; letter-spacing: -0.01em;
-    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), border-color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1); }
-.ai-action:active { transform: scale(0.97); }
-
-.ai-chat { display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
-    font-size: 12.5px; font-weight: 500; color: var(--toul-text-dim);
-    transition: color 160ms cubic-bezier(0.23,1,0.32,1); }
-
-@media (hover: hover) and (pointer: fine) {
-    .ai-action:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); }
-    .ai-chat:hover { color: var(--toul-accent); }
-}
-@media (prefers-reduced-motion: reduce) { .ai-action:active { transform: none; } }
-`
+const CSS = PANEL_CSS
 
 export function AIAdvisor({ insight, loading }: { insight: AIInsight | null; loading: boolean }) {
     const tone = TONE[insight?.severity ?? 'info'] ?? TONE.info
 
     return (
-        <div className="ai-card">
+        <div className="pnl">
             <style>{CSS}</style>
 
             {/* ── Encabezado: quién habla y cómo va el negocio ── */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)' }}>
-                    <Sparkles size={13} style={{ color: 'var(--toul-accent)' }} /> TOUL AI
-                </span>
+                <span className="pnl-label">TOUL AI</span>
                 {!loading && insight?.verdict && (
                     <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
@@ -99,7 +76,7 @@ export function AIAdvisor({ insight, loading }: { insight: AIInsight | null; loa
                             </p>
                             {insight.action && (
                                 <div style={{ marginTop: 12 }}>
-                                    <Link href={insight.action.href} className="ai-action">
+                                    <Link href={insight.action.href} className="pnl-pill">
                                         {insight.action.label} <ArrowRight size={14} />
                                     </Link>
                                 </div>
@@ -109,7 +86,7 @@ export function AIAdvisor({ insight, loading }: { insight: AIInsight | null; loa
 
                     {/* ── Seguir la conversación ── */}
                     <div style={{ marginTop: 'auto', paddingTop: 16 }}>
-                        <Link href={`/toul-ai${insight.question ? `?q=${encodeURIComponent(insight.question)}` : ''}`} className="ai-chat">
+                        <Link href={`/toul-ai${insight.question ? `?q=${encodeURIComponent(insight.question)}` : ''}`} className="pnl-link">
                             Preguntar a TOUL AI <ArrowRight size={13} />
                         </Link>
                     </div>

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Info, Plus } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { PANEL_CSS } from './panelStyles'
 
 /* ══════════════════════════════════════════════════════════════
    Resumen del periodo.
@@ -40,7 +41,7 @@ const CATEGORY_LABEL: Record<string, string> = {
     otros: 'otros gastos',
 }
 
-const CSS = `
+const CSS = PANEL_CSS + `
 .fs-root { position: relative; height: 100%; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden;
     border: 1px solid var(--toul-border); border-left-color: transparent; }
 /* Se funde con el gráfico por la izquierda y se vuelve sólido a la derecha */
@@ -58,14 +59,6 @@ const CSS = `
 .fs-band { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
 .fs-line { height: 1px; background: var(--toul-divider); flex-shrink: 0; }
 
-.fs-add { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
-    height: 28px; padding: 0 11px 0 8px; border-radius: 999px; text-decoration: none;
-    border: 1px solid var(--toul-border-2, rgba(255,255,255,0.14)); background: rgba(255,255,255,0.07);
-    color: var(--toul-text-muted); font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em;
-    white-space: nowrap; cursor: pointer;
-    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), color 160ms cubic-bezier(0.23,1,0.32,1), border-color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1); }
-.fs-add:active { transform: scale(0.96); }
-
 .fs-switch { display: inline-flex; align-items: center; gap: 3px; border: none; background: transparent; padding: 0;
     font-family: inherit; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
     color: var(--toul-text-subtle); cursor: pointer;
@@ -74,10 +67,8 @@ const CSS = `
     transition: color 160ms cubic-bezier(0.23,1,0.32,1); }
 
 @media (hover: hover) and (pointer: fine) {
-    .fs-add:hover { background: rgba(255,255,255,0.12); color: var(--toul-text); border-color: rgba(255,255,255,0.2); }
     .fs-switch:hover, .fs-info:hover { color: var(--toul-text-muted); }
 }
-@media (prefers-reduced-motion: reduce) { .fs-add:active { transform: none; } }
 `
 
 function Delta({ value, previous }: { value: number; previous: number }) {
@@ -138,7 +129,7 @@ export function FinancialSummary({ metrics, loading, periodLabel }: {
             <style>{CSS}</style>
 
             <div className="fs-body">
-                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 14px' }}>
+                <p className="pnl-label" style={{ marginBottom: 14 }}>
                     Resumen {periodLabel ?? 'del periodo'}
                 </p>
 
@@ -170,7 +161,7 @@ export function FinancialSummary({ metrics, loading, periodLabel }: {
                 <Block
                     label="Gastos"
                     action={
-                        <Link href="/expenses" className="fs-add">
+                        <Link href="/expenses" className="pnl-pill">
                             <Plus size={14} strokeWidth={2.6} /> Registrar gasto
                         </Link>
                     }>

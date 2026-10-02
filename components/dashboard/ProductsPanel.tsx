@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Package, ShoppingCart, ArrowRight } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { PANEL_CSS } from './panelStyles'
 
 /* ══════════════════════════════════════════════════════════════
    Tus productos.
@@ -45,37 +46,16 @@ const EMPTY: Record<Tab, string> = {
     slow: 'Todo tu inventario se está moviendo.',
 }
 
-const CSS = `
-.pp2-card { position: relative; height: 100%; display: flex; flex-direction: column;
-    padding: 18px 20px; border-radius: 18px;
-    background: var(--toul-surface); border: 1px solid var(--toul-border); }
-
+const CSS = PANEL_CSS + `
 .pp2-tab { position: relative; flex: 1; min-width: 0; padding: 7px 6px; border-radius: 10px; border: none;
     background: transparent; font-family: inherit; font-size: 11.5px; letter-spacing: -0.01em;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
     transition: color 160ms cubic-bezier(0.23,1,0.32,1); }
 .pp2-tab > span { position: relative; z-index: 1; }
 
-.pp2-row { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: 12px;
-    text-decoration: none; transition: background-color 160ms cubic-bezier(0.23,1,0.32,1); }
-.pp2-go { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
-    height: 30px; padding: 0 11px; border-radius: 10px; text-decoration: none; white-space: nowrap;
-    border: 1px solid var(--toul-border-2, rgba(255,255,255,0.14)); background: rgba(255,255,255,0.07);
-    color: var(--toul-text-muted); font-size: 11.5px; font-weight: 600;
-    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1); }
-.pp2-go:active { transform: scale(0.95); }
-
 .pp2-item { opacity: 0; transform: translateY(6px); animation: pp2-in 240ms cubic-bezier(0.23,1,0.32,1) forwards; }
 @keyframes pp2-in { to { opacity: 1; transform: translateY(0); } }
-
-@media (hover: hover) and (pointer: fine) {
-    .pp2-row:hover { background: rgba(255,255,255,0.045); }
-    .pp2-go:hover { background: rgba(255,255,255,0.12); color: var(--toul-text); }
-}
-@media (prefers-reduced-motion: reduce) {
-    .pp2-item { animation: none; opacity: 1; transform: none; }
-    .pp2-go:active { transform: none; }
-}
+@media (prefers-reduced-motion: reduce) { .pp2-item { animation: none; opacity: 1; transform: none; } }
 `
 
 export function ProductsPanel({ products, loading }: { products: ProductsData; loading: boolean }) {
@@ -100,15 +80,10 @@ export function ProductsPanel({ products, loading }: { products: ProductsData; l
     }
 
     return (
-        <div className="pp2-card">
+        <div className="pnl">
             <style>{CSS}</style>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
-                <Package size={13} style={{ color: 'var(--toul-text-faint)' }} />
-                <h3 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: 0 }}>
-                    Tus productos
-                </h3>
-            </div>
+            <h3 className="pnl-label" style={{ marginBottom: 12 }}>Tus productos</h3>
 
             {/* ── Qué estoy mirando ── */}
             <div style={{ display: 'flex', gap: 2, marginBottom: 12 }}>
@@ -156,7 +131,7 @@ export function ProductsPanel({ products, loading }: { products: ProductsData; l
                             return (
                                 <div key={row.id} className="pp2-item"
                                     style={{ display: 'flex', alignItems: 'center', gap: 6, animationDelay: `${index * 40}ms` }}>
-                                    <Link href={`/products/${row.id}`} className="pp2-row" style={{ flex: 1, minWidth: 0 }}>
+                                    <Link href={`/products/${row.id}`} className="pnl-row" style={{ flex: 1, minWidth: 0 }}>
                                         <span style={{
                                             width: 34, height: 34, borderRadius: 10, flexShrink: 0, overflow: 'hidden', position: 'relative',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -187,12 +162,12 @@ export function ProductsPanel({ products, loading }: { products: ProductsData; l
                                     </Link>
 
                                     {tab === 'low' && (
-                                        <Link href={`/inventory/purchase?product=${row.id}`} className="pp2-go">
+                                        <Link href={`/inventory/purchase?product=${row.id}`} className="pnl-pill">
                                             <ShoppingCart size={13} /> Comprar
                                         </Link>
                                     )}
                                     {tab === 'slow' && (
-                                        <Link href={`/products/${row.id}`} className="pp2-go">
+                                        <Link href={`/products/${row.id}`} className="pnl-pill">
                                             Ver <ArrowRight size={13} />
                                         </Link>
                                     )}

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowRight, MessageCircle } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
+import { PANEL_CSS } from './panelStyles'
 
 /* ══════════════════════════════════════════════════════════════
    Plata pendiente.
@@ -29,33 +30,28 @@ export interface PendingData {
 
 type Side = 'cobrar' | 'pagar'
 
-const CSS = `
+const CSS = PANEL_CSS + `
 .pp-tab { position: relative; flex: 1; min-width: 0; text-align: left; cursor: pointer; font-family: inherit;
     padding: 10px 12px; border-radius: 14px; border: 1px solid transparent; background: transparent;
-    transition: border-color 160ms cubic-bezier(0.23,1,0.32,1); }
+    transition: transform 160ms cubic-bezier(0.23,1,0.32,1), border-color 160ms cubic-bezier(0.23,1,0.32,1); }
 .pp-tab > * { position: relative; z-index: 1; }
 .pp-tab:active { transform: scale(0.98); }
-.pp-tab { transition: transform 160ms cubic-bezier(0.23,1,0.32,1), border-color 160ms cubic-bezier(0.23,1,0.32,1); }
 
-.pp-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px;
-    text-decoration: none; position: relative;
-    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1); }
-.pp-row:active { transform: scale(0.985); }
-@media (hover: hover) and (pointer: fine) {
-    .pp-row:hover { background: rgba(255,255,255,0.045); }
-    .pp-wa:hover { background: var(--toul-accent-dim); color: var(--toul-accent); }
-}
-.pp-wa { width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0; border: 1px solid var(--toul-border);
-    background: transparent; color: var(--toul-text-dim); cursor: pointer;
+.pp-wa { width: 30px; height: 30px; border-radius: 10px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.055); color: var(--toul-text-dim); cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1); }
 .pp-wa:active { transform: scale(0.94); }
 
 .pp-item { opacity: 0; transform: translateY(6px); animation: pp-in 260ms cubic-bezier(0.23,1,0.32,1) forwards; }
 @keyframes pp-in { to { opacity: 1; transform: translateY(0); } }
+
+@media (hover: hover) and (pointer: fine) {
+    .pp-wa:hover { background: var(--toul-accent-dim); color: var(--toul-accent); border-color: var(--toul-accent-dim); }
+}
 @media (prefers-reduced-motion: reduce) {
     .pp-item { animation: none; opacity: 1; transform: none; }
-    .pp-row:active, .pp-tab:active, .pp-wa:active { transform: none; }
+    .pp-tab:active, .pp-wa:active { transform: none; }
 }
 `
 
@@ -99,15 +95,10 @@ export function PendingPanel({ pending, storeName, compact = false }: {
     const tone = isCobrar ? 'var(--toul-accent)' : 'var(--toul-warning)'
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div className="pnl">
             <style>{CSS}</style>
 
-            <p style={{
-                fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em',
-                color: 'var(--toul-text-subtle)', margin: '0 0 8px',
-            }}>
-                Plata pendiente
-            </p>
+            <p className="pnl-label" style={{ marginBottom: 10 }}>Plata pendiente</p>
 
             {/* Los dos totales son el control: tocar uno cambia la lista */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -170,7 +161,7 @@ export function PendingPanel({ pending, storeName, compact = false }: {
                         return (
                             <div key={party.id} className="pp-item"
                                 style={{ display: 'flex', alignItems: 'center', gap: 6, animationDelay: `${index * 45}ms` }}>
-                                <Link href={href} className="pp-row" style={{ flex: 1, minWidth: 0 }}>
+                                <Link href={href} className="pnl-row" style={{ flex: 1, minWidth: 0 }}>
                                     <span style={{
                                         width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -222,7 +213,7 @@ export function PendingPanel({ pending, storeName, compact = false }: {
 
             {list.length > shown.length && (
                 <Link href={isCobrar ? '/customers' : '/providers'}
-                    className="pp-row"
+                    className="pnl-row"
                     style={{ justifyContent: 'center', gap: 6, marginTop: 4, fontSize: 12, fontWeight: 500, color: 'var(--toul-text-dim)' }}>
                     Ver los {list.length} <ArrowRight size={13} />
                 </Link>
