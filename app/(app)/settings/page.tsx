@@ -30,6 +30,7 @@ export default function SettingsPage() {
     const [storeId, setStoreId] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [coverageDays, setCoverageDays] = useState(7)
 
     useEffect(() => { loadData() }, [])
 
@@ -38,14 +39,21 @@ export default function SettingsPage() {
         if (!user) return
         setEmail(user.email || '')
         const { data: store } = await supabase.from('stores').select('*').eq('owner_id', user.id).single()
-        if (store) { setStoreId(store.id); setStoreName(store.name); setCategory(store.category) }
+        if (store) {
+            setStoreId(store.id); setStoreName(store.name); setCategory(store.category)
+            setCoverageDays(store.stock_coverage_days ?? 7)
+        }
         setLoading(false)
     }
 
     async function handleSave() {
         if (!storeName.trim()) { toast.error('Ingresa el nombre del negocio'); return }
         setSaving(true)
-        const { error } = await supabase.from('stores').update({ name: storeName.trim(), category, updated_at: new Date().toISOString() }).eq('id', storeId)
+        const { error } = await supabase.from('stores').update({
+            name: storeName.trim(), category,
+            stock_coverage_days: coverageDays,
+            updated_at: new Date().toISOString(),
+        }).eq('id', storeId)
         if (error) toast.error(explainError(error, 'No se pudieron guardar los datos del negocio.'))
         else toast.success('Cambios guardados ✅')
         setSaving(false)
@@ -94,6 +102,34 @@ export default function SettingsPage() {
                             {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                         </select>
                     </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
+                            Avisarme cuando me quede menos de
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            {[7, 15, 30].map(days => {
+                                const active = coverageDays === days
+                                return (
+                                    <button key={days} type="button" onClick={() => setCoverageDays(days)}
+                                        style={{
+                                            height: 38, padding: '0 14px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
+                                            fontSize: 13.5, fontWeight: active ? 600 : 500,
+                                            background: active ? 'var(--toul-accent-dim)' : 'var(--toul-surface-2)',
+                                            border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                            color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
+                                            transition: 'all 160ms cubic-bezier(0.23,1,0.32,1)',
+                                        }}>
+                                        {days === 7 ? 'una semana' : days === 15 ? 'quince días' : 'un mes'}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        <p className="text-xs mt-1.5" style={{ color: 'var(--toul-text-dim)', lineHeight: 1.5 }}>
+                            TOUL mira cuánto vendes de cada producto y te avisa cuando lo que queda no alcanza
+                            para ese tiempo. Si un producto necesita otro número, lo cambias en ese producto.
+                        </p>
+                    </div>
+
                     <button onClick={handleSave} disabled={saving || loading} className="toul-btn-primary">
                         {saving ? 'Guardando...' : 'Guardar cambios'}
                     </button>
