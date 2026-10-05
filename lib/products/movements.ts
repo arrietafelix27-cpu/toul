@@ -12,6 +12,9 @@ export const REASON_LABEL: Record<string, string> = {
     theft: 'Robo',
     expired: 'Vencimiento',
     other: 'Ajuste manual',
+    return: 'Devolución de un cliente',
+    found: 'Apareció',
+    gift: 'Regalo del proveedor',
 }
 
 export const formatMovementDate = (iso: string) =>
