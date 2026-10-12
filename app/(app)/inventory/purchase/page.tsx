@@ -14,6 +14,7 @@ import { fadeUp, t } from '@/lib/motion'
 import toast from 'react-hot-toast'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { DesktopPurchase } from '@/components/inventory/DesktopPurchase'
+import { tomarPedido } from '@/lib/inventory/pedido'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -84,6 +85,35 @@ export default function NewPurchaseFlow() {
                     grouped[v.product_id].push(v)
                 }
                 setVariantsByProduct(grouped)
+            }
+
+            // Si viene un pedido armado desde Inventario, la compra
+            // arranca con todo adentro: el dueño solo ajusta y confirma
+            const pedido = tomarPedido()
+            if (pedido.length > 0 && prodRes.data) {
+                const byProduct = new Map(prodRes.data.map(p => [p.id, p]))
+                const byVariant = new Map((variantsRes.data ?? []).map(v => [v.id, v]))
+                const precargado: SelectedItem[] = []
+
+                for (const linea of pedido) {
+                    const product = byProduct.get(linea.productId)
+                    if (!product) continue
+                    const variant = linea.variantId ? byVariant.get(linea.variantId) : null
+                    if (linea.variantId && !variant) continue
+                    const cost = variant ? (variant.cpp ?? product.cpp) : (product.cpp || product.cost_price || 0)
+                    precargado.push({
+                        itemKey: `${product.id}:${linea.variantId ?? ''}`,
+                        product,
+                        variantId: variant?.id,
+                        variantName: variant?.name,
+                        quantity: String(Math.max(Math.round(linea.quantity), 1)),
+                        cost: String(cost),
+                    })
+                }
+                if (precargado.length > 0) {
+                    setSelectedItems(precargado)
+                    toast.success(`${precargado.length} ${precargado.length === 1 ? 'producto listo' : 'productos listos'} en el pedido`)
+                }
             }
 
             setLoading(false)
