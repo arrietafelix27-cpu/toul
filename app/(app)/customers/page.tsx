@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { capitalizeFirst } from '@/lib/format/text'
 import { formatCOP } from '@/lib/utils'
 import { Plus, Users, Search, X } from 'lucide-react'
 import Link from 'next/link'
@@ -111,7 +112,7 @@ export default function CustomersPage() {
                     >
                         <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--toul-text)' }}>Nuevo cliente</h3>
                         <div className="flex flex-col gap-3">
-                            <input className="toul-input" placeholder="Nombre del cliente *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                            <input className="toul-input" autoCapitalize="sentences" placeholder="Nombre del cliente *" value={form.name} onChange={e => setForm(f => ({ ...f, name: capitalizeFirst(e.target.value) }))} />
                             <input className="toul-input" placeholder="WhatsApp / teléfono (opcional)" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
                             <button onClick={handleCreate} disabled={saving} className="toul-btn-primary">{saving ? 'Creando...' : 'Crear cliente'}</button>
                         </div>

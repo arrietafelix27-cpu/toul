@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { onlyDigits, withThousands } from '@/lib/format/text'
 import {
     Search, Plus, Minus, Trash2, SlidersHorizontal, Package, Check,
     ShoppingBag, UserPlus, ChevronRight, AlertTriangle, RefreshCw, X, Layers,
@@ -993,9 +994,9 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                 <div>
                                     <p style={{ fontSize: 9, color: 'var(--toul-pos-text-sec)', fontWeight: 600, margin: '0 0 4px', textTransform: 'uppercase' }}>Abono inicial</p>
                                     <input
-                                        type="number" inputMode="numeric" placeholder="0"
-                                        value={payment.initialPayment}
-                                        onChange={e => payment.setInitialPayment(e.target.value)}
+                                        type="text" inputMode="numeric" placeholder="0"
+                                        value={withThousands(onlyDigits(payment.initialPayment))}
+                                        onChange={e => payment.setInitialPayment(onlyDigits(e.target.value))}
                                         style={{ width: '100%', background: 'var(--toul-pos-bg-main)', border: `1px solid ${'var(--toul-pos-border)'}`, borderRadius: 8, padding: '8px', fontSize: 11, color: 'var(--toul-pos-text-main)', outline: 'none', fontFamily: 'monospace' }}
                                     />
                                 </div>
@@ -1067,8 +1068,8 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.methodColor, flexShrink: 0 }} />
                                             <span style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', fontWeight: 600, flexShrink: 0 }}>{s.methodName}</span>
                                             <input
-                                                type="number" inputMode="numeric" value={s.amount || ''} placeholder="0"
-                                                onChange={e => payment.setMethodAmount(s.methodId, Number(e.target.value) || 0)}
+                                                type="text" inputMode="numeric" value={withThousands(String(s.amount || ''))} placeholder="0"
+                                                onChange={e => payment.setMethodAmount(s.methodId, Number(onlyDigits(e.target.value)) || 0)}
                                                 style={{ flex: 1, background: 'none', border: 'none', textAlign: 'right', fontSize: 13, fontWeight: 600, color: 'var(--toul-pos-text-main)', outline: 'none', fontFamily: 'monospace', minWidth: 0 }}
                                             />
                                         </div>
@@ -1101,8 +1102,8 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                     {discType}<span style={{ fontSize: 9, opacity: 0.6 }}>⌄</span>
                                 </button>
                                 <input
-                                    type="number" inputMode="numeric" placeholder="0" value={discValue}
-                                    onChange={e => handleDiscValue(e.target.value)}
+                                    type="text" inputMode="numeric" placeholder="0" value={discType === '$' ? withThousands(onlyDigits(discValue)) : discValue}
+                                    onChange={e => handleDiscValue(onlyDigits(e.target.value))}
                                     style={{ flex: 1, background: 'var(--toul-pos-bg-main)', border: `1px solid ${'var(--toul-pos-border)'}`, borderRadius: 6, padding: '6px 10px', fontSize: 13, color: 'var(--toul-pos-text-main)', outline: 'none', fontFamily: 'monospace', minWidth: 0 }}
                                 />
                                 <button

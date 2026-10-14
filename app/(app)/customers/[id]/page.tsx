@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { onlyDigits, withThousands } from '@/lib/format/text'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, formatDate } from '@/lib/utils'
@@ -91,7 +92,7 @@ export default function CustomerDetailPage() {
                         <div className="toul-card fade-in">
                             <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--toul-text)' }}>Registrar abono</h3>
                             <div className="flex flex-col gap-3">
-                                <input className="toul-input" type="number" min={0} max={customer.total_debt} placeholder="Monto del abono" value={payAmount} onChange={e => setPayAmount(e.target.value)} />
+                                <input className="toul-input" type="text" inputMode="numeric" placeholder="Monto del abono" value={withThousands(onlyDigits(payAmount))} onChange={e => setPayAmount(onlyDigits(e.target.value))} />
                                 <div className="grid grid-cols-2 gap-2">
                                     <button onClick={() => setShowPayment(false)} className="toul-btn-secondary">Cancelar</button>
                                     <button onClick={handlePayment} disabled={saving} className="toul-btn-primary">

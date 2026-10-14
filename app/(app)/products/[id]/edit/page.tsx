@@ -737,7 +737,7 @@ export default function EditProductPage() {
                             style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                             <Field
-                                label="Nombre"
+                                label="Nombre" capitalize
                                 required
                                 value={name}
                                 onChange={setName}
@@ -1165,7 +1165,7 @@ function GeneralEditSheet({
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 <Field
-                                    label="Nombre"
+                                    label="Nombre" capitalize
                                     required
                                     value={name}
                                     onChange={setName}

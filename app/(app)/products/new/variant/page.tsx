@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
 import { explainError } from '@/lib/errors'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -69,13 +70,11 @@ function VariantPriceInput({ value, onChange }: { value: string; onChange: (v: s
                 transition: 'color var(--toul-transition)',
             }}>$</span>
             <input
-                type="number"
+                type="text"
                 inputMode="numeric"
-                min={0}
-                step={100}
                 placeholder="0"
-                value={value}
-                onChange={e => onChange(e.target.value)}
+                value={withThousands(toMoneyDigits(value))}
+                onChange={e => onChange(onlyDigits(e.target.value))}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
                 style={{
@@ -420,7 +419,7 @@ export default function NewVariantProductPage() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <Field
-                                label="Nombre"
+                                label="Nombre" capitalize
                                 required
                                 value={name}
                                 onChange={setName}

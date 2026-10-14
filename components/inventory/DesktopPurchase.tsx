@@ -1,4 +1,5 @@
 'use client'
+import { onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
 import { formatCOP } from '@/lib/utils'
 import {
     ArrowLeft, Package, Plus, Search, Layers, ChevronRight,
@@ -256,8 +257,8 @@ export function DesktopPurchase({
                                             </div>
                                             <div className="flex flex-col items-end">
                                                 <label className="text-[10px] uppercase font-bold tracking-wider mb-1" style={{ color: 'var(--toul-text-subtle)' }}>Costo unit.</label>
-                                                <input type="number" min="0" value={item.cost}
-                                                    onChange={e => updateItem(item.itemKey, 'cost', e.target.value)}
+                                                <input type="text" inputMode="numeric" value={withThousands(toMoneyDigits(item.cost))}
+                                                    onChange={e => updateItem(item.itemKey, 'cost', onlyDigits(e.target.value))}
                                                     className="toul-input py-1 text-sm text-right"
                                                     style={{ width: '100px' }} />
                                             </div>
@@ -347,10 +348,10 @@ export function DesktopPurchase({
                                     <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
                                         Abono Inicial <span className="text-xs font-normal" style={{ color: 'var(--toul-text-subtle)' }}>(opcional)</span>
                                     </label>
-                                    <input type="number" min="0" className="toul-input w-full"
+                                    <input type="text" inputMode="numeric" className="toul-input w-full"
                                         placeholder="0"
-                                        value={initialPayment}
-                                        onChange={(e) => setInitialPayment(e.target.value)} />
+                                        value={withThousands(onlyDigits(initialPayment))}
+                                        onChange={(e) => setInitialPayment(onlyDigits(e.target.value))} />
                                 </div>
                             </>
                         )}

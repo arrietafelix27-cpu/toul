@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { capitalizeFirst } from '@/lib/format/text'
 import { explainError } from '@/lib/errors'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -94,7 +95,7 @@ export default function SettingsPage() {
                 <div className="flex flex-col gap-3">
                     <div>
                         <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Nombre del negocio</label>
-                        <input className="toul-input" type="text" value={storeName} onChange={e => setStoreName(e.target.value)} placeholder="Nombre de tu negocio" disabled={loading} />
+                        <input className="toul-input" type="text" autoCapitalize="sentences" value={storeName} onChange={e => setStoreName(capitalizeFirst(e.target.value))} placeholder="Nombre de tu negocio" disabled={loading} />
                     </div>
                     <div>
                         <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Categoría</label>

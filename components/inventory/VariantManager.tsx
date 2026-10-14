@@ -101,7 +101,7 @@ export function VariantManager({ productId, storeId, variants, onChange }: {
                         style={{ overflow: 'hidden' }}>
                         <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
                             <input className="vm-input" style={{ flex: '1 1 120px' }} autoFocus
-                                placeholder='Nombre (ej. "XL")' value={name} maxLength={40}
+                                placeholder='Nombre (ej. "XL")' value={name} maxLength={40} autoCapitalize="characters"
                                 onChange={event => setName(event.target.value)} />
                             <input className="vm-input" style={{ flex: '1 1 110px' }} type="text" inputMode="numeric"
                                 placeholder="Precio de venta" value={price}

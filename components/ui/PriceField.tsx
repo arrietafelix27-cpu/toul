@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
 
 export interface PriceFieldProps {
     label: string
@@ -8,7 +9,6 @@ export interface PriceFieldProps {
     value: string
     onChange: (value: string) => void
     placeholder?: string
-    min?: number
     disabled?: boolean
 }
 
@@ -21,7 +21,7 @@ export interface PriceFieldProps {
  */
 export function PriceField({
     label, required, hint, value, onChange,
-    placeholder = '0', min = 0, disabled,
+    placeholder = '0', disabled,
 }: PriceFieldProps) {
     const [focused, setFocused] = useState(false)
 
@@ -75,19 +75,16 @@ export function PriceField({
                     $
                 </span>
                 <input
-                    type="number"
+                    /* Texto y no número: así se pueden ver los puntos de
+                       miles mientras se escribe. Hacia afuera sigue
+                       saliendo la cifra pelada. */
+                    type="text"
                     inputMode="numeric"
-                    min={min}
-                    /* Sin saltos: en pesos un precio puede ser 85.250.
-                       Con un paso fijo el navegador rechazaba la cifra. */
-                    step="any"
                     placeholder={placeholder}
-                    value={value}
-                    onChange={e => onChange(e.target.value)}
+                    value={withThousands(toMoneyDigits(value))}
+                    onChange={e => onChange(onlyDigits(e.target.value))}
                     onFocus={() => setFocused(true)}
                     onBlur={() => setFocused(false)}
-                    /* La rueda del mouse no cambia la plata sin querer */
-                    onWheel={event => event.currentTarget.blur()}
                     disabled={disabled}
                     style={{
                         flex: 1,

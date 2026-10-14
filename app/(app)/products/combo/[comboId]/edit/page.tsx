@@ -433,7 +433,7 @@ export default function EditComboPage() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <Field
-                                label="Nombre"
+                                label="Nombre" capitalize
                                 required
                                 value={name}
                                 onChange={setName}

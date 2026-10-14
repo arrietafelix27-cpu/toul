@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { onlyDigits, withThousands } from '@/lib/format/text'
 import { createClient } from '@/lib/supabase/client'
 import { CreditCard, X, CheckCircle2, Package, AlertCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -87,11 +88,10 @@ export function ProviderPaymentModal({ storeId, providerId, providerName, totalD
                         <div className="relative">
                             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-medium" style={{ color: 'var(--toul-text-muted)' }}>$</span>
                             <input
-                                type="number"
-                                min="1"
-                                max={maxAmount}
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
+                                type="text"
+                                inputMode="numeric"
+                                value={withThousands(onlyDigits(amount))}
+                                onChange={(e) => setAmount(onlyDigits(e.target.value))}
                                 className="toul-input w-full pl-8 text-lg font-bold"
                                 placeholder={`Max: ${maxAmount}`}
                             />

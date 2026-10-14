@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { capitalizeFirst } from '@/lib/format/text'
 
 export interface FieldProps {
     label: string
@@ -14,6 +15,8 @@ export interface FieldProps {
     disabled?: boolean
     autoFocus?: boolean
     name?: string
+    /** Nombres propios: arranca en mayúscula sin que haya que acordarse */
+    capitalize?: boolean
 }
 
 /**
@@ -24,7 +27,7 @@ export interface FieldProps {
 export function Field({
     label, required, hint, value, onChange,
     placeholder, maxLength, type = 'text',
-    inputMode, disabled, autoFocus, name,
+    inputMode, disabled, autoFocus, name, capitalize,
 }: FieldProps) {
     const [focused, setFocused] = useState(false)
 
@@ -64,7 +67,8 @@ export function Field({
                 type={type}
                 name={name}
                 value={value}
-                onChange={e => onChange(e.target.value)}
+                autoCapitalize={capitalize ? 'sentences' : undefined}
+                onChange={e => onChange(capitalize ? capitalizeFirst(e.target.value) : e.target.value)}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
                 placeholder={placeholder}

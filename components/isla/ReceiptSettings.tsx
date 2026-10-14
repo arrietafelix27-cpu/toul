@@ -45,9 +45,9 @@ export function ReceiptSettings({ storeId }: { storeId: string }) {
             </div>
             <div className="flex flex-col gap-3">
                 <Field label="NIT o cédula" value={form.nit} onChange={set('nit')} placeholder="900.123.456-7" maxLength={30} />
-                <Field label="Dirección" value={form.address} onChange={set('address')} placeholder="C.C. Buenavista · Isla 12" maxLength={80} />
+                <Field label="Dirección" capitalize value={form.address} onChange={set('address')} placeholder="C.C. Buenavista · Isla 12" maxLength={80} />
                 <Field label="Teléfono" type="tel" inputMode="tel" value={form.phone} onChange={set('phone')} placeholder="300 123 4567" maxLength={20} />
-                <Field label="Mensaje final" value={form.receipt_footer} onChange={set('receipt_footer')} placeholder="¡Gracias por tu compra!" maxLength={80} />
+                <Field label="Mensaje final" capitalize value={form.receipt_footer} onChange={set('receipt_footer')} placeholder="¡Gracias por tu compra!" maxLength={80} />
                 <button onClick={save} disabled={saving} className="toul-btn-primary">{saving ? 'Guardando…' : 'Guardar datos de tirilla'}</button>
             </div>
         </div>

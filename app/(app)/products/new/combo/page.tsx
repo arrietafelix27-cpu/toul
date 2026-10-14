@@ -378,7 +378,7 @@ export default function NewComboPage() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <Field
-                                label="Nombre"
+                                label="Nombre" capitalize
                                 required
                                 value={name}
                                 onChange={setName}

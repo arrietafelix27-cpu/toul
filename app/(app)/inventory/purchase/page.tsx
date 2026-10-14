@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import {
@@ -442,8 +443,8 @@ export default function NewPurchaseFlow() {
                                             </div>
                                             <div>
                                                 <label className="text-[10px] uppercase font-bold tracking-wider mb-1 block" style={{ color: 'var(--toul-text-subtle)' }}>Costo unitario</label>
-                                                <input type="number" min="0" value={item.cost}
-                                                    onChange={e => updateItem(item.itemKey, 'cost', e.target.value)}
+                                                <input type="text" inputMode="numeric" value={withThousands(toMoneyDigits(item.cost))}
+                                                    onChange={e => updateItem(item.itemKey, 'cost', onlyDigits(e.target.value))}
                                                     className="toul-input w-full py-1.5 min-h-[36px] text-sm" />
                                             </div>
                                         </div>
@@ -534,12 +535,12 @@ export default function NewPurchaseFlow() {
                                                 Abono Inicial <span className="text-xs font-normal" style={{ color: 'var(--toul-text-subtle)' }}>(opcional)</span>
                                             </label>
                                             <input
-                                                type="number"
-                                                min="0"
+                                                type="text"
+                                                inputMode="numeric"
                                                 className="toul-input w-full"
-                                                placeholder="Ej. 50000"
-                                                value={initialPayment}
-                                                onChange={(e) => setInitialPayment(e.target.value)}
+                                                placeholder="Ej. 50.000"
+                                                value={withThousands(onlyDigits(initialPayment))}
+                                                onChange={(e) => setInitialPayment(onlyDigits(e.target.value))}
                                             />
                                         </div>
                                         <div>

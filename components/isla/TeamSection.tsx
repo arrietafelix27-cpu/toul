@@ -127,7 +127,7 @@ export function TeamSection({ storeId }: { storeId: string }) {
                         </p>
                     </div>
                 ) : (
-                    <Field label="Nombre del vendedor" required value={name} onChange={setName} placeholder="Ej: Laura" maxLength={40} autoFocus />
+                    <Field label="Nombre del vendedor" capitalize required value={name} onChange={setName} placeholder="Ej: Laura" maxLength={40} autoFocus />
                 )}
             </Sheet>
         </div>

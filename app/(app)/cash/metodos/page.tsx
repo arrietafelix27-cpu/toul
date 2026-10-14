@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { capitalizeFirst } from '@/lib/format/text'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
@@ -108,7 +109,7 @@ export default function MetodosPagoPage() {
 
                             {editingId === method.id ? (
                                 <input className="toul-input" value={editingName} autoFocus
-                                    onChange={e => setEditingName(e.target.value)}
+                                    onChange={e => setEditingName(capitalizeFirst(e.target.value))}
                                     onKeyDown={e => { if (e.key === 'Enter') rename(method.id); if (e.key === 'Escape') setEditingId(null) }}
                                     style={{ flex: 1, height: 44 }} />
                             ) : (
@@ -146,8 +147,8 @@ export default function MetodosPagoPage() {
             <Sheet open={adding} onClose={() => !saving && setAdding(false)}
                 title="Nuevo método de pago" subtitle="Por ejemplo: Datáfono, Addi, Transferencia."
                 footer={<button className="toul-btn-primary" onClick={create} disabled={saving || !name.trim()}>{saving ? 'Guardando…' : 'Agregar'}</button>}>
-                <input className="toul-input" placeholder="Nombre" value={name} autoFocus maxLength={24}
-                    onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') create() }} />
+                <input className="toul-input" autoCapitalize="sentences" placeholder="Nombre" value={name} autoFocus maxLength={24}
+                    onChange={e => setName(capitalizeFirst(e.target.value))} onKeyDown={e => { if (e.key === 'Enter') create() }} />
                 <p className="toul-section-label" style={{ margin: '16px 0 8px 2px' }}>Color</p>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     {COLORS.map(c => (
