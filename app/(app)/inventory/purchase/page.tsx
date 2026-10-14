@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { Product, Provider } from '@/lib/types'
 import { motion, AnimatePresence } from 'framer-motion'
+import { AddedMark } from '@/components/inventory/AddedMark'
 import { fadeUp, t } from '@/lib/motion'
 import toast from 'react-hot-toast'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
@@ -324,12 +325,13 @@ export default function NewPurchaseFlow() {
                                     const productVariants = variantsByProduct[product.id]
                                     const hasVariants = productVariants && productVariants.length > 0
                                     const isExpanded = expandedInPicker.has(product.id)
+                                    const added = !hasVariants && selectedItems.some(i => i.itemKey === `${product.id}:`)
 
                                     return (
                                         <div key={product.id} className="border-b last:border-0" style={{ borderColor: 'var(--toul-border)' }}>
                                             {/* Product row */}
                                             <button
-                                                onClick={() => hasVariants ? toggleExpand(product.id) : addItem(product)}
+                                                onClick={() => hasVariants ? toggleExpand(product.id) : (!added && addItem(product))}
                                                 className="w-full p-3 text-left flex items-center gap-3 transition-all active:scale-[0.99]">
                                                 <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
                                                     style={{ background: 'var(--toul-surface-2)' }}>
@@ -360,7 +362,7 @@ export default function NewPurchaseFlow() {
                                                         <ChevronRight size={18} style={{ color: 'var(--toul-text-muted)' }} />
                                                     </motion.div>
                                                 ) : (
-                                                    <Plus size={18} style={{ color: 'var(--toul-accent)' }} />
+                                                    <AddedMark added={added} size={18} />
                                                 )}
                                             </button>
 
@@ -382,16 +384,13 @@ export default function NewPurchaseFlow() {
                                                                         onClick={() => !alreadyAdded && addItem(product, v.id, v.name)}
                                                                         disabled={alreadyAdded}
                                                                         className="w-full px-4 py-2.5 flex items-center gap-3 transition-all active:scale-[0.99]"
-                                                                        style={{ opacity: alreadyAdded ? 0.45 : 1 }}>
+                                                                        style={{ opacity: alreadyAdded ? 0.6 : 1 }}>
                                                                         <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: 'var(--toul-text-muted)' }} />
                                                                         <div className="flex-1 min-w-0 text-left">
                                                                             <p className="text-sm font-medium truncate" style={{ color: 'var(--toul-text)' }}>{v.name}</p>
                                                                             <p className="text-xs" style={{ color: 'var(--toul-text-subtle)' }}>Costo: {formatCOP(v.cpp)}</p>
                                                                         </div>
-                                                                        {alreadyAdded
-                                                                            ? <CheckCircle2 size={16} style={{ color: 'var(--toul-accent)' }} />
-                                                                            : <Plus size={16} style={{ color: 'var(--toul-accent)' }} />
-                                                                        }
+                                                                        <AddedMark added={alreadyAdded} size={16} />
                                                                     </button>
                                                                 )
                                                             })}

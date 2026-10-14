@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
+import { AddedMark } from './AddedMark'
 import type { Product, Provider } from '@/lib/types'
 
 // ─── Types (mirror purchase/page.tsx) ───────────────────────
@@ -139,12 +140,13 @@ export function DesktopPurchase({
                             const productVariants = variantsByProduct[product.id]
                             const hasVariants = productVariants && productVariants.length > 0
                             const isExpanded = expandedInPicker.has(product.id)
+                            const added = !hasVariants && selectedItems.some(i => i.itemKey === `${product.id}:`)
 
                             return (
                                 <div key={product.id} className="border-b last:border-0"
                                     style={{ borderColor: 'var(--toul-border)' }}>
                                     <button
-                                        onClick={() => hasVariants ? toggleExpand(product.id) : addItem(product)}
+                                        onClick={() => hasVariants ? toggleExpand(product.id) : (!added && addItem(product))}
                                         className="w-full px-4 py-3 text-left flex items-center gap-3 transition-all active:scale-[0.99]">
                                         <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
                                             style={{ background: 'var(--toul-surface-2)' }}>
@@ -175,7 +177,7 @@ export function DesktopPurchase({
                                                 <ChevronRight size={16} style={{ color: 'var(--toul-text-muted)' }} />
                                             </motion.div>
                                         ) : (
-                                            <Plus size={16} style={{ color: 'var(--toul-accent)' }} />
+                                            <AddedMark added={added} size={16} />
                                         )}
                                     </button>
 
@@ -196,16 +198,13 @@ export function DesktopPurchase({
                                                                 onClick={() => !alreadyAdded && addItem(product, v.id, v.name)}
                                                                 disabled={alreadyAdded}
                                                                 className="w-full px-5 py-2 flex items-center gap-3 transition-all active:scale-[0.99]"
-                                                                style={{ opacity: alreadyAdded ? 0.45 : 1 }}>
+                                                                style={{ opacity: alreadyAdded ? 0.6 : 1 }}>
                                                                 <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: 'var(--toul-text-muted)' }} />
                                                                 <div className="flex-1 min-w-0 text-left">
                                                                     <p className="text-sm font-medium truncate" style={{ color: 'var(--toul-text)' }}>{v.name}</p>
                                                                     <p className="text-xs" style={{ color: 'var(--toul-text-subtle)' }}>Costo: {formatCOP(v.cpp)}</p>
                                                                 </div>
-                                                                {alreadyAdded
-                                                                    ? <CheckCircle2 size={14} style={{ color: 'var(--toul-accent)' }} />
-                                                                    : <Plus size={14} style={{ color: 'var(--toul-accent)' }} />
-                                                                }
+                                                                <AddedMark added={alreadyAdded} size={14} />
                                                             </button>
                                                         )
                                                     })}
