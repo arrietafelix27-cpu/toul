@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ShoppingBag, ReceiptText, LockKeyhole, LayoutDashboard, LogOut, Printer, ChevronDown } from 'lucide-react'
+import { ShoppingBag, ReceiptText, LockKeyhole, LayoutDashboard, LogOut, Printer, ChevronDown, X } from 'lucide-react'
 import { POSProvider } from '@/components/pos/POSContext'
 import { CajaContext } from '@/components/isla/CajaContext'
 import { useOpenCashSession, useSessionContext } from '@/lib/isla/useSession'
@@ -174,6 +174,20 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
                                 )}
                             </AnimatePresence>
                         </div>
+                        {ctx!.role === 'admin' && (
+                            <motion.div whileTap={{ scale: 0.94 }} transition={SPRING_PRESS} style={{ flexShrink: 0 }}>
+                                <Link href="/" aria-label="Salir de la caja" title="Salir de la caja"
+                                    style={{
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        width: 46, height: 46, borderRadius: 14, textDecoration: 'none',
+                                        background: 'var(--toul-surface)', border: '1px solid var(--toul-border)',
+                                        color: 'var(--toul-text-muted)',
+                                        transition: 'background var(--toul-transition), color var(--toul-transition)',
+                                    }}>
+                                    <X size={19} strokeWidth={2.2} />
+                                </Link>
+                            </motion.div>
+                        )}
                     </header>
 
                     <OfflineBar offline={offline} />
