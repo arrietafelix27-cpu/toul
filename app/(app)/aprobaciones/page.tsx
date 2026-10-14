@@ -128,7 +128,7 @@ export default function AprobacionesPage() {
                                                 <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: 0 }}>
                                                     {req.details.items?.map(i => `${i.quantity}× ${i.name}`).join(', ')}
                                                     {req.details.initialPayment ? ` · Abono ${formatCOP(req.details.initialPayment)}` : ' · Sin abono'}
-                                                    {req.details.dueDate ? ` · Vence ${new Date(req.details.dueDate + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}` : ''}
+                                                    {req.details.dueDate ? ` · Plazo ${new Date(req.details.dueDate + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}` : ''}
                                                 </p>
                                             )}
                                         </div>

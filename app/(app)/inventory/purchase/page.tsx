@@ -544,7 +544,7 @@ export default function NewPurchaseFlow() {
                                         </div>
                                         <div>
                                             <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>
-                                                Fecha de Vencimiento <span style={{ color: 'var(--toul-error)' }}>*</span>
+                                                Plazo <span style={{ color: 'var(--toul-error)' }}>*</span>
                                             </label>
                                             <input
                                                 type="date"
@@ -611,7 +611,7 @@ export default function NewPurchaseFlow() {
                                     )}
                                     {paymentMethod === 'credit' && dueDate && (
                                         <div className="flex justify-between text-sm">
-                                            <span style={{ color: 'var(--toul-text-muted)' }}>Vence</span>
+                                            <span style={{ color: 'var(--toul-text-muted)' }}>Plazo</span>
                                             <span className="font-medium" style={{ color: 'var(--toul-error)' }}>
                                                 {new Date(dueDate).toLocaleDateString('es-CO')}
                                             </span>

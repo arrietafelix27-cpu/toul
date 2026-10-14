@@ -336,7 +336,7 @@ export function DesktopPurchase({
                             <>
                                 <div>
                                     <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
-                                        Fecha de Vencimiento <span style={{ color: 'var(--toul-error)' }}>*</span>
+                                        Plazo <span style={{ color: 'var(--toul-error)' }}>*</span>
                                     </label>
                                     <input type="date" className="toul-input w-full"
                                         value={dueDate}

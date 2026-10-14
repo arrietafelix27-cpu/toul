@@ -177,7 +177,7 @@ export function usePOSPayment(
         if (isCredit) {
             const hasCustomer = !!selectedCustomer || !!customerSearch.trim()
             if (!hasCustomer) return false
-            if (!dueDate) return false
+            // El plazo es opcional: muchos fiados se dan sin fecha
             // If there's an initial payment, splits must match
             if (Number(initialPayment) > 0 && !balanced) return false
             if (Number(initialPayment) > 0 && paymentSplits.length === 0) return false

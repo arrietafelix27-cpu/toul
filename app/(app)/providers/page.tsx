@@ -97,7 +97,7 @@ export default function ProvidersPage() {
                     <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: 'var(--toul-surface-2)', color: 'var(--toul-active)' }}>
                         <Clock size={16} />
                     </div>
-                    <p className="text-xs mb-0.5" style={{ color: 'var(--toul-text-muted)' }}>Próximas a vencer</p>
+                    <p className="text-xs mb-0.5" style={{ color: 'var(--toul-text-muted)' }}>Próximos plazos</p>
                     <p className="font-bold text-sm" style={{ color: 'var(--toul-text)' }}>0 facturas</p>
                 </div>
             </motion.div>

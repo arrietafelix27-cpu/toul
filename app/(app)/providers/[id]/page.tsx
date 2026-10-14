@@ -141,7 +141,7 @@ export default function ProviderDetailsPage({ params }: { params: { id: string }
                                         <span>•</span>
                                         <Clock size={12} />
                                         <span style={{ color: new Date(item.due_date) < new Date() && item.status !== 'paid' ? 'var(--toul-error)' : 'inherit' }}>
-                                            Vence {new Date(item.due_date).toLocaleDateString('es-CO')}
+                                            Plazo {new Date(item.due_date).toLocaleDateString('es-CO')}
                                         </span>
                                     </div>
                                 </div>

@@ -982,7 +982,7 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                         <Section label="Crédito">
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                                 <div>
-                                    <p style={{ fontSize: 9, color: 'var(--toul-pos-text-sec)', fontWeight: 600, margin: '0 0 4px', textTransform: 'uppercase' }}>Vence *</p>
+                                    <p style={{ fontSize: 9, color: 'var(--toul-pos-text-sec)', fontWeight: 600, margin: '0 0 4px', textTransform: 'uppercase' }}>Plazo · opcional</p>
                                     <input
                                         type="date"
                                         value={payment.dueDate}
