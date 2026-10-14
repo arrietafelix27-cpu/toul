@@ -16,7 +16,6 @@ import { ReorderPanel, type ReorderItem } from '@/components/inventory/ReorderPa
 const supabase = createClient()
 const PAGE_SIZE = 40
 /** Después de dos meses sin venderse, esa plata está dormida */
-const QUIETO_DAYS = 60
 
 /* ══════════════════════════════════════════════════════════════
    Inventario.
@@ -40,14 +39,33 @@ interface AlertRow {
     sold_30d: number
 }
 
+interface DormantRow {
+    id: string
+    kind: 'producto' | 'presentacion'
+    product_id: string
+    product_name: string
+    variant_name: string | null
+    image_url: string | null
+    stock: number
+    cost: number
+    idle_days: number
+    never_sold: boolean
+}
+
 interface Overview {
     coverageDays: number
+    idleDays: number
     value: number
     units: number
+    soldUnits30: number
     items: number
+    references: number
     outOfStock: number
     lowStock: number
     alerts: AlertRow[]
+    dormantValue: number
+    dormantCount: number
+    dormant: DormantRow[]
 }
 
 type Filtro = 'todo' | 'agotados' | 'pocos' | 'quietos'
@@ -115,56 +133,12 @@ export default function InventoryPage() {
         { revalidateOnFocus: false, dedupingInterval: 30000 },
     )
 
-    // ── Cuánto dura la bodega y cuánta plata está dormida ──
-    const { data: pulse } = useSWR(
-        storeId ? ['inventory-pulse', storeId] : null,
-        async () => {
-            const since60 = new Date(Date.now() - QUIETO_DAYS * 86400000).toISOString()
-            const since30 = new Date(Date.now() - 30 * 86400000).toISOString()
-
-            const [productsRes, variantsRes, soldRes] = await Promise.all([
-                supabase.from('products').select('id, stock, cpp').eq('store_id', storeId!).eq('is_active', true),
-                supabase.from('product_variants').select('id, product_id, stock, cpp').eq('store_id', storeId!).eq('is_active', true),
-                supabase.from('sale_items').select('product_id, variant_id, quantity, sales!inner(created_at)')
-                    .eq('store_id', storeId!).gte('sales.created_at', since60),
-            ])
-
-            const sold = (soldRes.data ?? []) as unknown as {
-                product_id: string; variant_id: string | null; quantity: number; sales: { created_at: string } | null
-            }[]
-            const movedIn60 = new Set<string>()
-            let units30 = 0
-            for (const item of sold) {
-                movedIn60.add(item.variant_id ?? item.product_id)
-                if ((item.sales?.created_at ?? '') >= since30) units30 += Number(item.quantity)
-            }
-
-            const variants = variantsRes.data ?? []
-            const withVariants = new Set(variants.map(v => v.product_id))
-            let unitsInStock = 0
-            let quietValue = 0
-            const quietKeys = new Set<string>()
-
-            const add = (key: string, stock: number, cost: number) => {
-                const safe = Math.max(stock, 0)
-                unitsInStock += safe
-                if (safe > 0 && !movedIn60.has(key)) { quietValue += safe * cost; quietKeys.add(key) }
-            }
-            for (const product of productsRes.data ?? []) {
-                if (withVariants.has(product.id)) continue
-                add(product.id, Number(product.stock) || 0, Number(product.cpp) || 0)
-            }
-            for (const variant of variants) add(variant.id, Number(variant.stock) || 0, Number(variant.cpp) || 0)
-
-            const perDay = units30 / 30
-            return {
-                daysLeft: perDay > 0 ? Math.floor(unitsInStock / perDay) : null,
-                quietValue: Math.round(quietValue),
-                quietKeys,
-            }
-        },
-        { revalidateOnFocus: false, dedupingInterval: 60000 },
-    )
+    // Cuánto dura la bodega al ritmo al que sale la mercancía
+    const daysLeft = useMemo(() => {
+        if (!overview || !Number(overview.soldUnits30)) return null
+        const perDay = Number(overview.soldUnits30) / 30
+        return Math.floor(Number(overview.units) / perDay)
+    }, [overview])
 
     const { data: lastCount } = useSWR(
         storeId ? ['last-count', storeId] : null,
@@ -219,32 +193,17 @@ export default function InventoryPage() {
         const text = search.trim().toLowerCase()
 
         if (filtro === 'quietos') {
-            if (!pulse || !shelf) return []
-            const rows: Row[] = []
-            const withVariants = new Set(shelf.variants.map(v => v.product_id))
-            for (const product of shelf.products) {
-                if (withVariants.has(product.id)) continue
-                if (!pulse.quietKeys.has(product.id)) continue
-                rows.push({
-                    key: `p-${product.id}`, href: `/inventory/${product.id}`,
-                    image: (product.images?.[0] as string | undefined) ?? product.image_url,
-                    title: product.name, subtitle: `${formatCOP(Math.round((Number(product.stock) || 0) * (Number(product.cpp) || 0)))} dormidos`,
-                    subtitleTone: 'warn', stock: Number(product.stock) || 0,
-                })
-            }
-            for (const variant of shelf.variants) {
-                if (!pulse.quietKeys.has(variant.id)) continue
-                const parent = shelf.products.find(p => p.id === variant.product_id)
-                if (!parent) continue
-                rows.push({
-                    key: `v-${variant.id}`, href: `/inventory/variant/${variant.id}`,
-                    image: (parent.images?.[0] as string | undefined) ?? parent.image_url,
-                    title: `${parent.name} · ${variant.name}`,
-                    subtitle: `${formatCOP(Math.round((Number(variant.stock) || 0) * (Number(variant.cpp) || 0)))} dormidos`,
-                    subtitleTone: 'warn', stock: Number(variant.stock) || 0,
-                })
-            }
-            return rows.filter(row => !text || row.title.toLowerCase().includes(text))
+            return overview.dormant
+                .map(row => ({
+                    key: `q-${row.kind}-${row.id}`,
+                    href: row.kind === 'presentacion' ? `/inventory/variant/${row.id}` : `/inventory/${row.id}`,
+                    image: row.image_url,
+                    title: row.variant_name ? `${row.product_name} · ${row.variant_name}` : row.product_name,
+                    subtitle: `${row.never_sold ? 'nunca se ha vendido' : 'sin venderse'} hace ${row.idle_days} días · ${formatCOP(Math.round(row.stock * row.cost))} quietos`,
+                    subtitleTone: 'warn' as Row['subtitleTone'],
+                    stock: Math.max(Number(row.stock) || 0, 0),
+                }))
+                .filter(row => !text || row.title.toLowerCase().includes(text))
         }
 
         return overview.alerts
@@ -259,7 +218,7 @@ export default function InventoryPage() {
                 stock: Math.max(Number(alert.stock) || 0, 0),
             }))
             .filter(row => !text || row.title.toLowerCase().includes(text))
-    }, [filtro, overview, pulse, shelf, search])
+    }, [filtro, overview, search])
 
     const variantsOf = (productId: string) => (shelf?.variants ?? []).filter(v => v.product_id === productId)
 
@@ -289,7 +248,7 @@ export default function InventoryPage() {
         { key: 'todo', label: 'Todo', color: 'var(--toul-text)' },
         { key: 'agotados', label: 'Agotados', count: overview?.outOfStock, color: 'var(--toul-error)' },
         { key: 'pocos', label: 'Por acabarse', count: overview?.lowStock, color: 'var(--toul-warning)' },
-        { key: 'quietos', label: 'Quietos', count: pulse?.quietKeys.size, color: 'var(--toul-warning)' },
+        { key: 'quietos', label: 'Quietos', count: overview?.dormantCount, color: 'var(--toul-warning)' },
     ]
 
     return (
@@ -330,27 +289,28 @@ export default function InventoryPage() {
                     <p className="pnl-label" style={{ marginBottom: 8 }}>Tu bodega</p>
                     {!overview ? <Skeleton height="2.2rem" width="170px" /> : (
                         <>
-                            <p style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0, lineHeight: 1.15 }}>
+                            <p style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0, lineHeight: 1.15 }}>
                                 {formatCOP(overview.value)}
                             </p>
-                            <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '3px 0 0' }}>
-                                {overview.units} {overview.units === 1 ? 'unidad' : 'unidades'} · {overview.items} {overview.items === 1 ? 'producto' : 'productos'}
+                            <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>
+                                lo que te costó la mercancía que tienes
                             </p>
 
-                            {pulse?.daysLeft !== null && pulse?.daysLeft !== undefined && (
-                                <p style={{ fontSize: 13, color: 'var(--toul-text-muted)', margin: '10px 0 0' }}>
-                                    Te alcanza para <strong style={{ color: 'var(--toul-text)' }}>{pulse.daysLeft} días</strong>
-                                </p>
-                            )}
-                            {!!pulse?.quietValue && (
-                                <button onClick={() => setFiltro('quietos')}
-                                    style={{
-                                        display: 'block', textAlign: 'left', border: 'none', background: 'transparent', padding: 0,
-                                        fontFamily: 'inherit', fontSize: 13, color: 'var(--toul-warning)', margin: '4px 0 0', cursor: 'pointer',
-                                    }}>
-                                    {formatCOP(pulse.quietValue)} llevan 2 meses sin venderse
-                                </button>
-                            )}
+                            <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column' }}>
+                                <Dato label="Referencias" value={String(overview.references)} />
+                                {overview.items > overview.references && (
+                                    <Dato label="Presentaciones" value={String(overview.items)} />
+                                )}
+                                <Dato label="Unidades" value={String(overview.units)} />
+                                {daysLeft !== null && (
+                                    <Dato label="Te dura" value={`${daysLeft} ${daysLeft === 1 ? 'día' : 'días'}`}
+                                        tone={daysLeft <= overview.coverageDays ? 'warn' : 'default'} />
+                                )}
+                                {overview.dormantValue > 0 && (
+                                    <Dato label={`Quietos +${overview.idleDays} días`} value={formatCOP(overview.dormantValue)}
+                                        tone="warn" onClick={() => setFiltro('quietos')} />
+                                )}
+                            </div>
                         </>
                     )}
 
@@ -531,6 +491,28 @@ export default function InventoryPage() {
             )}
         </div>
     )
+}
+
+/** Un renglón de la bodega: etiqueta a la izquierda, dato a la derecha. */
+function Dato({ label, value, tone = 'default', onClick }: {
+    label: string; value: string; tone?: 'default' | 'warn'; onClick?: () => void
+}) {
+    const color = tone === 'warn' ? 'var(--toul-warning)' : 'var(--toul-text)'
+    const content = (
+        <>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--toul-text-dim)', textAlign: 'left' }}>{label}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color, whiteSpace: 'nowrap' }}>{value}</span>
+        </>
+    )
+    const style: React.CSSProperties = {
+        display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+        padding: '7px 0', borderTop: '1px solid var(--toul-divider)',
+        background: 'transparent', border: 'none', borderTopWidth: 1, borderTopStyle: 'solid',
+        borderTopColor: 'var(--toul-divider)', fontFamily: 'inherit',
+    }
+    return onClick
+        ? <button onClick={onClick} style={{ ...style, cursor: 'pointer' }}>{content}</button>
+        : <div style={style}>{content}</div>
 }
 
 function Thumb({ src, size = 34 }: { src: string | null; size?: number }) {

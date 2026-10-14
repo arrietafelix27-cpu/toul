@@ -60,9 +60,9 @@ export default function DashboardPage() {
                 // Mejora 1: Yesterday's total
                 supabase.from('sales').select('total').eq('store_id', storeId).gte('created_at', yesterdayStart.toISOString()).lt('created_at', todayStart.toISOString()),
                 // Mejora 2: Customers with debt > 0
-                supabase.from('customers').select('id, name, phone, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(10),
+                supabase.from('customers').select('id, name, phone, total_debt', { count: 'exact' }).eq('store_id', storeId).eq('is_active', true).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(20),
                 // Mejora 2: Providers with credit purchases pending
-                supabase.from('providers').select('id, name, phone, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(10),
+                supabase.from('providers').select('id, name, phone, total_debt', { count: 'exact' }).eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(20),
                 // Desde cuándo debe cada cliente: la fiada más vieja sin pagar
                 supabase.from('sales').select('customer_id, created_at').eq('store_id', storeId).eq('is_credit', true).not('customer_id', 'is', null).order('created_at', { ascending: true }),
                 // Desde cuándo le debes a cada proveedor
@@ -147,12 +147,24 @@ export default function DashboardPage() {
             const sortedByProfit = Object.entries(productUnitsMap).map(([id, p]) => ({ id, ...p, value: p.profit, units: p.units, subValue: `te dejó ${formatCOP(p.profit)} en ${p.units} ${p.units === 1 ? 'venta' : 'ventas'}` })).sort((a, b) => b.value - a.value).slice(0, 5)
             const lowStock = (products.data || []).filter(p => p.stock <= (p.low_stock_threshold || 5)).map(p => ({ id: p.id, name: p.name, image_url: p.image_url, value: p.stock, units: 0, subValue: p.stock === 0 ? 'se agotó' : `quedan ${p.stock} ${p.stock === 1 ? 'unidad' : 'unidades'}` })).sort((a, b) => a.value - b.value).slice(0, 5)
 
-            // Slow moving (all active products - those sold)
-            const soldIds = new Set(Object.keys(productUnitsMap))
-            const slowMoving = (products.data || []).filter(p => !soldIds.has(p.id) && p.stock > 0).map(p => {
-                const days = getDaysDiff(p.created_at, new Date().toISOString())
-                return { id: p.id, name: p.name, image_url: p.image_url, value: days, units: 0, subValue: `${days} días sin venderse · ${p.stock} en bodega` }
-            }).sort((a, b) => b.value - a.value).slice(0, 5)
+            // "Sin mover" sale de la base: días desde la última venta de
+            // verdad. Antes se contaba desde que se creó la ficha y
+            // entraba todo lo que no se hubiera vendido en el periodo
+            // que estuvieras mirando — por eso decía 160 días.
+            const { data: pulse } = await supabase.rpc('toul_inventory_overview', { p_limit: 30 })
+            const dormant = (pulse?.dormant ?? []) as {
+                id: string; kind: string; product_id: string; product_name: string
+                variant_name: string | null; image_url: string | null
+                stock: number; idle_days: number; never_sold: boolean
+            }[]
+            const slowMoving = dormant.slice(0, 5).map(row => ({
+                id: row.kind === 'presentacion' ? row.product_id : row.id,
+                name: row.variant_name ? `${row.product_name} · ${row.variant_name}` : row.product_name,
+                image_url: row.image_url,
+                value: row.idle_days,
+                units: 0,
+                subValue: `${row.never_sold ? 'nunca se ha vendido' : 'sin venderse'} hace ${row.idle_days} días · ${row.stock} en bodega`,
+            }))
 
             // ── Mejora 1: Compute 7-day average ────────────────────────────
             const dayTotals7d: Record<string, number> = {}
@@ -236,7 +248,11 @@ export default function DashboardPage() {
                     products: { topUnits: sortedByUnits, topProfit: sortedByProfit, lowStock, slowMoving }
                 },
                 chart: { avg7d, streak, yesterdayTotal },
-                pending: { customerDebts, providerDebts }
+                pending: {
+                    customerDebts, providerDebts,
+                    customerCount: customersDebt.count ?? customerDebts.length,
+                    providerCount: providersPending.count ?? providerDebts.length,
+                }
             }
         },
         { revalidateOnFocus: false, dedupingInterval: 60000 }

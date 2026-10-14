@@ -26,6 +26,9 @@ export interface PendingParty {
 export interface PendingData {
     customerDebts: PendingParty[]
     providerDebts: PendingParty[]
+    /** Cuántos son en total, no cuántos alcanzaron a cargarse */
+    customerCount?: number
+    providerCount?: number
 }
 
 type Side = 'cobrar' | 'pagar'
@@ -87,6 +90,7 @@ export function PendingPanel({ pending, storeName, compact = false }: {
     }), [pending])
 
     const list = side === 'cobrar' ? pending.customerDebts : pending.providerDebts
+    const total = (side === 'cobrar' ? pending.customerCount : pending.providerCount) ?? list.length
     const shown = list.slice(0, compact ? 3 : 4)
     const isCobrar = side === 'cobrar'
     // Si alguno tiene WhatsApp, todos reservan ese espacio: los montos
@@ -103,8 +107,8 @@ export function PendingPanel({ pending, storeName, compact = false }: {
             {/* Los dos totales son el control: tocar uno cambia la lista */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
                 {([
-                    { key: 'cobrar' as Side, label: 'Te deben', value: totals.cobrar, count: pending.customerDebts.length, color: 'var(--toul-accent)' },
-                    { key: 'pagar' as Side, label: 'Debes', value: totals.pagar, count: pending.providerDebts.length, color: 'var(--toul-warning)' },
+                    { key: 'cobrar' as Side, label: 'Te deben', value: totals.cobrar, count: pending.customerCount ?? pending.customerDebts.length, color: 'var(--toul-accent)' },
+                    { key: 'pagar' as Side, label: 'Debes', value: totals.pagar, count: pending.providerCount ?? pending.providerDebts.length, color: 'var(--toul-warning)' },
                 ]).map(tab => {
                     const active = side === tab.key
                     return (
@@ -211,11 +215,11 @@ export function PendingPanel({ pending, storeName, compact = false }: {
                 </div>
             )}
 
-            {list.length > shown.length && (
-                <Link href={isCobrar ? '/customers' : '/providers'}
+            {total > shown.length && (
+                <Link href={isCobrar ? '/customers?ver=deben' : '/providers'}
                     className="pnl-row"
                     style={{ justifyContent: 'center', gap: 6, marginTop: 4, fontSize: 12, fontWeight: 500, color: 'var(--toul-text-dim)' }}>
-                    Ver los {list.length} <ArrowRight size={13} />
+                    Ver los {total} <ArrowRight size={13} />
                 </Link>
             )}
         </div>

@@ -4,9 +4,12 @@ import { onlyDigits, withThousands } from '@/lib/format/text'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, formatDate } from '@/lib/utils'
-import { ArrowLeft, Share2, Plus, Check } from 'lucide-react'
+import { ArrowLeft, Share2, Plus, Check, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
+import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
+import { explainError } from '@/lib/errors'
 import type { Customer, Credit } from '@/lib/types'
 
 export default function CustomerDetailPage() {
@@ -20,6 +23,19 @@ export default function CustomerDetailPage() {
     const [showPayment, setShowPayment] = useState(false)
     const [payAmount, setPayAmount] = useState('')
     const [saving, setSaving] = useState(false)
+    const router = useRouter()
+    const [removeOpen, setRemoveOpen] = useState(false)
+    const [removing, setRemoving] = useState(false)
+
+    async function removeCustomer() {
+        setRemoving(true)
+        const { data, error } = await supabase.rpc('toul_remove_customer', { p_customer_id: id })
+        setRemoving(false)
+        if (error) { toast.error(explainError(error, 'No se pudo quitar el cliente.')); return }
+        setRemoveOpen(false)
+        toast.success(data?.deleted ? `${data.name} fue borrado` : `${data?.name ?? 'El cliente'} ya no aparece en la lista`)
+        router.push('/customers')
+    }
 
     useEffect(() => { loadData() }, [id])
 
@@ -70,7 +86,27 @@ export default function CustomerDetailPage() {
                         <Share2 size={16} />
                     </button>
                 )}
+                <button onClick={() => setRemoveOpen(true)} aria-label="Quitar cliente"
+                    className="w-9 h-9 rounded-full flex items-center justify-center"
+                    style={{ background: 'var(--toul-surface)', color: 'var(--toul-text-muted)' }}>
+                    <Trash2 size={16} />
+                </button>
             </div>
+
+            <ConfirmSheet
+                open={removeOpen}
+                onClose={() => setRemoveOpen(false)}
+                onConfirm={removeCustomer}
+                busy={removing}
+                danger
+                title={`¿Quitar a ${customer.name}?`}
+                message={
+                    customer.total_debt > 0
+                        ? `Todavía te debe ${formatCOP(customer.total_debt)}. Registra el abono antes de quitarlo.`
+                        : 'Si nunca le has vendido, se borra. Si ya tiene ventas, desaparece de la lista y de la caja, pero su historial se conserva para que los reportes sigan cuadrando.'
+                }
+                confirmLabel="Quitar cliente"
+            />
 
             {/* Debt hero */}
             <div className="toul-card mb-4 text-center py-6">

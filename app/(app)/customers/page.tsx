@@ -1,5 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import useSWR from 'swr'
+import { createClient } from '@/lib/supabase/client'
 import { capitalizeFirst } from '@/lib/format/text'
 import { formatCOP } from '@/lib/utils'
 import { Plus, Users, Search, X } from 'lucide-react'
@@ -8,22 +10,42 @@ import toast from 'react-hot-toast'
 import type { Customer } from '@/lib/types'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToulData, useStore } from '@/lib/hooks/useData'
-import { createClient } from '@/lib/supabase/client'
+
+const supabase = createClient()
+
+type Filtro = 'todos' | 'deben' | 'alDia' | 'abonaron' | 'sinAbonar'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
 
 export default function CustomersPage() {
-    const supabase = createClient()
     const { data: store, isLoading: storeLoading } = useStore()
     const storeId = store?.id || null
 
     const { data: customers, isLoading, mutate } = useToulData<Customer>(
         'customers',
         storeId,
-        { order: { column: 'name' } }
+        { order: { column: 'name' }, eq: { is_active: true } }
+    )
+
+    // Quién ha abonado alguna vez: para poder separar al que paga
+    // del que te quedó debiendo y nunca volvió
+    const { data: abonaron } = useSWR(
+        storeId ? ['clientes-abonos', storeId] : null,
+        async () => {
+            const { data } = await supabase.from('credits')
+                .select('customer_id').eq('store_id', storeId!).eq('type', 'payment')
+            return new Set((data ?? []).map(row => row.customer_id as string))
+        },
+        { revalidateOnFocus: false },
     )
 
     const [search, setSearch] = useState('')
+    const [filtro, setFiltro] = useState<Filtro>('todos')
+
+    // Desde el inicio se puede llegar directo a los que deben
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get('ver') === 'deben') setFiltro('deben')
+    }, [])
     const [showForm, setShowForm] = useState(false)
     const [form, setForm] = useState({ name: '', phone: '' })
     const [saving, setSaving] = useState(false)
@@ -62,7 +84,17 @@ export default function CustomersPage() {
         setForm({ name: '', phone: '' })
     }
 
-    const filtered = (customers || []).filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+    const filtered = (customers || []).filter(c => {
+        if (!c.name.toLowerCase().includes(search.toLowerCase())) return false
+        const debe = Number(c.total_debt) > 0
+        switch (filtro) {
+            case 'deben': return debe
+            case 'alDia': return !debe
+            case 'abonaron': return !!abonaron?.has(c.id)
+            case 'sinAbonar': return debe && !abonaron?.has(c.id)
+            default: return true
+        }
+    })
     const totalDebt = (customers || []).reduce((s, c) => s + c.total_debt, 0)
 
     return (
@@ -120,6 +152,33 @@ export default function CustomersPage() {
                 )}
             </AnimatePresence>
 
+            {/* Filtros */}
+            <motion.div variants={fadeUp} initial="hidden" animate="visible"
+                style={{ display: 'flex', gap: 7, marginBottom: 12, overflowX: 'auto', paddingBottom: 2 }}>
+                {([
+                    { key: 'todos' as Filtro, label: 'Todos' },
+                    { key: 'deben' as Filtro, label: 'Deben' },
+                    { key: 'alDia' as Filtro, label: 'Al día' },
+                    { key: 'abonaron' as Filtro, label: 'Han abonado' },
+                    { key: 'sinAbonar' as Filtro, label: 'Deben y no han abonado' },
+                ]).map(chip => {
+                    const active = filtro === chip.key
+                    return (
+                        <button key={chip.key} onClick={() => setFiltro(chip.key)}
+                            style={{
+                                height: 34, padding: '0 13px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
+                                fontSize: 13, whiteSpace: 'nowrap', fontWeight: active ? 600 : 500,
+                                background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
+                                transition: 'all 160ms cubic-bezier(0.23,1,0.32,1)',
+                            }}>
+                            {chip.label}
+                        </button>
+                    )
+                })}
+            </motion.div>
+
             {/* Search */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" className="relative mb-4">
                 <Search size={16} strokeWidth={2} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)', pointerEvents: 'none' }} />
@@ -135,7 +194,13 @@ export default function CustomersPage() {
                 <div className="toul-card text-center py-12">
                     <Users size={36} className="mx-auto mb-2" style={{ color: 'var(--toul-border-2)' }} />
                     <p className="font-semibold mb-1" style={{ color: 'var(--toul-text)' }}>Sin clientes</p>
-                    <p className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Agrega tu primer cliente para empezar</p>
+                    <p className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>
+                        {filtro === 'deben' ? 'Ningún cliente te debe.'
+                            : filtro === 'alDia' ? 'Todos tus clientes tienen saldo pendiente.'
+                                : filtro === 'abonaron' ? 'Todavía nadie te ha abonado.'
+                                    : filtro === 'sinAbonar' ? 'Todos los que te deben ya te han abonado algo.'
+                                        : 'Agrega tu primer cliente para empezar'}
+                    </p>
                 </div>
             ) : (
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="flex flex-col gap-2">

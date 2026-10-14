@@ -21,10 +21,10 @@ const MIGRATIONS = [
     'migration_v7_hotfix.sql', 'migration_v8.sql', 'migration_v9.sql',
     'deploy_isla.sql', 'deploy_offline_conteo.sql', 'deploy_compras_simples.sql',
     'deploy_catalogo_publico.sql', 'deploy_inventario.sql',
-    'deploy_compras_proveedor.sql',
+    'deploy_compras_proveedor.sql', 'deploy_precision.sql',
 ]
 
-const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs', 'inventario.test.mjs', 'compras-proveedor.test.mjs']
+const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs', 'inventario.test.mjs', 'compras-proveedor.test.mjs', 'precision.test.mjs']
 
 async function runSuite(file) {
     const db = new PGlite()

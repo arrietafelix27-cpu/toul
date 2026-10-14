@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
@@ -75,6 +75,8 @@ export default function VentasPage() {
     const [selectedSale, setSelectedSale] = useState<VentaData | null>(null)
     const [limit, setLimit] = useState(PAGE_SIZE)
     const [hasMore, setHasMore] = useState(true)
+    // Las ventas siguen cargando solas al llegar al final de la lista
+    const sentinelRef = useRef<HTMLDivElement | null>(null)
     const [view, setView] = useState<'ventas' | 'anuladas'>('ventas')
     const [seller, setSeller] = useState<string>('todos')
     const [kind, setKind] = useState<Kind>('todas')
@@ -137,6 +139,17 @@ export default function VentasPage() {
         return (data ?? []).map(m => m.display_name as string)
     }, { revalidateOnFocus: false })
 
+    // Al llegar al final de la lista, se cargan más solas
+    useEffect(() => {
+        const node = sentinelRef.current
+        if (!node || !hasMore || isValidating) return
+        const observer = new IntersectionObserver(entries => {
+            if (entries[0]?.isIntersecting) setLimit(current => current + PAGE_SIZE)
+        }, { rootMargin: '320px' })
+        observer.observe(node)
+        return () => observer.disconnect()
+    }, [hasMore, isValidating, sales])
+
     const { data: voids } = useSWR<SaleVoid[]>(
         storeId && view === 'anuladas' ? ['sale-voids', storeId, period, fromDate, toDate] : null,
         async () => {
@@ -174,14 +187,48 @@ export default function VentasPage() {
         )
     }, [sales, query])
 
+    // El total se calcula sobre todas las ventas del periodo. Antes
+    // sumaba solo las 40 que estuvieran cargadas en pantalla.
+    const { data: periodTotals } = useSWR(
+        storeId ? ['sales-totals', storeId, period, fromDate, toDate, seller, kind] : null,
+        async () => {
+            const range = getRange(period, fromDate, toDate)
+            const run = (withSeller: boolean) => {
+                let q = supabase.from('sales')
+                    .select('total, sale_items(quantity, unit_price, unit_cost)')
+                    .eq('store_id', storeId)
+                    .gte('created_at', range.from || '1970-01-01')
+                    .lte('created_at', range.to || '9999-12-31')
+                if (withSeller && seller !== 'todos') q = q.eq('seller_name', seller)
+                if (kind === 'contado') q = q.eq('is_credit', false)
+                if (kind === 'credito') q = q.eq('is_credit', true)
+                if (kind === 'descuento') q = q.gt('discount', 0)
+                return q
+            }
+            let { data, error } = await run(true)
+            if (error) ({ data, error } = await run(false))
+            if (error) throw error
+            const list = (data ?? []) as unknown as { total: number; sale_items: { quantity: number; unit_price: number; unit_cost: number }[] }[]
+            return {
+                revenue: Math.round(list.reduce((sum, v) => sum + Number(v.total), 0)),
+                profit: Math.round(list.reduce((sum, v) => sum + (v.sale_items ?? []).reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0)),
+                count: list.length,
+            }
+        },
+        { revalidateOnFocus: false, dedupingInterval: 30000 },
+    )
+
+    // Si está buscando por texto, el resumen refleja lo que ve
     const totals = useMemo(() => {
-        const list = filtered
-        return {
-            revenue: Math.round(list.reduce((s, v) => s + v.total, 0)),
-            profit: Math.round(list.reduce((s, v) => s + v.sale_items.reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0)),
-            count: list.length,
+        if (query.trim()) {
+            return {
+                revenue: Math.round(filtered.reduce((s, v) => s + v.total, 0)),
+                profit: Math.round(filtered.reduce((s, v) => s + v.sale_items.reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0)),
+                count: filtered.length,
+            }
         }
-    }, [filtered])
+        return periodTotals ?? { revenue: 0, profit: 0, count: 0 }
+    }, [filtered, periodTotals, query])
 
     const PERIODS: { value: Period; label: string }[] = [
         { value: 'today', label: 'Hoy' },
@@ -439,14 +486,11 @@ export default function VentasPage() {
                     </motion.div>
 
                     {hasMore && (
-                        <button
-                            onClick={() => setLimit(l => l + PAGE_SIZE)}
-                            disabled={isValidating}
-                            className="w-full py-4 mt-4 rounded-2xl border border-dashed font-semibold text-xs transition-colors hover:bg-slate-900/50"
-                            style={{ color: 'var(--toul-text-muted)', borderColor: 'var(--toul-border)' }}
-                        >
-                            {isValidating ? 'Cargando más...' : 'Ver más ventas'}
-                        </button>
+                        <div ref={sentinelRef} style={{ height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 12, color: 'var(--toul-text-dim)' }}>
+                                {isValidating ? 'Cargando más…' : '\u00a0'}
+                            </span>
+                        </div>
                     )}
                 </>
             )}
