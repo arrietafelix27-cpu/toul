@@ -4,6 +4,8 @@ import { explainError } from '@/lib/errors'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
+import { useFormDraft } from '@/lib/forms/useFormDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import { ArrowLeft, Search, X, Camera, Check, Loader2, Trash2, Plus, Minus } from 'lucide-react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -63,6 +65,16 @@ export default function NewComboPage() {
     const [loading, setLoading] = useState(false)
     const [saved, setSaved] = useState(false)
     const [dataLoading, setDataLoading] = useState(true)
+
+    // Si se sale a mirar otra cosa, lo escrito sigue aquí al volver
+    const { restored, clearDraft, discardDraft } = useFormDraft(
+        'producto-combo',
+        { name, categoryId, comboPrice, selectedItems },
+        draft => {
+            setName(draft.name ?? ''); setCategoryId(draft.categoryId ?? '')
+            setComboPrice(draft.comboPrice ?? ''); setSelectedItems(draft.selectedItems ?? [])
+        },
+    )
 
     useEffect(() => {
         const load = async () => {
@@ -229,6 +241,7 @@ export default function NewComboPage() {
         }
 
         setLoading(false)
+        clearDraft()
         setSaved(true)
         toast.success('Combo creado')
         setTimeout(() => router.push('/products'), 1800)
@@ -275,6 +288,8 @@ export default function NewComboPage() {
                         Nuevo combo
                     </h1>
                 </motion.div>
+
+                <DraftNotice show={restored} onDiscard={discardDraft} />
 
                 <form
                     id="ncp-form"

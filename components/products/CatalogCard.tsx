@@ -61,7 +61,7 @@ export function CatalogCard({ item, index }: { item: CatalogCardData; index: num
             <Link
                 href={item.href}
                 style={{
-                    display: 'flex', flexDirection: 'column', height: '100%', textDecoration: 'none',
+                    display: 'flex', flexDirection: 'column', textDecoration: 'none',
                     borderRadius: 18, overflow: 'hidden',
                     background: 'var(--toul-surface)', border: '1px solid var(--toul-border)',
                     transition: 'background var(--toul-transition), border-color var(--toul-transition), transform 120ms var(--toul-ease)',
@@ -70,10 +70,13 @@ export function CatalogCard({ item, index }: { item: CatalogCardData; index: num
                 onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
                 onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
             >
-                {/* Imagen — cuadrada pase lo que pase: la foto se recorta,
-                    nunca estira la tarjeta (fotos verticales incluidas) */}
+                {/* Con foto, cuadrada pase lo que pase: se recorta y nunca
+                    estira la tarjeta. Sin foto no vale la pena reservar un
+                    cuadro vacío — basta una franja con el icono. */}
                 <div style={{
-                    position: 'relative', width: '100%', aspectRatio: '1 / 1', overflow: 'hidden', flexShrink: 0,
+                    position: 'relative', width: '100%', overflow: 'hidden', flexShrink: 0,
+                    aspectRatio: item.image ? '1 / 1' : undefined,
+                    height: item.image ? undefined : 58,
                     background: 'linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))',
                     opacity: outOfStock ? 0.45 : 1,
                 }}>

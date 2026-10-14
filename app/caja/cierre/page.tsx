@@ -95,7 +95,7 @@ export default function CajaCierrePage() {
 
                 {canClose ? (
                     <>
-                        <PriceField label="Efectivo contado" value={counted} onChange={setCounted} step={1000} />
+                        <PriceField label="Efectivo contado" value={counted} onChange={setCounted} />
                         <textarea className="toul-input" rows={2} placeholder="Novedades del turno (opcional)" value={notes}
                             onChange={e => setNotes(e.target.value)} maxLength={300}
                             style={{ resize: 'none', height: 'auto', paddingTop: 12, marginTop: 12 }} />

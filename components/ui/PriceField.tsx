@@ -9,7 +9,6 @@ export interface PriceFieldProps {
     onChange: (value: string) => void
     placeholder?: string
     min?: number
-    step?: number
     disabled?: boolean
 }
 
@@ -22,7 +21,7 @@ export interface PriceFieldProps {
  */
 export function PriceField({
     label, required, hint, value, onChange,
-    placeholder = '0', min = 0, step = 100, disabled,
+    placeholder = '0', min = 0, disabled,
 }: PriceFieldProps) {
     const [focused, setFocused] = useState(false)
 
@@ -79,12 +78,16 @@ export function PriceField({
                     type="number"
                     inputMode="numeric"
                     min={min}
-                    step={step}
+                    /* Sin saltos: en pesos un precio puede ser 85.250.
+                       Con un paso fijo el navegador rechazaba la cifra. */
+                    step="any"
                     placeholder={placeholder}
                     value={value}
                     onChange={e => onChange(e.target.value)}
                     onFocus={() => setFocused(true)}
                     onBlur={() => setFocused(false)}
+                    /* La rueda del mouse no cambia la plata sin querer */
+                    onWheel={event => event.currentTarget.blur()}
                     disabled={disabled}
                     style={{
                         flex: 1,

@@ -4,6 +4,8 @@ import { explainError } from '@/lib/errors'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
+import { useFormDraft } from '@/lib/forms/useFormDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import { ArrowLeft, X, Camera, Check, Loader2, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -112,6 +114,18 @@ export default function NewVariantProductPage() {
     const [attributes, setAttributes] = useState<Attribute[]>([{ id: uid(), name: '', values: [] }])
     const [variantPrices, setVariantPrices] = useState<Record<string, { price: string; cost: string }>>({})
     const [valueInputs, setValueInputs] = useState<Record<string, string>>({})
+
+    // Si se sale a mirar otra cosa, lo escrito sigue aquí al volver
+    const { restored, clearDraft, discardDraft } = useFormDraft(
+        'producto-presentaciones',
+        { name, reference, categoryId, attributes, variantPrices },
+        draft => {
+            setName(draft.name ?? ''); setReference(draft.reference ?? '')
+            setCategoryId(draft.categoryId ?? '')
+            setAttributes(draft.attributes?.length ? draft.attributes : [{ id: uid(), name: '', values: [] }])
+            setVariantPrices(draft.variantPrices ?? {})
+        },
+    )
 
     useEffect(() => {
         const loadCats = async () => {
@@ -262,6 +276,7 @@ export default function NewVariantProductPage() {
         }
 
         setLoading(false)
+        clearDraft()
         setSaved(true)
         toast.success('Producto creado')
         setTimeout(() => router.push('/products'), 1800)
@@ -315,6 +330,8 @@ export default function NewVariantProductPage() {
                         Producto con presentaciones
                     </h1>
                 </motion.div>
+
+                <DraftNotice show={restored} onDiscard={discardDraft} />
 
                 <form
                     id="nvp-form"

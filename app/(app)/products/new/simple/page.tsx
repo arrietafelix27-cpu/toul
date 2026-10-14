@@ -5,6 +5,8 @@ import { formatCOP } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
+import { useFormDraft } from '@/lib/forms/useFormDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import { ArrowLeft, X, Camera, Check, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -54,6 +56,17 @@ export default function NewSimpleProductPage() {
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
     const [saved, setSaved] = useState(false)
+
+    // Si se sale a mirar otra cosa, lo escrito sigue aquí al volver
+    const { restored, clearDraft, discardDraft } = useFormDraft(
+        'producto-simple',
+        { name, reference, categoryId, salePrice, costPrice },
+        draft => {
+            setName(draft.name ?? ''); setReference(draft.reference ?? '')
+            setCategoryId(draft.categoryId ?? ''); setSalePrice(draft.salePrice ?? '')
+            setCostPrice(draft.costPrice ?? '')
+        },
+    )
 
     useEffect(() => {
         const loadCats = async () => {
@@ -153,6 +166,7 @@ export default function NewSimpleProductPage() {
         }
 
         setLoading(false)
+        clearDraft()
         setSaved(true)
         toast.success('Producto creado')
         setTimeout(() => router.push('/products'), 1800)
@@ -231,6 +245,8 @@ export default function NewSimpleProductPage() {
                         Nuevo Producto
                     </h1>
                 </motion.div>
+
+                <DraftNotice show={restored} onDiscard={discardDraft} />
 
                 <form
                     id="nsp-form"

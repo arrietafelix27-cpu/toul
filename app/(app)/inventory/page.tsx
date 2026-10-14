@@ -360,9 +360,12 @@ export default function InventoryPage() {
                                 : lastCount ? `Contado hace ${daysAgo(lastCount)} ${daysAgo(lastCount) === 1 ? 'día' : 'días'}`
                                     : 'Nunca has contado'}
                         </span>
-                        <Link href="/inventory/conteo" className="pnl-pill">
-                            <ClipboardList size={13} /> Contar
-                        </Link>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                            <Link href="/inventory/compras" className="pnl-pill">Compras</Link>
+                            <Link href="/inventory/conteo" className="pnl-pill">
+                                <ClipboardList size={13} /> Contar
+                            </Link>
+                        </div>
                     </div>
                 </aside>
             </div>

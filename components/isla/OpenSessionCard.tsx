@@ -24,7 +24,7 @@ export function OpenSessionCard({ name, onOpened, embedded = false }: { name: st
     if (embedded) {
         return (
             <div>
-                <PriceField label="Base en efectivo" value={base} onChange={setBase} step={1000} />
+                <PriceField label="Base en efectivo" value={base} onChange={setBase} />
                 <button className="toul-btn-primary" onClick={open} disabled={opening} style={{ marginTop: 14 }}>
                     {opening ? 'Abriendo…' : 'Abrir turno'}
                 </button>
@@ -46,7 +46,7 @@ export function OpenSessionCard({ name, onOpened, embedded = false }: { name: st
                 <p style={{ fontSize: 15, color: 'var(--toul-text-muted)', margin: '0 0 24px', lineHeight: 1.5 }}>
                     Cuenta el efectivo que hay en la caja antes de empezar. Con esto se cuadra la caja al cerrar.
                 </p>
-                <PriceField label="Base en efectivo" value={base} onChange={setBase} step={1000} />
+                <PriceField label="Base en efectivo" value={base} onChange={setBase} />
                 <button className="toul-btn-primary" onClick={open} disabled={opening} style={{ marginTop: 16, height: 58, fontSize: 17 }}>
                     {opening ? 'Abriendo…' : 'Abrir turno'}
                 </button>

@@ -119,7 +119,7 @@ export default function TurnosPage() {
                 subtitle={selected ? `${selected.opened_by_name ?? ''} · ${fmt(selected.opened_at)}` : ''}
                 footer={selected && (selected.status === 'open' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <PriceField label="Efectivo contado (cerrar como administrador)" value={counted} onChange={setCounted} step={1000} />
+                        <PriceField label="Efectivo contado (cerrar como administrador)" value={counted} onChange={setCounted} />
                         <button className="toul-btn-primary" disabled={counted === '' || closing} onClick={closeAsAdmin}>
                             {closing ? 'Cerrando…' : 'Cerrar turno'}
                         </button>

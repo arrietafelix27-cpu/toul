@@ -293,7 +293,7 @@ export default function ExpensesPage() {
                     })}
                 </div>
 
-                <PriceField label="Monto" required value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} step={1000} />
+                <PriceField label="Monto" required value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} />
                 <div style={{ height: 10 }} />
                 <Field label="¿En qué exactamente?" hint="opcional" value={form.description}
                     onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="Ej: domicilio del pedido de María" maxLength={60} />
