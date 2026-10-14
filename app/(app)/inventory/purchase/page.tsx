@@ -71,7 +71,7 @@ export default function NewPurchaseFlow() {
             setStoreId(store.id)
 
             const [prodRes, provRes, variantsRes] = await Promise.all([
-                supabase.from('products').select('*').eq('store_id', store.id).order('name'),
+                supabase.from('products').select('*').eq('store_id', store.id).eq('is_active', true).order('name'),
                 supabase.from('providers').select('*').eq('store_id', store.id).order('name'),
                 supabase.from('product_variants').select('id, product_id, name, sale_price, cpp').eq('store_id', store.id).eq('is_active', true).order('name'),
             ])
@@ -134,7 +134,7 @@ export default function NewPurchaseFlow() {
             p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.reference && p.reference.toLowerCase().includes(searchQuery.toLowerCase()))
         )
-    ).slice(0, searchQuery ? 20 : 10)
+    )
 
     const toggleExpand = (productId: string) => {
         setExpandedInPicker(prev => {

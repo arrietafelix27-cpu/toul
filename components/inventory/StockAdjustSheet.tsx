@@ -134,10 +134,12 @@ export function StockAdjustSheet({ open, storeId, onClose, onDone, preselect }: 
         const text = query.trim().toLowerCase()
         const base = units ?? []
         const list = direction === 'out' ? base.filter(u => u.stock > 0) : base
-        if (!text) return list.slice(0, 40)
+        // Sin cortes: la lista se desplaza sola y hay que poder
+        // encontrar cualquier producto, no solo los primeros
+        if (!text) return list
         return list.filter(u =>
             u.label.toLowerCase().includes(text) || (u.sub ?? '').toLowerCase().includes(text)
-        ).slice(0, 40)
+        )
     }, [units, query, direction])
 
     const amount = Math.round(Number(quantity)) || 0

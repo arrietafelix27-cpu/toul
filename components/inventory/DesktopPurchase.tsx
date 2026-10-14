@@ -79,7 +79,6 @@ export function DesktopPurchase({
             p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.reference && p.reference.toLowerCase().includes(searchQuery.toLowerCase()))
         ))
-        .slice(0, searchQuery ? 30 : 15)
 
     return (
         <div className="px-8 pt-6 pb-12 max-w-6xl mx-auto">
