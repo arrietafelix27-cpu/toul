@@ -68,6 +68,17 @@ const ETIQUETA: Record<string, { texto: string; color: string; fondo: string }> 
 }
 
 const CSS = `
+.dir-wrap { container-type: inline-size; }
+
+/* En el celular el nombre se cortaba para dejarle sitio a la deuda.
+   La deuda baja a la segunda línea y el gasto total se guarda para
+   la ficha, donde hay espacio de sobra. */
+.dir-debe-sm { display: none; }
+@container (max-width: 430px) {
+    .dir-debe-sm { display: inline; color: var(--toul-text-muted); font-weight: 600; }
+    .dir-debe-lg, .dir-gastado { display: none !important; }
+}
+
 .dir-chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px;
     scrollbar-width: none; }
 .dir-chips::-webkit-scrollbar { display: none; }
@@ -312,19 +323,17 @@ export function Directory() {
                 </div>
             ) : lista.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '44px 16px' }}>
-                    <Users size={30} style={{ color: 'var(--toul-border-2)', marginBottom: 8 }} />
+                    <Users size={30} style={{ color: 'var(--toul-border-2)', margin: '0 auto 8px' }} />
                     <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
-                        {busca ? 'Nadie con ese nombre' : vacio(filtro)}
+                        {busca ? 'Nadie con ese nombre' : vacio(filtro).titulo}
                     </p>
-                    {!busca && filtro === 'inactivo' && (
-                        <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '3px 0 0' }}>
-                            Todos los que te compran siguen viniendo.
-                        </p>
-                    )}
+                    <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '3px 0 0' }}>
+                        {busca ? 'Prueba con el teléfono o con otra parte del nombre.' : vacio(filtro).detalle}
+                    </p>
                 </div>
             ) : (
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible"
-                    style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    className="dir-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                     {lista.map(c => {
                         const tag = ETIQUETA[c.etiqueta]
                         return (
@@ -343,11 +352,16 @@ export function Directory() {
                                             )}
                                         </span>
                                         <span style={{ display: 'block', fontSize: 12, color: 'var(--toul-text-dim)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {Number(c.saldo) > 0 && (
+                                                <span className="dir-debe-sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                                    Debe {formatCOP(Number(c.saldo))} ·{' '}
+                                                </span>
+                                            )}
                                             {resumen(c)}
                                         </span>
                                     </span>
                                     {Number(c.saldo) > 0 && (
-                                        <span style={{ fontSize: 12, fontWeight: 600, flexShrink: 0, color: 'var(--toul-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                                        <span className="dir-debe-lg" style={{ fontSize: 12, fontWeight: 600, flexShrink: 0, color: 'var(--toul-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                                             Debe {formatCOP(Number(c.saldo))}
                                         </span>
                                     )}
@@ -396,25 +410,26 @@ export function Directory() {
 }
 
 /** La línea que define al cliente: cuánto, cuántas veces, hace cuánto */
-function resumen(c: Cliente): string {
+function resumen(c: Cliente) {
     if (c.compras === 0) return 'Todavía no te ha comprado'
-    const partes = [
-        `${c.compras} ${c.compras === 1 ? 'compra' : 'compras'}`,
-        formatCOP(Number(c.gastado)),
-    ]
-    if (c.dias != null) {
-        partes.push(c.dias === 0 ? 'hoy' : c.dias === 1 ? 'ayer' : `hace ${c.dias} días`)
-    }
-    return partes.join(' · ')
+    const cuando = c.dias == null ? null
+        : c.dias === 0 ? 'hoy' : c.dias === 1 ? 'ayer' : `hace ${c.dias} días`
+    return (
+        <>
+            {c.compras} {c.compras === 1 ? 'compra' : 'compras'}
+            <span className="dir-gastado"> · {formatCOP(Number(c.gastado))}</span>
+            {cuando && <> · {cuando}</>}
+        </>
+    )
 }
 
 function vacio(f: Filtro) {
     switch (f) {
-        case 'recurrente': return 'Todavía no tienes clientes recurrentes'
-        case 'inactivo': return 'Ningún cliente está inactivo'
-        case 'nuevo': return 'No entraron clientes nuevos este mes'
-        case 'saldo': return 'Nadie tiene saldo pendiente'
-        default: return 'Sin clientes'
+        case 'recurrente': return { titulo: 'Todavía no tienes clientes recurrentes', detalle: 'Un cliente entra aquí cuando te compra por tercera vez.' }
+        case 'inactivo': return { titulo: 'Ningún cliente está inactivo', detalle: `Todos los que te compran han vuelto en los últimos ${DIAS_INACTIVO} días.` }
+        case 'nuevo': return { titulo: 'No hay clientes nuevos', detalle: 'Aquí aparecen los que entraron en los últimos 30 días.' }
+        case 'saldo': return { titulo: 'Nadie tiene saldo pendiente', detalle: 'Tu cartera está en cero. Así se trabaja.' }
+        default: return { titulo: 'Todavía no tienes clientes', detalle: 'Se agregan solos cuando vendes a crédito, o los creas con el botón de arriba.' }
     }
 }
 

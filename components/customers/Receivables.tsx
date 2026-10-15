@@ -71,11 +71,18 @@ function motivoTexto(f: Fila): string {
         case 'vencida': return `venció hace ${dias(f.diasVencido ?? 0)}`
         case 'vence_hoy': return 'se vence hoy'
         case 'promesa_hoy': return 'quedó de pagar hoy'
-        case 'promesa_rota': return 'prometió pagar y no lo hizo'
+        case 'promesa_rota': return 'prometió y no pagó'
         case 'promesa': return `quedó de pagar el ${fechaCorta(f.promesa)}`
         case 'escrito': return `le escribiste hace ${dias(f.diasContacto ?? 0)}`
         default: return f.vence ? `se vence el ${fechaCorta(f.vence)}` : 'sin plazo'
     }
+}
+
+/** Rojo es lo que ya se pasó. Lo de hoy avisa, pero no es una falla. */
+function colorMotivo(f: Fila) {
+    if (f.motivo === 'vencida' || f.motivo === 'promesa_rota') return 'var(--toul-error)'
+    if (f.grupo === 'hoy') return 'var(--toul-warning)'
+    return 'var(--toul-text-dim)'
 }
 
 function fechaCorta(iso: string | null) {
@@ -92,6 +99,17 @@ function diaISO(sumar = 0) {
 }
 
 const CSS = `
+.cob-wrap { container-type: inline-size; }
+
+/* En el celular la fila no da para nombre + plata + dos botones: el
+   nombre se cortaba casi entero. La plata baja a la segunda línea y
+   WhatsApp se queda en la hoja del cobro, a un toque. */
+.cob-monto-sm { display: none; }
+@container (max-width: 430px) {
+    .cob-monto-sm { display: inline; font-weight: 700; color: var(--toul-text); }
+    .cob-monto-lg, .cob-wa { display: none !important; }
+}
+
 .cob-hero { border-radius: 22px; padding: 20px 22px;
     background: linear-gradient(180deg, var(--toul-surface) 0%, transparent 100%);
     border: 1px solid var(--toul-border); border-bottom-color: transparent; }
@@ -123,8 +141,8 @@ const CSS = `
                 transform 140ms cubic-bezier(0.23,1,0.32,1); }
 .cob-acc:active { transform: scale(0.96); }
 
-.cob-barra { position: relative; height: 4px; border-radius: 999px; overflow: hidden;
-    background: rgba(255,255,255,0.07); }
+.cob-barra { display: block; position: relative; height: 4px; border-radius: 999px;
+    overflow: hidden; background: rgba(255,255,255,0.07); }
 .cob-barra > i { position: absolute; inset: 0 auto 0 0; border-radius: 999px;
     transition: transform 420ms cubic-bezier(0.23,1,0.32,1); transform-origin: left center; }
 
@@ -244,6 +262,7 @@ export function Receivables() {
 
     const c = data ?? { total: 0, hoy: 0, diasMasVieja: 0, fiadoMes: 0, recuperadoMes: 0, clientes: [] }
     const cuantos = c.clientes.length
+    const huboMes = Number(c.fiadoMes) > 0 || Number(c.recuperadoMes) > 0
     const sano = Number(c.recuperadoMes) >= Number(c.fiadoMes)
     const tope = Math.max(Number(c.fiadoMes), Number(c.recuperadoMes), 1)
 
@@ -274,14 +293,18 @@ export function Receivables() {
                 <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--toul-divider)' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 9 }}>
                         <p className="pnl-label">Este mes</p>
-                        <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                            fontSize: 11.5, fontWeight: 600, letterSpacing: '-0.01em',
-                            color: sano ? 'var(--toul-accent)' : 'var(--toul-warning)',
-                        }}>
-                            {sano ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                            {sano ? 'Recuperas más de lo que fías' : 'Fías más de lo que recuperas'}
-                        </span>
+                        {/* Sin movimiento no hay veredicto: decir "recuperas más
+                            de lo que fías" con todo en cero sería mentira */}
+                        {huboMes && (
+                            <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                fontSize: 11.5, fontWeight: 600, letterSpacing: '-0.01em',
+                                color: sano ? 'var(--toul-accent)' : 'var(--toul-warning)',
+                            }}>
+                                {sano ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                                {sano ? 'Recuperas más de lo que fías' : 'Fías más de lo que recuperas'}
+                            </span>
+                        )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                         {[
@@ -305,9 +328,10 @@ export function Receivables() {
             </motion.div>
 
             {/* ── Los tres grupos ── */}
+            <div className="cob-wrap">
             {cuantos === 0 ? (
                 <div style={{ textAlign: 'center', padding: '42px 16px' }}>
-                    <Check size={30} style={{ color: 'var(--toul-accent)', marginBottom: 8 }} />
+                    <Check size={30} style={{ color: 'var(--toul-accent)', margin: '0 auto 8px' }} />
                     <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
                         Tu cartera está en cero
                     </p>
@@ -352,21 +376,28 @@ export function Receivables() {
                                                 </span>
                                                 <span style={{
                                                     display: 'block', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                    color: f.grupo === 'hoy' ? 'var(--toul-error)' : 'var(--toul-text-dim)',
+                                                    color: colorMotivo(f),
                                                 }}>
+                                                    <span className="cob-monto-sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                                        {formatCOP(Number(f.saldo))} ·{' '}
+                                                    </span>
                                                     {motivoTexto(f)}
                                                 </span>
                                             </span>
-                                            <span style={{ fontSize: 14.5, fontWeight: 700, flexShrink: 0, color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }}>
+                                            <span className="cob-monto-lg" style={{ fontSize: 14.5, fontWeight: 700, flexShrink: 0, color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }}>
                                                 {formatCOP(Number(f.saldo))}
                                             </span>
-                                            {f.telefono && (
-                                                <button className="cob-acc" style={{ width: 32 }}
-                                                    aria-label={`Escribirle a ${f.nombre}`}
-                                                    onClick={e => { e.stopPropagation(); escribir(f) }}>
-                                                    <MessageCircle size={14} />
-                                                </button>
-                                            )}
+                                            {/* El hueco se reserva aunque no haya teléfono: si no,
+                                                esa fila corre la plata y se pierde la columna */}
+                                            <span className="cob-wa" style={{ width: 32, flexShrink: 0 }}>
+                                                {f.telefono && (
+                                                    <button className="cob-acc" style={{ width: 32 }}
+                                                        aria-label={`Escribirle a ${f.nombre}`}
+                                                        onClick={e => { e.stopPropagation(); escribir(f) }}>
+                                                        <MessageCircle size={14} />
+                                                    </button>
+                                                )}
+                                            </span>
                                             <button className="cob-acc" style={{ padding: '0 11px' }}
                                                 onClick={e => { e.stopPropagation(); setAbonoDe(f); setMonto('') }}>
                                                 Abonar
@@ -379,6 +410,7 @@ export function Receivables() {
                     </section>
                 )
             })}
+            </div>
 
             {/* ── El cobro de una persona ── */}
             <Sheet open={!!abierta} onClose={() => setAbierta(null)}
