@@ -216,7 +216,7 @@ export function PendingPanel({ pending, storeName, compact = false }: {
             )}
 
             {total > shown.length && (
-                <Link href={isCobrar ? '/customers?ver=deben' : '/providers'}
+                <Link href={isCobrar ? '/customers?ver=cobros' : '/providers'}
                     className="pnl-row"
                     style={{ justifyContent: 'center', gap: 6, marginTop: 4, fontSize: 12, fontWeight: 500, color: 'var(--toul-text-dim)' }}>
                     Ver los {total} <ArrowRight size={13} />

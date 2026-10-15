@@ -5,10 +5,10 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { AlertTriangle, ArrowLeft, Check, Receipt, Share2, Trash2, Wrench } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Check, MessageCircle, Receipt, Share2, Trash2, Wrench } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { onlyDigits, withThousands } from '@/lib/format/text'
+import { capitalizeFirst, onlyDigits, withThousands } from '@/lib/format/text'
 import { Sheet } from '@/components/isla/Sheet'
 import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
@@ -30,6 +30,18 @@ interface Movimiento {
     notes: string | null
     sale_id: string | null
     created_at: string
+}
+
+interface Perfil {
+    compras: number
+    gastado: number
+    ticket: number
+    primera: string | null
+    ultima: string | null
+    dias: number | null
+    favoritos: { nombre: string; unidades: number; monto: number }[]
+    contactos: { id: string; tipo: string; canal: string | null; promesa: string | null; nota: string | null; cerrado: string | null; cuando: string }[]
+    plazoDias: number
 }
 
 const LABEL: Record<string, string> = {
@@ -54,21 +66,25 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     const [removeOpen, setRemoveOpen] = useState(false)
     const [removing, setRemoving] = useState(false)
     const [fixing, setFixing] = useState(false)
+    const [nota, setNota] = useState<string | null>(null)
+    const [notaSaving, setNotaSaving] = useState(false)
 
     const { data, isLoading, mutate } = useSWR(['cliente', id], async () => {
-        const [storeRes, customerRes, movesRes, salesRes] = await Promise.all([
+        const [storeRes, customerRes, movesRes, salesRes, perfilRes] = await Promise.all([
             supabase.from('stores').select('id, name').limit(1).single(),
             supabase.from('customers').select('*').eq('id', id).single(),
             supabase.from('credits').select('id, type, amount, notes, sale_id, created_at')
                 .eq('customer_id', id).order('created_at', { ascending: false }),
             supabase.from('sales').select('id, created_at, total, is_credit')
                 .eq('customer_id', id).order('created_at', { ascending: false }),
+            supabase.rpc('toul_customer_profile', { p_customer_id: id }),
         ])
         return {
             store: storeRes.data,
             customer: customerRes.data,
             movimientos: (movesRes.data ?? []) as Movimiento[],
             ventas: salesRes.data ?? [],
+            perfil: (perfilRes.data ?? null) as Perfil | null,
         }
     }, { revalidateOnFocus: false })
 
@@ -94,6 +110,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     }
 
     const customer = data.customer
+    const perfil = data.perfil
     const guardada = Math.round(Number(customer.total_debt) || 0)
     const descuadrada = guardada !== calculada
 
@@ -137,6 +154,20 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         setRemoveOpen(false)
         toast.success(res?.deleted ? `${res.name} fue borrado` : `${res?.name ?? 'El cliente'} ya no aparece en la lista`)
         router.push('/customers')
+    }
+
+    // Lo que no cabe en ningún campo: "la mamá de Juan",
+    // "paga los viernes". Se guarda al salir del cuadro.
+    async function guardarNota() {
+        const texto = (nota ?? '').trim()
+        if (texto === (customer.notes ?? '').trim()) return
+        setNotaSaving(true)
+        const { error } = await supabase.from('customers')
+            .update({ notes: texto || null }).eq('id', id)
+        setNotaSaving(false)
+        if (error) { toast.error('No se pudo guardar la nota'); return }
+        await mutate()
+        toast.success('Nota guardada')
     }
 
     function porWhatsApp() {
@@ -194,6 +225,12 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                         Registrar abono
                     </button>
                 )}
+                {calculada > 0 && (
+                    <Link href="/customers?ver=cobros" className="pnl-link"
+                        style={{ marginTop: 10, justifyContent: 'center', width: '100%' }}>
+                        Ver en Cuentas por cobrar →
+                    </Link>
+                )}
             </div>
 
             {/* ── Cuando la ficha no coincide con lo que pasó ── */}
@@ -226,6 +263,91 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                         </p>
                     </div>
                 </div>
+            )}
+
+            {/* ── Qué tan buen cliente es ── */}
+            {perfil && perfil.compras > 0 && (
+                <section style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1,
+                    borderRadius: 16, overflow: 'hidden', background: 'var(--toul-divider)' }}>
+                    {[
+                        { label: 'Compras', valor: String(perfil.compras) },
+                        { label: 'Te ha comprado', valor: formatCOP(Number(perfil.gastado)) },
+                        { label: 'Compra promedio', valor: formatCOP(Number(perfil.ticket)) },
+                    ].map(d => (
+                        <div key={d.label} style={{ background: 'var(--toul-surface)', padding: '13px 12px', textAlign: 'center' }}>
+                            <p style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--toul-text)', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                                {d.valor}
+                            </p>
+                            <p className="pnl-label" style={{ marginTop: 3, letterSpacing: '0.06em' }}>{d.label}</p>
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            {/* ── Qué le gusta comprar ── */}
+            {perfil && perfil.favoritos.length > 0 && (
+                <section style={{ marginTop: 22 }}>
+                    <p className="pnl-label" style={{ marginBottom: 8 }}>Lo que compra</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {perfil.favoritos.map(f => (
+                            <div key={f.nombre} className="pnl-row" style={{ cursor: 'default' }}>
+                                <span style={{ flex: 1, minWidth: 0 }}>
+                                    <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--toul-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {f.nombre}
+                                    </span>
+                                    <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-text-dim)' }}>
+                                        {f.unidades} {Number(f.unidades) === 1 ? 'unidad' : 'unidades'}
+                                    </span>
+                                </span>
+                                <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--toul-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                                    {formatCOP(Number(f.monto))}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* ── Lo que hay que saber de esta persona ── */}
+            <section style={{ marginTop: 22 }}>
+                <p className="pnl-label" style={{ marginBottom: 8 }}>Notas</p>
+                <textarea
+                    value={nota ?? customer.notes ?? ''}
+                    onChange={e => setNota(capitalizeFirst(e.target.value))}
+                    onBlur={guardarNota}
+                    placeholder="La mamá de Juan · paga los viernes · le gustan los dulces"
+                    rows={2}
+                    className="toul-input"
+                    style={{ resize: 'vertical', lineHeight: 1.5, minHeight: 62, paddingTop: 11, paddingBottom: 11 }} />
+                {notaSaving && (
+                    <p style={{ fontSize: 11.5, color: 'var(--toul-text-dim)', margin: '5px 0 0' }}>Guardando…</p>
+                )}
+            </section>
+
+            {/* ── Qué le has dicho ── */}
+            {perfil && perfil.contactos.length > 0 && (
+                <section style={{ marginTop: 22 }}>
+                    <p className="pnl-label" style={{ marginBottom: 8 }}>Cobros</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {perfil.contactos.slice(0, 6).map(c => (
+                            <div key={c.id} className="pnl-row" style={{ cursor: 'default' }}>
+                                <span style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)' }}>
+                                    <MessageCircle size={14} style={{ color: 'var(--toul-text-dim)' }} />
+                                </span>
+                                <span style={{ flex: 1, minWidth: 0 }}>
+                                    <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: 'var(--toul-text)' }}>
+                                        {c.tipo === 'compromiso'
+                                            ? `Quedó de pagar el ${new Date(String(c.promesa).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}`
+                                            : 'Le escribiste'}
+                                    </span>
+                                    <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-text-dim)' }}>
+                                        {fecha(c.cuando)}{c.tipo === 'compromiso' && c.cerrado ? ' · cumplido' : ''}
+                                    </span>
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
             )}
 
             {/* ── Todo lo que pasó ── */}

@@ -48,7 +48,7 @@ export default function DashboardPage() {
             const sevenDaysAgo = new Date(todayStart); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
             // Fetch current data + new dashboard enhancement queries
-            const [sales, expenses, products, purchases, sales7d, salesStreak, salesYesterday, customersDebt, providersPending, creditSales, allPurchases] = await Promise.all([
+            const [sales, expenses, products, purchases, sales7d, salesStreak, salesYesterday, customersDebt, providersPending, allPurchases] = await Promise.all([
                 supabase.from('sales').select('total, created_at, is_credit, sale_items(unit_price, unit_cost, quantity, product_id, products(name, image_url))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 supabase.from('expenses').select('amount, category, created_at').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 supabase.from('products').select('*').eq('store_id', storeId).eq('is_active', true),
@@ -59,12 +59,11 @@ export default function DashboardPage() {
                 supabase.from('sales').select('created_at').eq('store_id', storeId).gte('created_at', new Date(todayStart.getTime() - 60 * 86400000).toISOString()).order('created_at', { ascending: false }),
                 // Mejora 1: Yesterday's total
                 supabase.from('sales').select('total').eq('store_id', storeId).gte('created_at', yesterdayStart.toISOString()).lt('created_at', todayStart.toISOString()),
-                // Mejora 2: Customers with debt > 0
-                supabase.from('customers').select('id, name, phone, total_debt').eq('store_id', storeId).eq('is_active', true).gt('total_debt', 0).order('total_debt', { ascending: false }),
+                // Lo que te deben sale de los movimientos, igual que en
+                // Cuentas por cobrar: un solo número en toda la app
+                supabase.rpc('toul_receivables'),
                 // Mejora 2: Providers with credit purchases pending
                 supabase.from('providers').select('id, name, phone, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }),
-                // Desde cuándo debe cada cliente: la fiada más vieja sin pagar
-                supabase.from('sales').select('customer_id, created_at').eq('store_id', storeId).eq('is_credit', true).not('customer_id', 'is', null).order('created_at', { ascending: true }),
                 // Desde cuándo le debes a cada proveedor
                 supabase.from('purchases').select('provider_id, created_at').eq('store_id', storeId).not('provider_id', 'is', null).order('created_at', { ascending: true })
             ])
@@ -201,21 +200,20 @@ export default function DashboardPage() {
             const daysSince = (iso: string | null) =>
                 iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)) : null
 
-            const firstCreditSale = new Map<string, string>()
-            for (const row of (creditSales.data || [])) {
-                if (row.customer_id && !firstCreditSale.has(row.customer_id)) firstCreditSale.set(row.customer_id, row.created_at)
-            }
             const firstPurchase = new Map<string, string>()
             for (const row of (allPurchases.data || [])) {
                 if (row.provider_id && !firstPurchase.has(row.provider_id)) firstPurchase.set(row.provider_id, row.created_at)
             }
 
-            const customerDebts = (customersDebt.data || []).map(c => ({
+            type FilaCartera = { id: string; nombre: string; telefono: string | null; saldo: number; diasFiado: number | null }
+            const cartera = (customersDebt.data as { clientes?: FilaCartera[] } | null)?.clientes ?? []
+            const customerDebts = cartera.map(c => ({
                 id: c.id,
-                name: c.name,
-                amount: Math.round(c.total_debt),
-                phone: c.phone ?? null,
-                days: daysSince(firstCreditSale.get(c.id) ?? null),
+                name: c.nombre,
+                amount: Math.round(Number(c.saldo)),
+                phone: c.telefono ?? null,
+                // Hace cuánto está abierto el fiado más viejo que sigue sin pagar
+                days: c.diasFiado ?? null,
             }))
 
             const providerDebts = (providersPending.data || []).map(p => ({

@@ -326,7 +326,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
             <Section title="Lo que te deben y lo que debes" hint="Esto no depende del período: es lo que está pendiente hoy.">
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
                     {([
-                        { title: 'Te deben', total: data.receivables.total, rows: data.receivables.top, color: 'var(--toul-accent)', empty: 'Nadie te debe. Bien ahí.', href: '/customers' },
+                        { title: 'Te deben', total: data.receivables.total, rows: data.receivables.top, color: 'var(--toul-accent)', empty: 'Nadie te debe. Bien ahí.', href: '/customers?ver=cobros' },
                         { title: 'Debes', total: data.payables.total, rows: data.payables.top, color: 'var(--toul-error)', empty: 'No le debes a ningún proveedor.', href: '/providers' },
                     ]).map(box => (
                         <Link key={box.title} href={box.href} className="toul-card toul-card-interactive" style={{ textDecoration: 'none', display: 'block' }}>

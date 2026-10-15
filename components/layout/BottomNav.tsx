@@ -68,16 +68,13 @@ const NAV_SECTIONS = [
             { href: '/inventory', icon: Boxes, label: 'Inventario' },
             { href: '/cash', icon: Wallet, label: 'Caja' },
             { href: '/ventas', icon: Receipt, label: 'Ventas' },
-        ],
-    },
-    ISLA_SECTION,
-    {
-        label: 'Personas',
-        items: [
-            { href: '/customers', icon: Users, label: 'Clientes' },
             { href: '/providers', icon: Truck, label: 'Proveedores' },
         ],
     },
+    ISLA_SECTION,
+    // Clientes es su propio mundo: adentro están Mis clientes y
+    // Cuentas por cobrar. Va sin encabezado, para no repetir la palabra.
+    { label: '', items: [{ href: '/customers', icon: Users, label: 'Clientes' }] },
     {
         label: 'Inteligencia',
         items: [
@@ -165,14 +162,16 @@ export function Sidebar() {
 
             {/* Secciones */}
             <nav className="flex-1 px-3 overflow-y-auto" style={{ paddingBottom: 8 }}>
-                {NAV_SECTIONS.map(section => (
-                    <div key={section.label} style={{ marginBottom: 14 }}>
-                        <p style={{
-                            fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
-                            color: 'var(--toul-text-faint)', margin: '0 0 4px 10px',
-                        }}>
-                            {section.label}
-                        </p>
+                {NAV_SECTIONS.map((section, si) => (
+                    <div key={section.label || `s${si}`} style={{ marginBottom: 14 }}>
+                        {section.label && (
+                            <p style={{
+                                fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
+                                color: 'var(--toul-text-faint)', margin: '0 0 4px 10px',
+                            }}>
+                                {section.label}
+                            </p>
+                        )}
                         {section.items.map(({ href, icon: Icon, label, ...rest }) => (
                             <SidebarRow
                                 key={href}
@@ -210,16 +209,11 @@ const MENU_SECTIONS = [
             { href: '/inventory', icon: Boxes, label: 'Inventario' },
             { href: '/ventas', icon: Receipt, label: 'Ventas' },
             { href: '/expenses', icon: TrendingDown, label: 'Gastos' },
-        ],
-    },
-    ISLA_SECTION,
-    {
-        label: 'Personas',
-        items: [
-            { href: '/customers', icon: Users, label: 'Clientes' },
             { href: '/providers', icon: Truck, label: 'Proveedores' },
         ],
     },
+    ISLA_SECTION,
+    { label: '', items: [{ href: '/customers', icon: Users, label: 'Clientes' }] },
     {
         label: 'Inteligencia',
         items: [
@@ -308,16 +302,18 @@ export function BottomNav() {
                         }}>
                             {MENU_SECTIONS.map((section, si) => (
                                 <motion.div
-                                    key={section.label}
+                                    key={section.label || `s${si}`}
                                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.26, delay: 0.04 + si * 0.035, ease: [0, 0, 0.2, 1] }}
                                     style={{ marginBottom: 14 }}>
-                                    <p style={{
-                                        fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
-                                        color: 'var(--toul-text-faint)', margin: '0 0 7px 14px',
-                                    }}>
-                                        {section.label}
-                                    </p>
+                                    {section.label && (
+                                        <p style={{
+                                            fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
+                                            color: 'var(--toul-text-faint)', margin: '0 0 7px 14px',
+                                        }}>
+                                            {section.label}
+                                        </p>
+                                    )}
 
                                     {/* Lista agrupada: un solo bloque, filas separadas por una línea */}
                                     <div className="nav-group">
