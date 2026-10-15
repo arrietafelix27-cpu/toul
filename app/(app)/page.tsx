@@ -60,9 +60,9 @@ export default function DashboardPage() {
                 // Mejora 1: Yesterday's total
                 supabase.from('sales').select('total').eq('store_id', storeId).gte('created_at', yesterdayStart.toISOString()).lt('created_at', todayStart.toISOString()),
                 // Mejora 2: Customers with debt > 0
-                supabase.from('customers').select('id, name, phone, total_debt', { count: 'exact' }).eq('store_id', storeId).eq('is_active', true).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(20),
+                supabase.from('customers').select('id, name, phone, total_debt').eq('store_id', storeId).eq('is_active', true).gt('total_debt', 0).order('total_debt', { ascending: false }),
                 // Mejora 2: Providers with credit purchases pending
-                supabase.from('providers').select('id, name, phone, total_debt', { count: 'exact' }).eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }).limit(20),
+                supabase.from('providers').select('id, name, phone, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }),
                 // Desde cuándo debe cada cliente: la fiada más vieja sin pagar
                 supabase.from('sales').select('customer_id, created_at').eq('store_id', storeId).eq('is_credit', true).not('customer_id', 'is', null).order('created_at', { ascending: true }),
                 // Desde cuándo le debes a cada proveedor
@@ -250,8 +250,8 @@ export default function DashboardPage() {
                 chart: { avg7d, streak, yesterdayTotal },
                 pending: {
                     customerDebts, providerDebts,
-                    customerCount: customersDebt.count ?? customerDebts.length,
-                    providerCount: providersPending.count ?? providerDebts.length,
+                    customerCount: customerDebts.length,
+                    providerCount: providerDebts.length,
                 }
             }
         },

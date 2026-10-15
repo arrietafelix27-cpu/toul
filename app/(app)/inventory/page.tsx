@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
-import { AlertTriangle, ClipboardList, Package, Plus, Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, ClipboardList, Package, Plus, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
@@ -56,6 +56,7 @@ interface Overview {
     coverageDays: number
     idleDays: number
     value: number
+    retailValue: number
     units: number
     soldUnits30: number
     items: number
@@ -120,6 +121,9 @@ export default function InventoryPage() {
     const [filtro, setFiltro] = useState<Filtro>('todo')
     const [limit, setLimit] = useState(PAGE_SIZE)
     const [adjustOpen, setAdjustOpen] = useState(false)
+    // El mismo inventario vale distinto según se mire: lo que costó
+    // o lo que va a entrar si se vende
+    const [verVenta, setVerVenta] = useState(false)
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
     // ── Valor, mínimos y lo que falta: lo calcula la base ──
@@ -290,11 +294,22 @@ export default function InventoryPage() {
                     {!overview ? <Skeleton height="2.2rem" width="170px" /> : (
                         <>
                             <p style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0, lineHeight: 1.15 }}>
-                                {formatCOP(overview.value)}
+                                {formatCOP(verVenta ? overview.retailValue : overview.value)}
                             </p>
-                            <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>
-                                lo que te costó la mercancía que tienes
-                            </p>
+                            <button onClick={() => setVerVenta(v => !v)}
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0, marginTop: 2,
+                                    background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                                    fontSize: 12.5, color: 'var(--toul-text-dim)',
+                                }}>
+                                {verVenta ? 'a precio de venta' : 'a lo que te costó'}
+                                <ArrowLeftRight size={12} />
+                            </button>
+                            {verVenta && overview.value > 0 && (
+                                <p style={{ fontSize: 12.5, color: 'var(--toul-accent)', margin: '2px 0 0' }}>
+                                    {formatCOP(overview.retailValue - overview.value)} de ganancia si lo vendes todo
+                                </p>
+                            )}
 
                             <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column' }}>
                                 <Dato label="Referencias" value={String(overview.references)} />

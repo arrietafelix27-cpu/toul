@@ -160,14 +160,14 @@ BEGIN
        AND payload->>'customerName' IS NOT NULL
        AND length(trim(payload->>'customerName')) > 0
     THEN
-        INSERT INTO customers (store_id, name, phone, total_debt)
-        VALUES (
+        -- Buscar antes de crear: escribir el nombre en la caja estaba
+        -- creando un cliente nuevo en cada venta, y la deuda del mismo
+        -- señor quedaba partida en varios registros
+        v_customer_id := toul_find_or_create_customer(
             v_store_id,
-            trim(payload->>'customerName'),
-            NULLIF(trim(payload->>'customerPhone'), ''),
-            0
-        )
-        RETURNING id INTO v_customer_id;
+            payload->>'customerName',
+            payload->>'customerPhone'
+        );
     END IF;
 
     -- ─── 3. Primary method (largest split, lowercased) ───────────

@@ -75,6 +75,7 @@ BEGIN
             p.image_url,
             v.stock                AS stock,
             v.cpp                  AS cost,
+            v.sale_price           AS price,
             v.low_stock_threshold  AS manual_min,
             COALESCE((SELECT units FROM vendido WHERE variant_id = v.id), 0) AS sold_30d,
             (SELECT last_sale FROM ultima_venta WHERE variant_id = v.id) AS last_sale,
@@ -87,7 +88,7 @@ BEGIN
 
         SELECT
             p.id, 'producto'::TEXT, p.id, p.name, NULL, p.image_url,
-            p.stock, p.cpp, p.low_stock_threshold,
+            p.stock, p.cpp, p.sale_price, p.low_stock_threshold,
             COALESCE((SELECT units FROM vendido WHERE product_id = p.id AND variant_id IS NULL), 0),
             (SELECT last_sale FROM ultima_venta WHERE product_id = p.id AND variant_id IS NULL),
             COALESCE((SELECT owned_since FROM desde WHERE product_id = p.id AND variant_id IS NULL), p.created_at)
@@ -113,6 +114,8 @@ BEGIN
         'coverageDays', v_days,
         'idleDays',  p_idle_days,
         'value',     COALESCE(SUM(GREATEST(stock, 0) * cost), 0),
+        -- Lo mismo pero a lo que lo vendes, no a lo que te costó
+        'retailValue', COALESCE(SUM(GREATEST(stock, 0) * COALESCE(price, 0)), 0),
         'units',     COALESCE(SUM(GREATEST(stock, 0)), 0),
         -- Cuánto sale al día, para saber cuánto dura la bodega
         'soldUnits30', COALESCE(SUM(sold_30d), 0),

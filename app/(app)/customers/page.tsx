@@ -1,15 +1,17 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { capitalizeFirst } from '@/lib/format/text'
 import { formatCOP } from '@/lib/utils'
-import { Plus, Users, Search, X } from 'lucide-react'
+import { Plus, Users, Search, X, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import type { Customer } from '@/lib/types'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToulData, useStore } from '@/lib/hooks/useData'
+import { Sheet } from '@/components/isla/Sheet'
+import { explainError } from '@/lib/errors'
 
 const supabase = createClient()
 
@@ -41,6 +43,31 @@ export default function CustomersPage() {
 
     const [search, setSearch] = useState('')
     const [filtro, setFiltro] = useState<Filtro>('todos')
+    const [dupOpen, setDupOpen] = useState(false)
+    const [merging, setMerging] = useState<string | null>(null)
+
+    // Antes, escribir el nombre en la caja creaba un cliente nuevo
+    // cada vez. Esto encuentra los que quedaron partidos.
+    const repetidos = useMemo(() => {
+        const grupos = new Map<string, Customer[]>()
+        for (const c of customers || []) {
+            const clave = c.name.trim().toLowerCase().replace(/\s+/g, ' ')
+            grupos.set(clave, [...(grupos.get(clave) ?? []), c])
+        }
+        return [...grupos.values()].filter(g => g.length > 1)
+    }, [customers])
+
+    async function unir(grupo: Customer[]) {
+        const [quedarse, ...resto] = grupo
+        setMerging(quedarse.id)
+        for (const otro of resto) {
+            const { error } = await supabase.rpc('toul_merge_customers', { p_keep: quedarse.id, p_merge: otro.id })
+            if (error) { toast.error(explainError(error, 'No se pudieron unir.')); setMerging(null); return }
+        }
+        setMerging(null)
+        await mutate()
+        toast.success(`${quedarse.name} quedó en un solo registro`)
+    }
 
     // Desde el inicio se puede llegar directo a los que deben
     useEffect(() => {
@@ -151,6 +178,55 @@ export default function CustomersPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Clientes repetidos */}
+            {repetidos.length > 0 && (
+                <motion.button variants={fadeUp} initial="hidden" animate="visible"
+                    onClick={() => setDupOpen(true)}
+                    style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12,
+                        padding: '12px 14px', borderRadius: 16, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                        background: 'var(--toul-warning-dim)', border: '1px solid rgba(255,214,10,0.25)',
+                    }}>
+                    <AlertTriangle size={18} style={{ color: 'var(--toul-warning)', flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: 'var(--toul-text)' }}>
+                            {repetidos.length} {repetidos.length === 1 ? 'cliente está repetido' : 'clientes están repetidos'}
+                        </span>
+                        <span style={{ display: 'block', fontSize: 12, color: 'var(--toul-text-dim)', lineHeight: 1.45 }}>
+                            Su deuda y sus ventas quedaron partidas. Toca para unirlos.
+                        </span>
+                    </span>
+                </motion.button>
+            )}
+
+            <Sheet open={dupOpen} onClose={() => setDupOpen(false)}
+                title="Clientes repetidos"
+                subtitle="Al unirlos, sus ventas y su deuda quedan en un solo registro.">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 360, overflowY: 'auto' }}>
+                    {repetidos.map(grupo => (
+                        <div key={grupo[0].id} className="toul-card" style={{ padding: '12px 14px' }}>
+                            <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>{grupo[0].name}</p>
+                            <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '2px 0 10px' }}>
+                                {grupo.length} registros · {formatCOP(grupo.reduce((sum, c) => sum + Number(c.total_debt), 0))} en total
+                            </p>
+                            <button onClick={() => unir(grupo)} disabled={merging === grupo[0].id}
+                                style={{
+                                    height: 38, padding: '0 14px', borderRadius: 11, border: 'none', cursor: 'pointer',
+                                    fontFamily: 'inherit', fontSize: 13.5, fontWeight: 600,
+                                    background: 'var(--toul-accent)', color: '#000',
+                                }}>
+                                {merging === grupo[0].id ? 'Uniendo…' : 'Unir en uno solo'}
+                            </button>
+                        </div>
+                    ))}
+                    {repetidos.length === 0 && (
+                        <p style={{ fontSize: 13.5, color: 'var(--toul-text-dim)', textAlign: 'center', padding: '20px 10px', margin: 0 }}>
+                            Ya no hay clientes repetidos.
+                        </p>
+                    )}
+                </div>
+            </Sheet>
 
             {/* Filtros */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible"

@@ -3,9 +3,12 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { Clock, X, Printer, Ban, Search, SlidersHorizontal } from 'lucide-react'
+import { Clock, X, Printer, Ban, Search, SlidersHorizontal, UserRound } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
+import { Sheet } from '@/components/isla/Sheet'
+import { PANEL_CSS } from '@/components/dashboard/panelStyles'
+import { explainError } from '@/lib/errors'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
 import type { SaleVoid } from '@/lib/isla/types'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -77,6 +80,33 @@ export default function VentasPage() {
     const [hasMore, setHasMore] = useState(true)
     // Las ventas siguen cargando solas al llegar al final de la lista
     const sentinelRef = useRef<HTMLDivElement | null>(null)
+    const [customerEdit, setCustomerEdit] = useState<VentaData | null>(null)
+    const [savingCustomer, setSavingCustomer] = useState(false)
+
+    const { data: customerList } = useSWR(
+        storeId && customerEdit ? ['clientes-venta', storeId] : null,
+        async () => {
+            const { data } = await supabase.from('customers')
+                .select('id, name, total_debt').eq('store_id', storeId!).eq('is_active', true).order('name')
+            return data ?? []
+        },
+        { revalidateOnFocus: false },
+    )
+
+    async function changeSaleCustomer(customerId: string | null) {
+        if (!customerEdit) return
+        setSavingCustomer(true)
+        const { data, error } = await supabase.rpc('toul_change_sale_customer', {
+            p_sale_id: customerEdit.id,
+            p_customer_id: customerId,
+        })
+        setSavingCustomer(false)
+        if (error) { toast.error(explainError(error, 'No se pudo cambiar el cliente.')); return }
+        setCustomerEdit(null)
+        setSelectedSale(null)
+        mutate()
+        toast.success(data?.name ? `La venta quedó a nombre de ${data.name}` : 'Venta sin cliente')
+    }
     const [view, setView] = useState<'ventas' | 'anuladas'>('ventas')
     const [seller, setSeller] = useState<string>('todos')
     const [kind, setKind] = useState<Kind>('todas')
@@ -519,6 +549,19 @@ export default function VentasPage() {
                                     <X size={16} />
                                 </button>
                             </div>
+                            {/* A quién fue: se puede corregir después */}
+                            <div className="px-5 pt-4" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <p style={{ fontSize: 11.5, color: 'var(--toul-text-dim)', margin: 0 }}>Cliente</p>
+                                    <p style={{ fontSize: 14.5, fontWeight: 600, color: selectedSale.customer_name ? 'var(--toul-text)' : 'var(--toul-text-dim)', margin: 0 }}>
+                                        {selectedSale.customer_name || 'Sin cliente'}
+                                    </p>
+                                </div>
+                                <button onClick={() => setCustomerEdit(selectedSale)} className="pnl-pill">
+                                    <UserRound size={13} /> Cambiar
+                                </button>
+                            </div>
+
                             <div className="px-5 py-4 flex flex-col gap-2">
                                 {selectedSale.sale_items.map((item, i) => (
                                     <div key={i} className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid var(--toul-border)' }}>
@@ -608,6 +651,40 @@ export default function VentasPage() {
                     </div>
                 )}
             </AnimatePresence>
+
+            {/* Corregir a quién se le vendió */}
+            <Sheet
+                open={!!customerEdit}
+                onClose={() => setCustomerEdit(null)}
+                title="¿A quién fue esta venta?"
+                subtitle={customerEdit ? formatCOP(customerEdit.total) : undefined}>
+                <style>{PANEL_CSS}</style>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 340, overflowY: 'auto' }}>
+                    {!customerEdit?.is_credit && (
+                        <button className="pnl-row" style={{ border: '1px solid var(--toul-border)', background: 'var(--toul-surface)' }}
+                            disabled={savingCustomer} onClick={() => changeSaleCustomer(null)}>
+                            <span style={{ flex: 1, fontSize: 14.5, color: 'var(--toul-text-dim)', textAlign: 'left' }}>Sin cliente</span>
+                        </button>
+                    )}
+                    {(customerList ?? []).map(person => (
+                        <button key={person.id} className="pnl-row"
+                            style={{ border: '1px solid var(--toul-border)', background: 'var(--toul-surface)' }}
+                            disabled={savingCustomer} onClick={() => changeSaleCustomer(person.id)}>
+                            <span style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', textAlign: 'left' }}>
+                                {person.name}
+                            </span>
+                            {Number(person.total_debt) > 0 && (
+                                <span style={{ fontSize: 12.5, color: 'var(--toul-warning)' }}>debe {formatCOP(Number(person.total_debt))}</span>
+                            )}
+                        </button>
+                    ))}
+                    {customerEdit?.is_credit && (
+                        <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '4px 2px 0', lineHeight: 1.5 }}>
+                            Esta venta fue a crédito: al cambiar el cliente, la deuda se le pasa al nuevo.
+                        </p>
+                    )}
+                </div>
+            </Sheet>
 
             {selectedSale && (
                 <VoidSaleDialog
