@@ -51,6 +51,7 @@ interface VentaData {
     discount: number
     payment_method: string
     is_credit: boolean
+    customer_id: string | null
     customer_name: string | null
     seller_name?: string | null
     cash_session_id?: string | null
@@ -105,7 +106,17 @@ export default function VentasPage() {
         setCustomerEdit(null)
         setSelectedSale(null)
         mutate()
-        toast.success(data?.name ? `La venta quedó a nombre de ${data.name}` : 'Venta sin cliente')
+
+        if (data?.changed === false) {
+            toast('Esa venta ya estaba a nombre de ese cliente')
+        } else if (customerId === null) {
+            toast.success('La venta quedó sin cliente')
+        } else {
+            const movida = Number(data?.movedDebt ?? 0)
+            toast.success(movida > 0
+                ? `La venta quedó a nombre de ${data?.name}. Se le pasaron ${formatCOP(movida)} de deuda.`
+                : `La venta quedó a nombre de ${data?.name}`)
+        }
     }
     const [view, setView] = useState<'ventas' | 'anuladas'>('ventas')
     const [seller, setSeller] = useState<string>('todos')
@@ -121,7 +132,7 @@ export default function VentasPage() {
         async () => {
             const range = getRange(period, fromDate, toDate)
             // seller_name existe desde migration_v10 (modo isla); si falta, se reintenta sin él
-            const baseSelect = 'id, created_at, total, discount, payment_method, is_credit, customer_name, cash_session_id, sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url)), sale_payments(amount, payment_methods(name))'
+            const baseSelect = 'id, created_at, total, discount, payment_method, is_credit, customer_id, customer_name, cash_session_id, sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url)), sale_payments(amount, payment_methods(name))'
             const run = (select: string) => {
                 let q = supabase.from('sales')
                     .select(select)
@@ -556,6 +567,12 @@ export default function VentasPage() {
                                     <p style={{ fontSize: 14.5, fontWeight: 600, color: selectedSale.customer_name ? 'var(--toul-text)' : 'var(--toul-text-dim)', margin: 0 }}>
                                         {selectedSale.customer_name || 'Sin cliente'}
                                     </p>
+                                    {selectedSale.customer_id && (
+                                        <Link href={`/customers/${selectedSale.customer_id}`}
+                                            style={{ fontSize: 11.5, color: 'var(--toul-accent)', textDecoration: 'none' }}>
+                                            Ver su ficha →
+                                        </Link>
+                                    )}
                                 </div>
                                 <button onClick={() => setCustomerEdit(selectedSale)} className="pnl-pill">
                                     <UserRound size={13} /> Cambiar
@@ -666,18 +683,33 @@ export default function VentasPage() {
                             <span style={{ flex: 1, fontSize: 14.5, color: 'var(--toul-text-dim)', textAlign: 'left' }}>Sin cliente</span>
                         </button>
                     )}
-                    {(customerList ?? []).map(person => (
-                        <button key={person.id} className="pnl-row"
-                            style={{ border: '1px solid var(--toul-border)', background: 'var(--toul-surface)' }}
-                            disabled={savingCustomer} onClick={() => changeSaleCustomer(person.id)}>
-                            <span style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', textAlign: 'left' }}>
-                                {person.name}
-                            </span>
-                            {Number(person.total_debt) > 0 && (
-                                <span style={{ fontSize: 12.5, color: 'var(--toul-warning)' }}>debe {formatCOP(Number(person.total_debt))}</span>
-                            )}
-                        </button>
-                    ))}
+                    {(customerList ?? []).map(person => {
+                        const actual = customerEdit?.customer_id === person.id
+                        return (
+                            <button key={person.id} className="pnl-row"
+                                style={{
+                                    border: `1px solid ${actual ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
+                                    background: actual ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
+                                }}
+                                disabled={savingCustomer || actual} onClick={() => changeSaleCustomer(person.id)}>
+                                <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                                    <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600, color: actual ? 'var(--toul-accent)' : 'var(--toul-text)' }}>
+                                        {person.name}
+                                    </span>
+                                    {actual && (
+                                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-accent)' }}>
+                                            esta venta ya es de esta persona
+                                        </span>
+                                    )}
+                                </span>
+                                {Number(person.total_debt) > 0 && (
+                                    <span style={{ fontSize: 12.5, color: 'var(--toul-warning)', flexShrink: 0 }}>
+                                        debe {formatCOP(Number(person.total_debt))}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
                     {customerEdit?.is_credit && (
                         <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '4px 2px 0', lineHeight: 1.5 }}>
                             Esta venta fue a crédito: al cambiar el cliente, la deuda se le pasa al nuevo.
