@@ -622,12 +622,17 @@ export default function VentasPage() {
                                     </div>
                                 )}
                                 {selectedSale.is_credit && (
+                                    /* Antes decía "$X pendiente", pero solo restaba el abono
+                                       del momento de la venta: los abonos posteriores van
+                                       contra el cliente, no contra la venta. Una venta ya
+                                       pagada seguía diciendo que se debía toda. El saldo de
+                                       verdad está en la ficha del cliente. */
                                     <div className="flex justify-between">
                                         <span className="text-sm" style={{ color: 'var(--toul-info)' }}>
-                                            Crédito{selectedSale.customer_name ? ` — ${selectedSale.customer_name}` : ''}
+                                            Quedó fiado{selectedSale.customer_name ? ` a ${selectedSale.customer_name}` : ''}
                                         </span>
                                         <span className="text-sm font-medium" style={{ color: 'var(--toul-info)' }}>
-                                            {formatCOP(Math.max(0, selectedSale.total - (selectedSale.sale_payments ?? []).reduce((s, p) => s + Number(p.amount), 0)))} pendiente
+                                            {formatCOP(Math.max(0, selectedSale.total - (selectedSale.sale_payments ?? []).reduce((s, p) => s + Number(p.amount), 0)))}
                                         </span>
                                     </div>
                                 )}

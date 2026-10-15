@@ -76,6 +76,13 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         return Math.max(Math.round(total), 0)
     }, [data?.movimientos])
 
+    // Una venta a crédito siempre deja su fiado. Si falta, hay que
+    // decirlo: es la única forma de que no se pierda de vista.
+    const ventasSinMovimiento = useMemo(() => {
+        const conMovimiento = new Set((data?.movimientos ?? []).filter(m => m.sale_id).map(m => m.sale_id as string))
+        return (data?.ventas ?? []).filter(v => v.is_credit && !conMovimiento.has(v.id))
+    }, [data?.movimientos, data?.ventas])
+
     if (isLoading || !data) {
         return <div className="px-4 pt-6 max-w-2xl mx-auto"><div className="skeleton" style={{ height: 180, borderRadius: 20 }} /></div>
     }
@@ -201,6 +208,20 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                     <button onClick={cuadrar} disabled={fixing} className="pnl-pill">
                         <Wrench size={13} /> {fixing ? 'Cuadrando…' : 'Cuadrar'}
                     </button>
+                </div>
+            )}
+
+            {ventasSinMovimiento.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, padding: '13px 15px', borderRadius: 16, background: 'var(--toul-warning-dim)', border: '1px solid rgba(255,214,10,0.25)' }}>
+                    <AlertTriangle size={18} style={{ color: 'var(--toul-warning)', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
+                            {ventasSinMovimiento.length} {ventasSinMovimiento.length === 1 ? 'venta a crédito sin fiado' : 'ventas a crédito sin fiado'}
+                        </p>
+                        <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: '2px 0 0', lineHeight: 1.45 }}>
+                            Está en sus compras pero no sumó a la deuda. Ábrela abajo y avísame.
+                        </p>
+                    </div>
                 </div>
             )}
 
