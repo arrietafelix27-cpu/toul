@@ -178,3 +178,59 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION toul_change_sale_customer(UUID, UUID) TO authenticated;
+
+-- ── 4. Cuadrar la deuda con los movimientos ──────────────────────
+-- La deuda vive en un campo aparte y se iba actualizando a mano
+-- desde el navegador: si una de las escrituras fallaba, o la
+-- pantalla llevaba rato abierta, el número quedaba desfasado.
+-- Esto la vuelve a calcular desde los movimientos, que son la
+-- verdad: fiados menos abonos menos anulaciones.
+CREATE OR REPLACE FUNCTION toul_recalc_customer_debt(p_customer_id UUID DEFAULT NULL)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+    v_store   UUID;
+    v_result  JSONB;
+BEGIN
+    SELECT id INTO v_store FROM stores WHERE owner_id = auth.uid() LIMIT 1;
+    IF v_store IS NULL THEN RAISE EXCEPTION 'Unauthorized'; END IF;
+
+    WITH real AS (
+        SELECT c.id,
+               c.name,
+               COALESCE(c.total_debt, 0) AS antes,
+               GREATEST(COALESCE((
+                   SELECT SUM(CASE WHEN cr.type = 'debt' THEN cr.amount ELSE -cr.amount END)
+                     FROM credits cr
+                    WHERE cr.customer_id = c.id AND cr.store_id = v_store
+               ), 0), 0) AS despues
+          FROM customers c
+         WHERE c.store_id = v_store
+           AND (p_customer_id IS NULL OR c.id = p_customer_id)
+    ),
+    cambiados AS (
+        SELECT * FROM real WHERE antes <> despues
+    ),
+    aplicado AS (
+        UPDATE customers c
+           SET total_debt = r.despues
+          FROM cambiados r
+         WHERE c.id = r.id AND c.store_id = v_store
+        RETURNING c.id
+    )
+    SELECT jsonb_build_object(
+        'fixed', (SELECT COUNT(*) FROM aplicado),
+        'changes', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('name', name, 'antes', antes, 'despues', despues))
+            FROM cambiados
+        ), '[]'::JSONB)
+    ) INTO v_result;
+
+    RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION toul_recalc_customer_debt(UUID) TO authenticated;

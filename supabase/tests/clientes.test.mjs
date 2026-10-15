@@ -61,5 +61,25 @@ export default async function (db) {
   const sinCliente = await err(() => as(O, () => q(`SELECT toul_change_sale_customer($1,NULL)`, [v2.id])))
   ok(sinCliente !== null, 'una venta a crédito no se puede dejar sin cliente')
 
+  console.log('\n— Cuadrar una deuda que quedó desfasada')
+  const [desc] = await q(`INSERT INTO customers(store_id,name,total_debt) VALUES ($1,'Daneys',999999) RETURNING id`, [STORE])
+  const [vd] = await q(`INSERT INTO sales(store_id,customer_id,total,is_credit) VALUES ($1,$2,300000,true) RETURNING id`, [STORE, desc.id])
+  await q(`INSERT INTO credits(store_id,customer_id,sale_id,type,amount) VALUES ($1,$2,$3,'debt',300000)`, [STORE, desc.id, vd.id])
+  await q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'payment',100000)`, [STORE, desc.id])
+
+  const fix = await as(O, async () => (await one(`SELECT toul_recalc_customer_debt($1) r`, [desc.id])).r)
+  ok(Number(fix.fixed) === 1, 'detecta que la ficha no cuadra con los movimientos')
+  ok(Number((await one(`SELECT total_debt FROM customers WHERE id=$1`, [desc.id])).total_debt) === 200000,
+     'la deja en $200.000: $300.000 fiados menos $100.000 abonados')
+
+  const otraVez = await as(O, async () => (await one(`SELECT toul_recalc_customer_debt($1) r`, [desc.id])).r)
+  ok(Number(otraVez.fixed) === 0, 'si ya cuadra, no toca nada')
+
+  console.log('\n— Una anulación también descuenta')
+  await q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'void',200000)`, [STORE, desc.id])
+  await as(O, () => q(`SELECT toul_recalc_customer_debt($1)`, [desc.id]))
+  ok(Number((await one(`SELECT total_debt FROM customers WHERE id=$1`, [desc.id])).total_debt) === 0,
+     'queda en cero después de anular lo que faltaba')
+
   return { fails }
 }

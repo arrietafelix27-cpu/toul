@@ -4,7 +4,7 @@ import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { capitalizeFirst } from '@/lib/format/text'
 import { formatCOP } from '@/lib/utils'
-import { Plus, Users, Search, X, AlertTriangle } from 'lucide-react'
+import { Plus, Users, Search, X, AlertTriangle, Wrench } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import type { Customer } from '@/lib/types'
@@ -45,6 +45,22 @@ export default function CustomersPage() {
     const [filtro, setFiltro] = useState<Filtro>('todos')
     const [dupOpen, setDupOpen] = useState(false)
     const [merging, setMerging] = useState<string | null>(null)
+    const [cuadrando, setCuadrando] = useState(false)
+
+    // Revisa todas las fichas contra sus movimientos y arregla las
+    // que no cuadren. Las deudas se escribían a mano desde el
+    // navegador y podían quedar desfasadas.
+    async function cuadrarTodo() {
+        setCuadrando(true)
+        const { data, error } = await supabase.rpc('toul_recalc_customer_debt', { p_customer_id: null })
+        setCuadrando(false)
+        if (error) { toast.error(explainError(error)); return }
+        await mutate()
+        const fixed = Number(data?.fixed ?? 0)
+        toast.success(fixed === 0
+            ? 'Todas las deudas ya cuadraban'
+            : `${fixed} ${fixed === 1 ? 'deuda quedó al día' : 'deudas quedaron al día'}`)
+    }
 
     // Antes, escribir el nombre en la caja creaba un cliente nuevo
     // cada vez. Esto encuentra los que quedaron partidos.
@@ -157,7 +173,20 @@ export default function CustomersPage() {
                 {isLoading ? <Skeleton height="2rem" width="120px" className="rounded-lg mb-1" /> : (
                     <p className="text-3xl font-bold" style={{ color: totalDebt > 0 ? '#EF4444' : 'var(--toul-text)' }}>{formatCOP(totalDebt)}</p>
                 )}
-                <p className="text-xs mt-0.5" style={{ color: 'var(--toul-text-subtle)' }}>{(customers || []).filter(c => c.total_debt > 0).length} clientes con saldo pendiente</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 2 }}>
+                    <p className="text-xs" style={{ color: 'var(--toul-text-subtle)', margin: 0 }}>
+                        {(customers || []).filter(c => c.total_debt > 0).length} clientes con saldo pendiente
+                    </p>
+                    <button onClick={cuadrarTodo} disabled={cuadrando}
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                            height: 28, padding: '0 11px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit',
+                            background: 'rgba(255,255,255,0.055)', border: '1px solid rgba(255,255,255,0.1)',
+                            color: 'var(--toul-text-muted)', fontSize: 11.5, fontWeight: 600,
+                        }}>
+                        <Wrench size={12} /> {cuadrando ? 'Cuadrando…' : 'Cuadrar deudas'}
+                    </button>
+                </div>
             </motion.div>
 
             {/* Form */}
