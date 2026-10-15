@@ -65,16 +65,37 @@ export default function CustomersPage() {
     // Antes, escribir el nombre en la caja creaba un cliente nuevo
     // cada vez. Esto encuentra los que quedaron partidos.
     const repetidos = useMemo(() => {
-        const grupos = new Map<string, Customer[]>()
-        for (const c of customers || []) {
-            const clave = c.name.trim().toLowerCase().replace(/\s+/g, ' ')
-            grupos.set(clave, [...(grupos.get(clave) ?? []), c])
+        const lista = [...(customers || [])]
+        const norm = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ')
+        const tel = (t: string | null) => (t ?? '').replace(/\D/g, '')
+
+        // Es la misma persona si coincide el nombre, el teléfono, o si
+        // un nombre es el comienzo del otro: "Daneys" y "Daneys Arteta"
+        const mismaPersona = (a: Customer, b: Customer) => {
+            const na = norm(a.name), nb = norm(b.name)
+            if (na === nb) return true
+            const ta = tel(a.phone), tb = tel(b.phone)
+            if (ta && ta === tb) return true
+            const corto = na.length <= nb.length ? na : nb
+            const largo = na.length <= nb.length ? nb : na
+            return corto.length >= 3 && largo.startsWith(corto + ' ')
         }
-        return [...grupos.values()].filter(g => g.length > 1)
+
+        const grupos: Customer[][] = []
+        const usados = new Set<string>()
+        for (const base of lista) {
+            if (usados.has(base.id)) continue
+            const grupo = lista.filter(otro => !usados.has(otro.id) && (otro.id === base.id || mismaPersona(base, otro)))
+            grupo.forEach(c => usados.add(c.id))
+            if (grupo.length > 1) grupos.push(grupo)
+        }
+        return grupos
     }, [customers])
 
     async function unir(grupo: Customer[]) {
-        const [quedarse, ...resto] = grupo
+        // Se queda el nombre más completo: "Daneys Arteta" sobre "Daneys"
+        const ordenado = [...grupo].sort((a, b) => b.name.trim().length - a.name.trim().length)
+        const [quedarse, ...resto] = ordenado
         setMerging(quedarse.id)
         for (const otro of resto) {
             const { error } = await supabase.rpc('toul_merge_customers', { p_keep: quedarse.id, p_merge: otro.id })
@@ -235,8 +256,13 @@ export default function CustomersPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 360, overflowY: 'auto' }}>
                     {repetidos.map(grupo => (
                         <div key={grupo[0].id} className="toul-card" style={{ padding: '12px 14px' }}>
-                            <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>{grupo[0].name}</p>
-                            <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '2px 0 10px' }}>
+                            <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
+                                {[...grupo].sort((a, b) => b.name.trim().length - a.name.trim().length)[0].name}
+                            </p>
+                            <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '2px 0 4px' }}>
+                                {grupo.map(c => c.name).join(' · ')}
+                            </p>
+                            <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '0 0 10px' }}>
                                 {grupo.length} registros · {formatCOP(grupo.reduce((sum, c) => sum + Number(c.total_debt), 0))} en total
                             </p>
                             <button onClick={() => unir(grupo)} disabled={merging === grupo[0].id}
