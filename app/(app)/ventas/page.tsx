@@ -511,6 +511,7 @@ export default function VentasPage() {
                                         <p className="font-semibold text-sm truncate" style={{ color: 'var(--toul-text)' }}>{summary}{more}</p>
                                         <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>
                                             {formatDateTime(sale.created_at)} · {methodLabel(sale.payment_method)}
+                                            <span style={{ color: 'var(--toul-text-faint)' }}> · #{sale.id.slice(0, 8).toUpperCase()}</span>
                                             {sale.seller_name && sale.seller_name !== 'Administrador' && <span> · {sale.seller_name}</span>}
                                             {sale.is_credit && <span style={{ color: '#00E5A0', fontWeight: 600 }}> · Crédito</span>}
                                             {sale.is_credit && sale.customer_name && <span style={{ color: 'var(--toul-text-muted)' }}> — {sale.customer_name}</span>}

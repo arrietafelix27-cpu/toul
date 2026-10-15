@@ -38,6 +38,9 @@ const LABEL: Record<string, string> = {
     void: 'Venta anulada',
 }
 
+/** Las ventas se identifican por sus 8 primeros caracteres */
+const numero = (id: string) => `#${id.slice(0, 8).toUpperCase()}`
+
 const fecha = (iso: string) =>
     new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
@@ -251,7 +254,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                                             {LABEL[m.type] ?? 'Movimiento'}
                                         </span>
                                         <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {fecha(m.created_at)}
+                                            {fecha(m.created_at)}{m.sale_id ? ` · ${numero(m.sale_id)}` : ''}
                                         </span>
                                     </span>
                                     <span style={{ fontSize: 14.5, fontWeight: 700, flexShrink: 0, color: esFiado ? 'var(--toul-error)' : 'var(--toul-accent)' }}>
@@ -278,9 +281,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                                     <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--toul-text)' }}>
                                         {fecha(v.created_at)}
                                     </span>
-                                    {v.is_credit && (
-                                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-warning)' }}>a crédito</span>
-                                    )}
+                                    <span style={{ display: 'block', fontSize: 11.5, color: v.is_credit ? 'var(--toul-warning)' : 'var(--toul-text-dim)' }}>
+                                        {numero(v.id)}{v.is_credit ? ' · a crédito' : ''}
+                                    </span>
                                 </span>
                                 <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--toul-text)' }}>
                                     {formatCOP(Number(v.total))}
