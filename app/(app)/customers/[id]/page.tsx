@@ -12,6 +12,9 @@ import { capitalizeFirst, onlyDigits, withThousands } from '@/lib/format/text'
 import { Sheet } from '@/components/isla/Sheet'
 import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
+import { SaleDetail } from '@/components/ventas/SaleDetail'
+import { SALE_DETAIL_SELECT } from '@/lib/types'
+import type { SaleDetailData } from '@/lib/types'
 import { explainError } from '@/lib/errors'
 
 const supabase = createClient()
@@ -66,6 +69,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     const [removeOpen, setRemoveOpen] = useState(false)
     const [removing, setRemoving] = useState(false)
     const [fixing, setFixing] = useState(false)
+    const [venta, setVenta] = useState<SaleDetailData | null>(null)
+    const [abriendo, setAbriendo] = useState<string | null>(null)
     const [nota, setNota] = useState<string | null>(null)
     const [notaSaving, setNotaSaving] = useState(false)
 
@@ -154,6 +159,20 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         setRemoveOpen(false)
         toast.success(res?.deleted ? `${res.name} fue borrado` : `${res?.name ?? 'El cliente'} ya no aparece en la lista`)
         router.push('/customers')
+    }
+
+    // El resumen se pide cuando lo tocas, no al abrir la ficha: un
+    // cliente con cuarenta compras la volvería lenta de entrada
+    async function abrirVenta(saleId: string) {
+        setAbriendo(saleId)
+        const pedir = (select: string) =>
+            supabase.from('sales').select(select).eq('id', saleId).single()
+        // seller_name existe desde el modo isla; si falta, se reintenta sin él
+        let { data, error } = await pedir(`${SALE_DETAIL_SELECT}, seller_name`)
+        if (error) ({ data, error } = await pedir(SALE_DETAIL_SELECT))
+        setAbriendo(null)
+        if (error || !data) { toast.error('No se pudo abrir esa venta'); return }
+        setVenta(data as unknown as SaleDetailData)
     }
 
     // Lo que no cabe en ningún campo: "la mamá de Juan",
@@ -385,7 +404,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                                 </>
                             )
                             return m.sale_id
-                                ? <Link key={m.id} href={`/ventas?venta=${m.sale_id}`} className="pnl-row">{row}</Link>
+                                ? <button key={m.id} className="pnl-row" style={{ border: 'none', background: 'none', font: 'inherit', textAlign: 'left', width: '100%' }}
+                                    disabled={abriendo === m.sale_id}
+                                    onClick={() => abrirVenta(m.sale_id!)}>{row}</button>
                                 : <div key={m.id} className="pnl-row" style={{ cursor: 'default' }}>{row}</div>
                         })}
                     </div>
@@ -398,7 +419,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                     <p className="pnl-label" style={{ marginBottom: 8 }}>Sus compras</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                         {data.ventas.map(v => (
-                            <Link key={v.id} href={`/ventas?venta=${v.id}`} className="pnl-row">
+                            <button key={v.id} className="pnl-row"
+                                style={{ border: 'none', background: 'none', font: 'inherit', textAlign: 'left', width: '100%' }}
+                                disabled={abriendo === v.id}
+                                onClick={() => abrirVenta(v.id)}>
                                 <span style={{ flex: 1, minWidth: 0 }}>
                                     <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--toul-text)' }}>
                                         {fecha(v.created_at)}
@@ -408,9 +432,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                                     </span>
                                 </span>
                                 <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--toul-text)' }}>
-                                    {formatCOP(Number(v.total))}
+                                    {abriendo === v.id ? '…' : formatCOP(Number(v.total))}
                                 </span>
-                            </Link>
+                            </button>
                         ))}
                     </div>
                 </section>
@@ -445,6 +469,16 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                     Abonó todo ({formatCOP(calculada)})
                 </button>
             </Sheet>
+
+            {/* El mismo resumen que se abre desde Ventas. Sin el bloque de
+                cliente, que aquí sobra, y sin anular: eso mueve inventario,
+                caja y deuda, y se queda en Ventas. */}
+            <SaleDetail
+                sale={venta}
+                onClose={() => setVenta(null)}
+                mostrarCliente={false}
+                verEnVentas
+            />
 
             <ConfirmSheet
                 open={removeOpen}

@@ -352,3 +352,35 @@ export const PAYMENT_METHODS: { value: PaymentMethod; label: string; color: stri
     { value: 'capital', label: 'Capital Propio', color: '#6366F1' },
 ]
 
+
+/* ── El detalle de una venta ──────────────────────────────────────
+   Lo usan el historial de ventas y la ficha del cliente: las dos
+   pantallas abren el mismo resumen. */
+export interface SaleItemDetail {
+    product_id: string
+    quantity: number
+    unit_price: number
+    unit_cost: number
+    products: { name: string; image_url: string | null } | null
+}
+
+export interface SaleDetailData {
+    id: string
+    created_at: string
+    total: number
+    discount: number
+    payment_method: string
+    is_credit: boolean
+    customer_id: string | null
+    customer_name: string | null
+    seller_name?: string | null
+    cash_session_id?: string | null
+    sale_items: SaleItemDetail[]
+    sale_payments?: { amount: number; payment_methods: { name: string } | null }[]
+}
+
+/** Lo que se pide a la base para pintar ese resumen */
+export const SALE_DETAIL_SELECT =
+    'id, created_at, total, discount, payment_method, is_credit, customer_id, customer_name, cash_session_id, ' +
+    'sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url)), ' +
+    'sale_payments(amount, payment_methods(name))'

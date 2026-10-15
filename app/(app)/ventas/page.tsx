@@ -3,20 +3,21 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { Clock, X, Printer, Ban, Search, SlidersHorizontal, UserRound } from 'lucide-react'
+import { Clock, Ban, Search, SlidersHorizontal } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
 import { Sheet } from '@/components/isla/Sheet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { explainError } from '@/lib/errors'
-import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
 import type { SaleVoid } from '@/lib/isla/types'
 import { motion, AnimatePresence } from 'framer-motion'
-import { staggerContainer, staggerItem, fadeUp, t, panelVariants, backdropVariants } from '@/lib/motion'
+import { staggerContainer, staggerItem, fadeUp, t } from '@/lib/motion'
 import { Skeleton, EmptyState } from '@/components/ui/Skeleton'
 import { useStore } from '@/lib/hooks/useData'
 import useSWR from 'swr'
-import type { Sale } from '@/lib/types'
+import type { SaleDetailData as VentaData } from '@/lib/types'
+import { SALE_DETAIL_SELECT } from '@/lib/types'
+import { SaleDetail } from '@/components/ventas/SaleDetail'
 
 type Period = 'today' | 'week' | 'month' | 'total' | 'custom'
 
@@ -35,29 +36,6 @@ function formatDateTime(iso: string) {
 }
 
 const PAGE_SIZE = 40
-
-interface SaleItem {
-    product_id: string
-    quantity: number
-    unit_price: number
-    unit_cost: number
-    products: { name: string; image_url: string | null } | null
-}
-
-interface VentaData {
-    id: string
-    created_at: string
-    total: number
-    discount: number
-    payment_method: string
-    is_credit: boolean
-    customer_id: string | null
-    customer_name: string | null
-    seller_name?: string | null
-    cash_session_id?: string | null
-    sale_items: SaleItem[]
-    sale_payments?: { amount: number; payment_methods: { name: string } | null }[]
-}
 
 type Kind = 'todas' | 'contado' | 'credito' | 'descuento'
 
@@ -124,7 +102,6 @@ export default function VentasPage() {
     const [query, setQuery] = useState('')
     const [showFilters, setShowFilters] = useState(false)
     const [voidOpen, setVoidOpen] = useState(false)
-    const [printing, setPrinting] = useState(false)
 
     // Using SWR for caching and consistency
     const { data: sales, isLoading, isValidating, mutate } = useSWR<VentaData[]>(
@@ -132,7 +109,7 @@ export default function VentasPage() {
         async () => {
             const range = getRange(period, fromDate, toDate)
             // seller_name existe desde migration_v10 (modo isla); si falta, se reintenta sin él
-            const baseSelect = 'id, created_at, total, discount, payment_method, is_credit, customer_id, customer_name, cash_session_id, sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url)), sale_payments(amount, payment_methods(name))'
+            const baseSelect = SALE_DETAIL_SELECT
             const run = (select: string) => {
                 let q = supabase.from('sales')
                     .select(select)
@@ -204,17 +181,6 @@ export default function VentasPage() {
         },
         { revalidateOnFocus: false }
     )
-
-    const handlePrint = async (saleId: string) => {
-        setPrinting(true)
-        try {
-            printReceipt(await loadReceiptData(supabase, saleId))
-        } catch {
-            toast.error('No se pudo preparar la tirilla')
-        } finally {
-            setPrinting(false)
-        }
-    }
 
     // Búsqueda por cliente o producto sobre las ventas del período
     const filtered = useMemo(() => {
@@ -537,143 +503,14 @@ export default function VentasPage() {
                 </>
             )}
 
-            {/* Sale detail modal */}
-            <AnimatePresence>
-                {selectedSale && (
-                    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-                        <motion.div className="absolute inset-0" onClick={() => setSelectedSale(null)}
-                            variants={backdropVariants} initial="hidden" animate="visible" exit="exit"
-                            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }} />
-                        <motion.div
-                            variants={panelVariants} initial="hidden" animate="visible" exit="exit"
-                            className="relative w-full md:w-[440px] rounded-t-3xl md:rounded-3xl shadow-2xl"
-                            style={{ background: 'var(--toul-bg)', border: '1px solid var(--toul-border)', maxHeight: '88dvh', overflowY: 'auto' }}>
-                            <div className="flex justify-center pt-3 pb-0 md:hidden">
-                                <div className="w-10 h-1 rounded-full" style={{ background: 'var(--toul-border)' }} />
-                            </div>
-                            <div className="flex items-center justify-between px-5 pt-4 pb-3" style={{ borderBottom: '1px solid var(--toul-border)' }}>
-                                <div>
-                                    <p className="text-xs font-medium" style={{ color: 'var(--toul-text-subtle)' }}>Detalle de venta</p>
-                                    <p className="font-bold" style={{ color: 'var(--toul-text)' }}>{formatDateTime(selectedSale.created_at)}</p>
-                                </div>
-                                <button onClick={() => setSelectedSale(null)} className="w-8 h-8 rounded-full flex items-center justify-center"
-                                    style={{ background: 'var(--toul-surface)', color: 'var(--toul-text-muted)' }}>
-                                    <X size={16} />
-                                </button>
-                            </div>
-                            {/* A quién fue: se puede corregir después */}
-                            <div className="px-5 pt-4" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <p style={{ fontSize: 11.5, color: 'var(--toul-text-dim)', margin: 0 }}>Cliente</p>
-                                    <p style={{ fontSize: 14.5, fontWeight: 600, color: selectedSale.customer_name ? 'var(--toul-text)' : 'var(--toul-text-dim)', margin: 0 }}>
-                                        {selectedSale.customer_name || 'Sin cliente'}
-                                    </p>
-                                    {selectedSale.customer_id && (
-                                        <Link href={`/customers/${selectedSale.customer_id}`}
-                                            style={{ fontSize: 11.5, color: 'var(--toul-accent)', textDecoration: 'none' }}>
-                                            Ver su ficha →
-                                        </Link>
-                                    )}
-                                </div>
-                                <button onClick={() => setCustomerEdit(selectedSale)} className="pnl-pill">
-                                    <UserRound size={13} /> Cambiar
-                                </button>
-                            </div>
-
-                            <div className="px-5 py-4 flex flex-col gap-2">
-                                {selectedSale.sale_items.map((item, i) => (
-                                    <div key={i} className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid var(--toul-border)' }}>
-                                        <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0" style={{ background: 'var(--toul-surface)' }}>
-                                            {item.products?.image_url ? (
-                                                <img src={item.products.image_url} className="w-full h-full object-cover" alt="" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-lg">📦</div>
-                                            )}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>{item.products?.name || 'Producto'}</p>
-                                            <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>{item.quantity} × {formatCOP(item.unit_price)}</p>
-                                        </div>
-                                        <p className="font-bold text-sm" style={{ color: 'var(--toul-text)' }}>{formatCOP(item.unit_price * item.quantity)}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="px-5 pb-6 flex flex-col gap-2">
-                                {selectedSale.discount > 0 && (
-                                    <div className="flex justify-between text-sm">
-                                        <span style={{ color: 'var(--toul-text-muted)' }}>Descuento</span>
-                                        <span style={{ color: '#F59E0B' }}>−{formatCOP(selectedSale.discount)}</span>
-                                    </div>
-                                )}
-                                {(selectedSale.sale_payments?.length ?? 0) > 0 ? (
-                                    selectedSale.sale_payments!.map((pay, i) => (
-                                        <div key={i} className="flex justify-between">
-                                            <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>
-                                                {pay.payment_methods?.name || 'Pago'}
-                                            </span>
-                                            <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>{formatCOP(pay.amount)}</span>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="flex justify-between">
-                                        <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Método</span>
-                                        <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>
-                                            {methodLabel(selectedSale.payment_method)}
-                                        </span>
-                                    </div>
-                                )}
-                                {selectedSale.is_credit && (
-                                    /* Antes decía "$X pendiente", pero solo restaba el abono
-                                       del momento de la venta: los abonos posteriores van
-                                       contra el cliente, no contra la venta. Una venta ya
-                                       pagada seguía diciendo que se debía toda. El saldo de
-                                       verdad está en la ficha del cliente. */
-                                    <div className="flex justify-between">
-                                        <span className="text-sm" style={{ color: 'var(--toul-info)' }}>
-                                            Quedó fiado{selectedSale.customer_name ? ` a ${selectedSale.customer_name}` : ''}
-                                        </span>
-                                        <span className="text-sm font-medium" style={{ color: 'var(--toul-info)' }}>
-                                            {formatCOP(Math.max(0, selectedSale.total - (selectedSale.sale_payments ?? []).reduce((s, p) => s + Number(p.amount), 0)))}
-                                        </span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between pt-2" style={{ borderTop: '1px solid var(--toul-border)' }}>
-                                    <span className="font-bold" style={{ color: 'var(--toul-text)' }}>Total</span>
-                                    <span className="text-xl font-bold" style={{ color: 'var(--toul-accent)' }}>{formatCOP(selectedSale.total)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Utilidad estimada</span>
-                                    <span className="font-semibold text-sm" style={{ color: 'var(--toul-accent)' }}>
-                                        {formatCOP(selectedSale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0))}
-                                    </span>
-                                </div>
-                                {selectedSale.seller_name && (
-                                    <div className="flex justify-between">
-                                        <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Vendió</span>
-                                        <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>
-                                            {selectedSale.seller_name}{selectedSale.cash_session_id ? ' · en la caja' : ''}
-                                        </span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between">
-                                    <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>N° de venta</span>
-                                    <span className="text-sm font-medium" style={{ color: 'var(--toul-text-muted)' }}>#{selectedSale.id.slice(0, 8).toUpperCase()}</span>
-                                </div>
-                                <div className="flex gap-2 pt-3">
-                                    <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-text)' }}
-                                        disabled={printing} onClick={() => handlePrint(selectedSale.id)}>
-                                        <Printer size={16} /> {printing ? 'Preparando…' : 'Tirilla'}
-                                    </button>
-                                    <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-error)' }}
-                                        onClick={() => setVoidOpen(true)}>
-                                        <Ban size={16} /> Anular
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            {/* El resumen vive en components/ventas: la ficha del cliente
+                abre exactamente este mismo */}
+            <SaleDetail
+                sale={selectedSale}
+                onClose={() => setSelectedSale(null)}
+                onChangeCustomer={setCustomerEdit}
+                onVoid={() => setVoidOpen(true)}
+            />
 
             {/* Corregir a quién se le vendió */}
             <Sheet
