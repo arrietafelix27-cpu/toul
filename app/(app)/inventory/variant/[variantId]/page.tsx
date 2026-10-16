@@ -26,7 +26,7 @@ export default function InventoryVariantPage({ params }: { params: Promise<{ var
 
         const [productRes, movementsRes, soldRes, storeRes] = await Promise.all([
             supabase.from('products').select('id, name, reference, image_url, images').eq('id', variant.product_id).single(),
-            supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at')
+            supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at, created_by_name')
                 .eq('variant_id', variantId).order('created_at', { ascending: false }).limit(10),
             supabase.from('sale_items').select('quantity, sales!inner(created_at)')
                 .eq('variant_id', variantId).gte('sales.created_at', since),
@@ -38,6 +38,7 @@ export default function InventoryVariantPage({ params }: { params: Promise<{ var
             label: row.notes || REASON_LABEL[row.reason] || 'Movimiento',
             quantity: Number(row.quantity),
             date: formatMovementDate(row.created_at),
+            author: row.created_by_name === 'Administrador' ? null : (row.created_by_name ?? null),
         }))
 
         return {

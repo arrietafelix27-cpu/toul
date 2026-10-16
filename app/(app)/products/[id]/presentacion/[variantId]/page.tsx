@@ -28,7 +28,7 @@ export default function PresentationDetailPage({ params }: { params: Promise<{ i
             supabase.from('products').select('id, name, reference, image_url, images, category:product_categories(name)').eq('id', id).single(),
             supabase.from('product_variants').select('id, name, sale_price, cpp, cost_price').eq('product_id', id).eq('is_active', true).order('name'),
             supabase.from('inventory_adjustments').select('variant_id, quantity').eq('product_id', id),
-            supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at').eq('variant_id', variantId).order('created_at', { ascending: false }).limit(8),
+            supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at, created_by_name').eq('variant_id', variantId).order('created_at', { ascending: false }).limit(8),
             supabase.from('sale_items').select('quantity, unit_price, sales!inner(created_at)').eq('variant_id', variantId).gte('sales.created_at', since),
         ])
 
@@ -53,7 +53,7 @@ export default function PresentationDetailPage({ params }: { params: Promise<{ i
                 href: `/products/${id}/presentacion/${v.id}`,
             }))
 
-        const movements: MovementLine[] = ((movementsRes.data ?? []) as { id: string; quantity: number; reason: string; notes: string | null; created_at: string }[])
+        const movements: MovementLine[] = ((movementsRes.data ?? []) as { id: string; quantity: number; reason: string; notes: string | null; created_at: string; created_by_name: string | null }[])
             .map(movement => ({
                 id: movement.id,
                 label: movement.notes || REASON_LABEL[movement.reason] || 'Movimiento',

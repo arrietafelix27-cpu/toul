@@ -26,6 +26,8 @@ export interface StockMovement {
     label: string
     quantity: number
     date: string
+    /** Quién lo movió */
+    author?: string | null
 }
 
 export interface StockDetailProps {
@@ -253,7 +255,9 @@ export function StockDetail(props: StockDetailProps) {
                                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--toul-divider)' : 'none' }}>
                                 <span style={{ minWidth: 0 }}>
                                     <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, color: 'var(--toul-text)' }}>{movement.label}</span>
-                                    <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-text-dim)' }}>{movement.date}</span>
+                                    <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-text-dim)' }}>
+                                        {movement.date}{movement.author ? ` · ${movement.author}` : ''}
+                                    </span>
                                 </span>
                                 <span style={{ fontSize: 14.5, fontWeight: 700, color: movement.quantity >= 0 ? 'var(--toul-accent)' : 'var(--toul-error)' }}>
                                     {movement.quantity >= 0 ? '+' : '−'}{Math.abs(movement.quantity)}

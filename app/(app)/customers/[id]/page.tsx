@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { AlertTriangle, ArrowLeft, Check, MessageCircle, Receipt, Share2, Trash2, Wrench } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Check, MessageCircle, Receipt, Share2, Trash2, Undo2, Wrench } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { capitalizeFirst, onlyDigits, withThousands } from '@/lib/format/text'
@@ -71,6 +71,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     const [fixing, setFixing] = useState(false)
     const [venta, setVenta] = useState<SaleDetailData | null>(null)
     const [abriendo, setAbriendo] = useState<string | null>(null)
+    const [deshacer, setDeshacer] = useState<Movimiento | null>(null)
+    const [deshaciendo, setDeshaciendo] = useState(false)
     const [nota, setNota] = useState<string | null>(null)
     const [notaSaving, setNotaSaving] = useState(false)
 
@@ -173,6 +175,19 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         setAbriendo(null)
         if (error || !data) { toast.error('No se pudo abrir esa venta'); return }
         setVenta(data as unknown as SaleDetailData)
+    }
+
+    // Un abono mal puesto descuadraba al cliente para siempre. Al
+    // deshacerlo vuelve la deuda y la plata sale de la caja.
+    async function deshacerAbono() {
+        if (!deshacer) return
+        setDeshaciendo(true)
+        const { error } = await supabase.rpc('toul_undo_payment', { p_credit_id: deshacer.id })
+        setDeshaciendo(false)
+        if (error) { toast.error(explainError(error, 'No se pudo deshacer el abono.')); return }
+        setDeshacer(null)
+        await mutate()
+        toast.success('El abono se deshizo')
     }
 
     // Lo que no cabe en ningún campo: "la mamá de Juan",
@@ -401,6 +416,13 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                                     <span style={{ fontSize: 14.5, fontWeight: 700, flexShrink: 0, color: esFiado ? 'var(--toul-error)' : 'var(--toul-accent)' }}>
                                         {esFiado ? '+' : '−'}{formatCOP(Number(m.amount))}
                                     </span>
+                                    {m.type === 'payment' && (
+                                        <button className="pnl-pill" style={{ padding: '0 9px', flexShrink: 0 }}
+                                            aria-label="Deshacer este abono"
+                                            onClick={e => { e.preventDefault(); e.stopPropagation(); setDeshacer(m) }}>
+                                            <Undo2 size={13} />
+                                        </button>
+                                    )}
                                 </>
                             )
                             return m.sale_id
@@ -478,6 +500,19 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                 onClose={() => setVenta(null)}
                 mostrarCliente={false}
                 verEnVentas
+            />
+
+            <ConfirmSheet
+                open={!!deshacer}
+                onClose={() => setDeshacer(null)}
+                onConfirm={deshacerAbono}
+                busy={deshaciendo}
+                danger
+                title="¿Deshacer este abono?"
+                message={deshacer
+                    ? `${customer.name} volverá a deber ${formatCOP(Number(deshacer.amount))}, y esa plata sale de la caja.`
+                    : ''}
+                confirmLabel="Deshacer abono"
             />
 
             <ConfirmSheet

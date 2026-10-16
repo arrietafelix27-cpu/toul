@@ -5,10 +5,11 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import toast from 'react-hot-toast'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, TrendingDown, TrendingUp, Truck, X } from 'lucide-react'
+import { Ban, Check, TrendingDown, TrendingUp, Truck, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { Sheet } from '@/components/isla/Sheet'
+import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { explainError } from '@/lib/errors'
 import { panelVariants, backdropVariants } from '@/lib/motion'
@@ -86,6 +87,7 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
     onChanged?: () => void
 }) {
     const [cambiar, setCambiar] = useState(false)
+    const [anular, setAnular] = useState(false)
     const [saving, setSaving] = useState(false)
 
     const { data: providers } = useSWR(purchase ? 'providers-list' : null, async () => {
@@ -105,6 +107,22 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
         setCambiar(false)
         onChanged?.()
         toast.success('Proveedor actualizado')
+    }
+
+    // Saca la mercancía, borra la deuda con el proveedor y devuelve la
+    // plata a la caja. La base se niega si ya vendiste lo que entró o
+    // si ya le abonaste: eso hay que resolverlo a mano.
+    async function anularCompra() {
+        if (!purchase) return
+        setSaving(true)
+        const { error } = await supabase.rpc('toul_void_purchase', {
+            p_purchase_id: purchase.id, p_reason: null,
+        })
+        setSaving(false)
+        if (error) { toast.error(explainError(error, 'No se pudo anular la compra.')); return }
+        setAnular(false)
+        onChanged?.()
+        toast.success('Compra anulada')
     }
 
     return (
@@ -246,11 +264,35 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
                                         #{purchase.id.slice(0, 8).toUpperCase()}
                                     </span>
                                 </div>
+
+                                <button onClick={() => setAnular(true)} disabled={saving}
+                                    style={{
+                                        marginTop: 10, height: 46, borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                        fontSize: 14, fontWeight: 600,
+                                        background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+                                        color: 'var(--toul-error)',
+                                    }}>
+                                    <Ban size={16} /> Anular compra
+                                </button>
                             </div>
                         </motion.div>
                     </div>
                 )}
             </AnimatePresence>
+
+            <ConfirmSheet
+                open={anular}
+                onClose={() => setAnular(false)}
+                onConfirm={anularCompra}
+                busy={saving}
+                danger
+                title="¿Anular esta compra?"
+                message={purchase
+                    ? `Sale del inventario lo que entró, se borra la deuda con el proveedor y vuelven ${formatCOP(Number(purchase.total))} a la caja. Si ya vendiste parte de esa mercancía, no se va a poder.`
+                    : ''}
+                confirmLabel="Anular compra"
+            />
 
             {/* ── Corregir el proveedor ── */}
             <Sheet

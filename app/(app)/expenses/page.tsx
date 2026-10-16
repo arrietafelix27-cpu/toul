@@ -5,7 +5,7 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Plus, Receipt, Megaphone, Truck, ShoppingBag, Zap, Package } from 'lucide-react'
+import { ArrowLeft, Plus, Receipt, Megaphone, Truck, ShoppingBag, Zap, Package, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
@@ -13,6 +13,7 @@ import { EXPENSE_CATEGORIES } from '@/lib/types'
 import { explainError } from '@/lib/errors'
 import { Field, PriceField, EASE_OUT_EMIL } from '@/components/ui'
 import { Sheet } from '@/components/isla/Sheet'
+import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 
 const supabase = createClient()
 
@@ -68,6 +69,26 @@ export default function ExpensesPage() {
     const [adding, setAdding] = useState(false)
     const [saving, setSaving] = useState(false)
     const [form, setForm] = useState({ category: 'otros', description: '', amount: '' })
+    // Un gasto mal digitado dañaba la utilidad para siempre: ahora se corrige
+    const [editing, setEditing] = useState<ExpenseRow | null>(null)
+    const [removing, setRemoving] = useState(false)
+    const [confirmOpen, setConfirmOpen] = useState(false)
+
+    function abrirNuevo() {
+        setEditing(null)
+        setForm({ category: 'otros', description: '', amount: '' })
+        setAdding(true)
+    }
+
+    function abrirEdicion(expense: ExpenseRow) {
+        setEditing(expense)
+        setForm({
+            category: expense.category,
+            description: expense.description ?? '',
+            amount: String(Math.round(Number(expense.amount))),
+        })
+        setAdding(true)
+    }
 
     const { data: expenses, isLoading, mutate } = useSWR<ExpenseRow[]>(
         storeId ? ['gastos', storeId, period] : null,
@@ -85,6 +106,17 @@ export default function ExpensesPage() {
         },
         { revalidateOnFocus: false },
     )
+
+    async function borrar() {
+        if (!editing) return
+        setRemoving(true)
+        const { error } = await supabase.rpc('toul_delete_expense', { p_expense_id: editing.id })
+        setRemoving(false)
+        if (error) { toast.error(explainError(error, 'No se pudo borrar el gasto.')); return }
+        setConfirmOpen(false); setAdding(false); setEditing(null)
+        mutate()
+        toast.success('Gasto borrado')
+    }
 
     const rows = expenses ?? []
     const total = useMemo(() => Math.round(rows.reduce((sum, e) => sum + Number(e.amount), 0)), [rows])
@@ -115,6 +147,25 @@ export default function ExpensesPage() {
     async function save() {
         const amount = Number(form.amount)
         if (!amount || amount <= 0) { toast.error('Escribe cuánto gastaste'); return }
+
+        // Corregir uno que ya existe: el gasto y su salida de caja se
+        // arreglan juntos, para que la caja no quede descuadrada
+        if (editing) {
+            setSaving(true)
+            const { error } = await supabase.rpc('toul_update_expense', {
+                p_expense_id: editing.id,
+                p_category: form.category,
+                p_description: form.description,
+                p_amount: amount,
+            })
+            setSaving(false)
+            if (error) { toast.error(explainError(error, 'No se pudo corregir el gasto.')); return }
+            setAdding(false); setEditing(null)
+            mutate()
+            toast.success('Gasto corregido')
+            return
+        }
+
         setSaving(true)
         try {
             const res = await fetch('/api/expenses', {
@@ -149,7 +200,7 @@ export default function ExpensesPage() {
                     <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 2px' }}>Caja</p>
                     <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Gastos</h1>
                 </div>
-                <button onClick={() => setAdding(true)}
+                <button onClick={abrirNuevo}
                     style={{
                         display: 'flex', alignItems: 'center', gap: 6, height: 42, padding: '0 16px', borderRadius: 12,
                         border: 'none', background: 'var(--toul-accent)', color: '#000', fontSize: 14, fontWeight: 600,
@@ -238,7 +289,12 @@ export default function ExpensesPage() {
                                     const style = CATEGORY_STYLE[expense.category] ?? CATEGORY_STYLE.otros
                                     const label = EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label ?? 'Otros'
                                     return (
-                                        <div key={expense.id} className="toul-card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                        <button key={expense.id} className="toul-card"
+                                            onClick={() => abrirEdicion(expense)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 14, width: '100%',
+                                                textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer',
+                                            }}>
                                             <span style={{
                                                 width: 40, height: 40, borderRadius: 13, flexShrink: 0,
                                                 background: style.dim, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -256,7 +312,7 @@ export default function ExpensesPage() {
                                             <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-error)', whiteSpace: 'nowrap' }}>
                                                 −{formatCOP(expense.amount)}
                                             </span>
-                                        </div>
+                                        </button>
                                     )
                                 })}
                             </div>
@@ -266,11 +322,31 @@ export default function ExpensesPage() {
             )}
 
             {/* Nuevo gasto */}
-            <Sheet open={adding} onClose={() => !saving && setAdding(false)}
-                title="Nuevo gasto" subtitle="Lo que sale del negocio y no es mercancía."
-                footer={<button className="toul-btn-primary" onClick={save} disabled={saving || !form.amount}>
-                    {saving ? 'Guardando…' : 'Guardar gasto'}
-                </button>}>
+            <Sheet open={adding} onClose={() => !saving && (setAdding(false), setEditing(null))}
+                title={editing ? 'Corregir gasto' : 'Nuevo gasto'}
+                subtitle={editing
+                    ? 'Se corrige el gasto y su salida de caja al mismo tiempo.'
+                    : 'Lo que sale del negocio y no es mercancía.'}
+                footer={
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="toul-btn-primary" style={{ flex: 1 }}
+                            onClick={save} disabled={saving || !form.amount}>
+                            {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar gasto'}
+                        </button>
+                        {editing && (
+                            <button onClick={() => setConfirmOpen(true)} disabled={saving}
+                                aria-label="Borrar gasto"
+                                style={{
+                                    width: 52, height: 52, borderRadius: 14, cursor: 'pointer', flexShrink: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)',
+                                    color: 'var(--toul-error)',
+                                }}>
+                                <Trash2 size={17} />
+                            </button>
+                        )}
+                    </div>
+                }>
                 <p className="toul-section-label" style={{ margin: '0 0 8px 2px' }}>¿En qué gastaste?</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
                     {EXPENSE_CATEGORIES.map(category => {
@@ -298,6 +374,19 @@ export default function ExpensesPage() {
                 <Field label="¿En qué exactamente?" hint="opcional" capitalize value={form.description}
                     onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="Ej: domicilio del pedido de María" maxLength={60} />
             </Sheet>
+
+            <ConfirmSheet
+                open={confirmOpen}
+                onClose={() => setConfirmOpen(false)}
+                onConfirm={borrar}
+                busy={removing}
+                danger
+                title="¿Borrar este gasto?"
+                message={editing
+                    ? `Se van ${formatCOP(Number(editing.amount))} de tus gastos y de la caja. Esto no se puede deshacer.`
+                    : ''}
+                confirmLabel="Borrar gasto"
+            />
         </div>
     )
 }

@@ -1,9 +1,13 @@
 'use client'
 
-import { use } from 'react'
+import { use, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
-import { Edit3, PackageMinus } from 'lucide-react'
+import { Edit3, EyeOff, PackageMinus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import toast from 'react-hot-toast'
+import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
+import { explainError } from '@/lib/errors'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { ProductDetailView, ProductDetailSkeleton, type MovementLine, type Presentation } from '@/components/products/ProductDetailView'
@@ -14,6 +18,22 @@ const DAYS = 14
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params)
+    const router = useRouter()
+    const [esconder, setEsconder] = useState(false)
+    const [escondiendo, setEscondiendo] = useState(false)
+
+    // Borrarlo rompería las ventas viejas. Se esconde: desaparece del
+    // catálogo y del inventario, pero su historial sigue contando.
+    async function esconderProducto() {
+        setEscondiendo(true)
+        const { error } = await supabase.rpc('toul_set_product_active', {
+            p_product_id: id, p_active: false,
+        })
+        setEscondiendo(false)
+        if (error) { toast.error(explainError(error, 'No se pudo esconder el producto.')); return }
+        toast.success('El producto ya no aparece en tu catálogo')
+        router.push('/products')
+    }
 
     const { data, isLoading } = useSWR(['producto', id], async () => {
         const since = new Date(Date.now() - DAYS * 86400000).toISOString()
@@ -22,7 +42,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             supabase.from('products').select('*, category:product_categories(id, name)').eq('id', id).single(),
             supabase.from('product_variants').select('id, name, sale_price, cpp, cost_price').eq('product_id', id).eq('is_active', true).order('name'),
             supabase.from('inventory_adjustments').select('variant_id, quantity').eq('product_id', id),
-            supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at, variant_id').eq('product_id', id).order('created_at', { ascending: false }).limit(8),
+            supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at, variant_id, created_by_name').eq('product_id', id).order('created_at', { ascending: false }).limit(8),
             supabase.from('sale_items').select('quantity, unit_price, sales!inner(created_at)').eq('product_id', id).gte('sales.created_at', since),
         ])
 
@@ -60,7 +80,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         const revenue = saleItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price), 0)
 
         const variantName = new Map(variants.map(v => [v.id, v.name]))
-        const movements: MovementLine[] = ((movementsRes.data ?? []) as { id: string; quantity: number; reason: string; notes: string | null; created_at: string; variant_id: string | null }[])
+        const movements: MovementLine[] = ((movementsRes.data ?? []) as { id: string; quantity: number; reason: string; notes: string | null; created_at: string; variant_id: string | null; created_by_name: string | null }[])
             .map(adjustment => {
                 const reason = adjustment.notes || REASON_LABEL[adjustment.reason] || 'Movimiento'
                 const presentation = adjustment.variant_id ? variantName.get(adjustment.variant_id) : null
@@ -70,6 +90,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     label: presentation ? `${reason} · ${presentation}` : reason,
                     quantity: Number(adjustment.quantity),
                     date: formatMovementDate(adjustment.created_at),
+                    author: adjustment.created_by_name === 'Administrador' ? null : (adjustment.created_by_name ?? null),
                 }
             })
 
@@ -109,6 +130,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         : `Se están vendiendo ${(data.sales.units / DAYS * 7).toFixed(1)} unidades por semana.`
 
     return (
+        <>
         <ProductDetailView
             kind={hasPresentations ? 'presentaciones' : 'simple'}
             name={product.name}
@@ -142,8 +164,28 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                         }}>
                         <Edit3 size={16} /> Editar
                     </Link>
+                    <button onClick={() => setEsconder(true)} aria-label="Esconder producto"
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 40, height: 40, borderRadius: 12, cursor: 'pointer',
+                            background: 'var(--toul-surface)', border: '1px solid var(--toul-border)',
+                            color: 'var(--toul-text-muted)',
+                        }}>
+                        <EyeOff size={16} />
+                    </button>
                 </div>
             }
         />
+        <ConfirmSheet
+                open={esconder}
+                onClose={() => setEsconder(false)}
+                onConfirm={esconderProducto}
+                busy={escondiendo}
+                danger
+                title={`¿Esconder ${product.name}?`}
+                message="Desaparece de tu catálogo y de tu inventario, pero las ventas que ya le hiciste siguen contando. Lo puedes volver a mostrar cuando quieras."
+            confirmLabel="Esconder producto"
+        />
+        </>
     )
 }

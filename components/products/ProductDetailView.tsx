@@ -36,6 +36,8 @@ export interface MovementLine {
     label: string
     quantity: number
     date: string
+    /** Quién lo movió. Sin esto, con vendedores en la isla no hay a quién preguntarle. */
+    author?: string | null
 }
 
 export interface ProductDetailProps {
@@ -331,7 +333,9 @@ export function ProductDetailView(props: ProductDetailProps) {
                                     <div key={movement.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--toul-divider)' : 'none' }}>
                                         <span style={{ minWidth: 0 }}>
                                             <span style={{ display: 'block', fontSize: 14, fontWeight: 500, color: 'var(--toul-text)' }}>{movement.label}</span>
-                                            <span style={{ display: 'block', fontSize: 12, color: 'var(--toul-text-dim)' }}>{movement.date}</span>
+                                            <span style={{ display: 'block', fontSize: 12, color: 'var(--toul-text-dim)' }}>
+                                                {movement.date}{movement.author ? ` · ${movement.author}` : ''}
+                                            </span>
                                         </span>
                                         <span style={{ fontSize: 15, fontWeight: 700, color: movement.quantity >= 0 ? 'var(--toul-accent)' : 'var(--toul-error)' }}>
                                             {movement.quantity >= 0 ? '+' : '−'}{Math.abs(movement.quantity)}

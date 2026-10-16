@@ -24,7 +24,7 @@ export default function InventoryProductPage({ params }: { params: Promise<{ id:
             supabase.from('products').select('id, store_id, name, reference, image_url, images, stock, cpp, low_stock_threshold').eq('id', id).single(),
             supabase.from('product_variants').select('id, name, stock, cpp, low_stock_threshold')
                 .eq('product_id', id).eq('is_active', true).order('name'),
-            supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at, variant_id')
+            supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at, variant_id, created_by_name')
                 .eq('product_id', id).order('created_at', { ascending: false }).limit(10),
             supabase.from('sale_items').select('quantity, variant_id, sales!inner(created_at)')
                 .eq('product_id', id).gte('sales.created_at', since),
@@ -44,6 +44,7 @@ export default function InventoryProductPage({ params }: { params: Promise<{ id:
                 label: presentation ? `${reason} · ${presentation}` : reason,
                 quantity: Number(row.quantity),
                 date: formatMovementDate(row.created_at),
+                author: row.created_by_name === 'Administrador' ? null : (row.created_by_name ?? null),
             }
         })
 
