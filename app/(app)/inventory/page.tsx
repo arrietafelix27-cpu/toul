@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
-import { AlertTriangle, ArrowLeftRight, ClipboardList, Package, Plus, Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ClipboardList, Plus, Search, Settings2, SlidersHorizontal, Truck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
@@ -12,6 +12,8 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { StockAdjustSheet } from '@/components/inventory/StockAdjustSheet'
 import { ReorderPanel, type ReorderItem } from '@/components/inventory/ReorderPanel'
+import { StockGauge } from '@/components/inventory/StockGauge'
+import { InventoryRow, ROW_CSS } from '@/components/inventory/InventoryRow'
 
 const supabase = createClient()
 const PAGE_SIZE = 40
@@ -79,36 +81,43 @@ interface Row {
     subtitle: string
     subtitleTone: 'dim' | 'warn' | 'error'
     stock: number
+    /** Cuántas debería haber. Sin esto no se dibuja la barra de nivel. */
+    target?: number
 }
 
-const CSS = PANEL_CSS + `
-.inv-wrap { position: relative; max-width: 1240px; margin: 0 auto; padding: 24px 16px 96px; container-type: inline-size; }
+const CSS = PANEL_CSS + ROW_CSS + `
+.inv-wrap { position: relative; max-width: 1000px; margin: 0 auto; padding: 24px 16px 96px; container-type: inline-size; }
 @media (min-width: 768px) { .inv-wrap { padding-left: 32px; padding-right: 32px; } }
 
-.inv-top { display: grid; gap: 30px; align-items: stretch; padding: 20px 24px; border-radius: 20px;
-    background: var(--toul-surface); border: 1px solid var(--toul-border); margin-bottom: 26px; }
-.inv-side { position: relative; min-width: 0; }
-@container (min-width: 820px) {
-    .inv-top { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
-    .inv-side::before {
-        content: ''; position: absolute; left: -15px; top: 2%; bottom: 2%; width: 1px;
-        background: var(--toul-divider);
-        -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
-        mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
-    }
-}
+/* Lo que separa son líneas que se desvanecen, no bordes de cajas */
+.inv-sep { height: 1px; margin: 26px 0; background: var(--toul-divider); border: none;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent); }
 
 .inv-chip { height: 34px; padding: 0 13px; border-radius: 999px; cursor: pointer; font-family: inherit;
-    font-size: 13px; white-space: nowrap; border: 1px solid var(--toul-border); background: var(--toul-surface);
-    color: var(--toul-text-muted);
-    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), color 160ms cubic-bezier(0.23,1,0.32,1), border-color 160ms cubic-bezier(0.23,1,0.32,1); }
+    font-size: 13px; white-space: nowrap; flex-shrink: 0;
+    border: 1px solid var(--toul-border); background: var(--toul-surface); color: var(--toul-text-muted);
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), color 160ms cubic-bezier(0.23,1,0.32,1),
+                border-color 160ms cubic-bezier(0.23,1,0.32,1), transform 140ms cubic-bezier(0.23,1,0.32,1); }
+.inv-chip:active { transform: scale(0.97); }
+
+.inv-chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.inv-chips::-webkit-scrollbar { display: none; }
+
 .inv-input { width: 100%; height: 46px; border-radius: 14px; padding: 0 14px 0 40px; font-family: inherit;
     background: var(--toul-surface); border: 1px solid var(--toul-border); color: var(--toul-text);
-    font-size: 15px; outline: none; }
+    font-size: 15px; outline: none;
+    transition: border-color 160ms cubic-bezier(0.23,1,0.32,1); }
 .inv-input:focus { border-color: var(--toul-border-focused); }
-.inv-item { opacity: 0; transform: translateY(6px); animation: inv-in 240ms cubic-bezier(0.23,1,0.32,1) forwards; }
-@keyframes inv-in { to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .inv-item { animation: none; opacity: 1; transform: none; } }
+
+.inv-caret { flex-shrink: 0; color: var(--toul-text-faint);
+    transition: transform 220ms cubic-bezier(0.23,1,0.32,1); }
+.inv-caret[data-open="true"] { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+    .inv-chip:active { transform: none; }
+    .inv-caret { transition: none; }
+}
 `
 
 const daysAgo = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
@@ -206,6 +215,8 @@ export default function InventoryPage() {
                     subtitle: `${row.never_sold ? 'nunca se ha vendido' : 'sin venderse'} hace ${row.idle_days} días · ${formatCOP(Math.round(row.stock * row.cost))} quietos`,
                     subtitleTone: 'warn' as Row['subtitleTone'],
                     stock: Math.max(Number(row.stock) || 0, 0),
+                    // Un producto quieto no tiene un nivel "correcto" contra
+                    // el cual medirse: el problema no es cuánto hay
                 }))
                 .filter(row => !text || row.title.toLowerCase().includes(text))
         }
@@ -220,6 +231,7 @@ export default function InventoryPage() {
                 subtitle: alert.stock <= 0 ? 'se agotó' : `quedan ${alert.stock}, deberías tener ${alert.min_stock}`,
                 subtitleTone: (alert.stock <= 0 ? 'error' : 'warn') as Row['subtitleTone'],
                 stock: Math.max(Number(alert.stock) || 0, 0),
+                target: Math.max(Number(alert.min_stock) || 0, 1),
             }))
             .filter(row => !text || row.title.toLowerCase().includes(text))
     }, [filtro, overview, search])
@@ -260,101 +272,93 @@ export default function InventoryPage() {
             <style>{CSS}</style>
             <div className="toul-ambient" />
 
-            {/* ── Encabezado ── */}
+            {/* ── Encabezado: una sola acción principal ── */}
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
-                className="flex items-start justify-between gap-3 mb-5" style={{ position: 'relative' }}>
+                className="flex items-start justify-between gap-3 mb-7" style={{ position: 'relative' }}>
                 <div>
                     <p className="pnl-label" style={{ marginBottom: 3 }}>Operaciones</p>
-                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: 0 }}>
+                    <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>
                         Inventario
                     </h1>
                 </div>
-                <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
-                    <button className="pnl-pill" style={{ height: 38, fontSize: 13 }} onClick={() => setAdjustOpen(true)}>
-                        <SlidersHorizontal size={14} /> Ajustar
+                <Link href="/inventory/purchase"
+                    style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0,
+                        height: 40, padding: '0 16px', borderRadius: 13,
+                        background: 'var(--toul-accent)', color: '#000', fontSize: 14, fontWeight: 600,
+                        letterSpacing: '-0.01em', textDecoration: 'none', whiteSpace: 'nowrap',
+                        boxShadow: '0 4px 20px var(--toul-accent-glow)',
+                    }}>
+                    <Plus size={15} strokeWidth={2.6} /> Comprar
+                </Link>
+            </motion.div>
+
+            {/* ── Cuánto aguantas: el único número que manda ── */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.04, ease: [0.23, 1, 0.32, 1] }}
+                style={{ position: 'relative' }}>
+                {!overview ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <Skeleton height="2.8rem" width="190px" className="rounded-xl" />
+                        <Skeleton height="10px" className="rounded-full" />
+                    </div>
+                ) : (
+                    <StockGauge
+                        days={daysLeft}
+                        coverageDays={overview.coverageDays}
+                        value={overview.value}
+                        retailValue={overview.retailValue}
+                        verVenta={verVenta}
+                        onToggleValue={() => setVerVenta(v => !v)}
+                        references={overview.references}
+                        items={overview.items}
+                        units={overview.units}
+                    />
+                )}
+
+                {/* Mantenimiento de la bodega: un solo grupo, no tres */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 15 }}>
+                    <button className="pnl-pill" onClick={() => setAdjustOpen(true)}>
+                        <SlidersHorizontal size={13} /> Ajustar
                     </button>
-                    <Link href="/inventory/purchase"
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 15px', borderRadius: 11,
-                            background: 'var(--toul-accent)', color: '#000', fontSize: 13.5, fontWeight: 600,
-                            textDecoration: 'none', whiteSpace: 'nowrap', boxShadow: '0 4px 18px var(--toul-accent-glow)',
-                        }}>
-                        <Plus size={15} strokeWidth={2.6} /> Comprar
+                    <Link href="/inventory/conteo" className="pnl-pill">
+                        <ClipboardList size={13} />
+                        {lastCount === undefined ? 'Contar'
+                            : lastCount ? `Contar · hace ${daysAgo(lastCount)} ${daysAgo(lastCount) === 1 ? 'día' : 'días'}`
+                                : 'Contar · nunca'}
                     </Link>
+                    <Link href="/inventory/compras" className="pnl-pill">
+                        <Truck size={13} /> Compras
+                    </Link>
+                    {overview && overview.dormantValue > 0 && (
+                        <button className="pnl-pill" onClick={() => setFiltro('quietos')}
+                            style={{ color: 'var(--toul-warning)' }}>
+                            {formatCOP(overview.dormantValue)} quietos
+                        </button>
+                    )}
                 </div>
             </motion.div>
 
-            {/* ── El pedido manda; la bodega acompaña ── */}
-            <div className="inv-top">
-                {!overview ? <Skeleton height="160px" className="rounded-2xl" /> : <ReorderPanel items={reorder} />}
+            <hr className="inv-sep" />
 
-                <aside className="inv-side pnl">
-                    <p className="pnl-label" style={{ marginBottom: 8 }}>Tu bodega</p>
-                    {!overview ? <Skeleton height="2.2rem" width="170px" /> : (
-                        <>
-                            <p style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0, lineHeight: 1.15 }}>
-                                {formatCOP(verVenta ? overview.retailValue : overview.value)}
-                            </p>
-                            <button onClick={() => setVerVenta(v => !v)}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 5, padding: 0, marginTop: 2,
-                                    background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                                    fontSize: 12.5, color: 'var(--toul-text-dim)',
-                                }}>
-                                {verVenta ? 'a precio de venta' : 'a lo que te costó'}
-                                <ArrowLeftRight size={12} />
-                            </button>
-                            {verVenta && overview.value > 0 && (
-                                <p style={{ fontSize: 12.5, color: 'var(--toul-accent)', margin: '2px 0 0' }}>
-                                    {formatCOP(overview.retailValue - overview.value)} de ganancia si lo vendes todo
-                                </p>
-                            )}
+            {/* ── Lo que hay que pedir ── */}
+            {!overview
+                ? <Skeleton height="140px" className="rounded-2xl" />
+                : <ReorderPanel items={reorder} />}
 
-                            <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column' }}>
-                                <Dato label="Referencias" value={String(overview.references)} />
-                                {overview.items > overview.references && (
-                                    <Dato label="Presentaciones" value={String(overview.items)} />
-                                )}
-                                <Dato label="Unidades" value={String(overview.units)} />
-                                {daysLeft !== null && (
-                                    <Dato label="Te dura" value={`${daysLeft} ${daysLeft === 1 ? 'día' : 'días'}`}
-                                        tone={daysLeft <= overview.coverageDays ? 'warn' : 'default'} />
-                                )}
-                                {overview.dormantValue > 0 && (
-                                    <Dato label={`Quietos +${overview.idleDays} días`} value={formatCOP(overview.dormantValue)}
-                                        tone="warn" onClick={() => setFiltro('quietos')} />
-                                )}
-                            </div>
-                        </>
-                    )}
-
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 'auto', paddingTop: 16 }}>
-                        <span style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', minWidth: 0 }}>
-                            {lastCount === undefined ? ' '
-                                : lastCount ? `Contado hace ${daysAgo(lastCount)} ${daysAgo(lastCount) === 1 ? 'día' : 'días'}`
-                                    : 'Nunca has contado'}
-                        </span>
-                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                            <Link href="/inventory/compras" className="pnl-pill">Compras</Link>
-                            <Link href="/inventory/conteo" className="pnl-pill">
-                                <ClipboardList size={13} /> Contar
-                            </Link>
-                        </div>
-                    </div>
-                </aside>
-            </div>
+            <hr className="inv-sep" />
 
             {/* ── Todo lo que tienes ── */}
             <section>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 11 }}>
                     <p className="pnl-label" style={{ margin: 0 }}>Todo lo que tienes</p>
                     <Link href="/settings" className="pnl-link" style={{ fontSize: 11.5 }}>
                         <Settings2 size={12} /> {overview?.coverageDays ?? 7} días de respaldo
                     </Link>
                 </div>
 
-                <div style={{ display: 'flex', gap: 7, marginBottom: 10, overflowX: 'auto', paddingBottom: 2 }}>
+                <div className="inv-chips" style={{ marginBottom: 10 }}>
                     {CHIPS.map(chip => {
                         const active = filtro === chip.key
                         return (
@@ -365,14 +369,14 @@ export default function InventoryPage() {
                                     color: active ? 'var(--toul-accent)' : chip.color,
                                     fontWeight: active ? 600 : 500,
                                 }}>
-                                {chip.label}{chip.count !== undefined && chip.count > 0 ? ` (${chip.count})` : ''}
+                                {chip.label}{chip.count !== undefined && chip.count > 0 ? ` ${chip.count}` : ''}
                             </button>
                         )
                     })}
                 </div>
 
                 <div style={{ position: 'relative', marginBottom: 10 }}>
-                    <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)' }} />
+                    <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)', pointerEvents: 'none' }} />
                     <input className="inv-input" placeholder="Buscar por nombre o referencia"
                         value={search} onChange={event => { setSearch(event.target.value); setLimit(PAGE_SIZE) }} />
                 </div>
@@ -383,39 +387,22 @@ export default function InventoryPage() {
                     </div>
                 ) : filtered ? (
                     filtered.length === 0 ? (
-                        <p style={{ fontSize: 14, color: 'var(--toul-text-dim)', textAlign: 'center', padding: '32px 16px', margin: 0 }}>
-                            {filtro === 'agotados' ? 'No tienes nada agotado.'
-                                : filtro === 'pocos' ? 'Nada está por acabarse.'
-                                    : 'Todo tu inventario se está moviendo.'}
-                        </p>
+                        <Vacio texto={filtro === 'agotados' ? 'No tienes nada agotado.'
+                            : filtro === 'pocos' ? 'Nada está por acabarse.'
+                                : 'Todo tu inventario se está moviendo.'} />
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                             {filtered.map((row, index) => (
-                                <Link key={row.key} href={row.href} className="pnl-row inv-item"
-                                    style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}>
-                                    <Thumb src={row.image} />
-                                    <span style={{ flex: 1, minWidth: 0 }}>
-                                        <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {row.title}
-                                        </span>
-                                        <span style={{
-                                            display: 'block', fontSize: 12,
-                                            color: row.subtitleTone === 'error' ? 'var(--toul-error)' : row.subtitleTone === 'warn' ? 'var(--toul-warning)' : 'var(--toul-text-dim)',
-                                        }}>
-                                            {row.subtitle}
-                                        </span>
-                                    </span>
-                                    <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0, color: row.stock <= 0 ? 'var(--toul-error)' : 'var(--toul-text)' }}>
-                                        {row.stock}
-                                    </span>
-                                </Link>
+                                <InventoryRow key={row.key} href={row.href}
+                                    image={row.image} name={row.title}
+                                    title={row.title} subtitle={row.subtitle} tone={row.subtitleTone}
+                                    stock={row.stock} target={row.target}
+                                    delay={Math.min(index, 12) * 30} />
                             ))}
                         </div>
                     )
                 ) : shelf.products.length === 0 ? (
-                    <p style={{ fontSize: 14, color: 'var(--toul-text-dim)', textAlign: 'center', padding: '32px 16px', margin: 0 }}>
-                        {search ? 'No encontramos nada con eso.' : 'Todavía no tienes productos.'}
-                    </p>
+                    <Vacio texto={search ? 'No encontramos nada con eso.' : 'Todavía no tienes productos.'} />
                 ) : (
                     <>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -428,52 +415,64 @@ export default function InventoryPage() {
                                 const agotadas = variants.filter(v => (Number(v.stock) || 0) <= 0).length
                                 const image = (product.images?.[0] as string | undefined) ?? product.image_url
                                 const isOpen = expanded.has(product.id)
+                                const delay = Math.min(index, 12) * 30
 
-                                const inner = (
-                                    <>
-                                        <Thumb src={image} size={42} />
-                                        <span style={{ flex: 1, minWidth: 0 }}>
-                                            <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {product.name}
-                                            </span>
-                                            <span style={{ display: 'block', fontSize: 12, color: agotadas > 0 ? 'var(--toul-error)' : 'var(--toul-text-dim)' }}>
-                                                {hasVariants
-                                                    ? agotadas > 0
-                                                        ? `${variants.length} presentaciones · ${agotadas} sin existencias`
-                                                        : `${variants.length} presentaciones`
-                                                    : `${formatCOP(Math.round(stock * (Number(product.cpp) || 0)))} en bodega`}
-                                            </span>
-                                        </span>
-                                        <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0, color: stock <= 0 ? 'var(--toul-error)' : 'var(--toul-text)' }}>
-                                            {stock}
-                                        </span>
-                                    </>
-                                )
+                                const subtitle = hasVariants
+                                    ? agotadas > 0
+                                        ? `${variants.length} presentaciones · ${agotadas} sin existencias`
+                                        : `${variants.length} presentaciones`
+                                    : `${formatCOP(Math.round(stock * (Number(product.cpp) || 0)))} en bodega`
 
                                 return (
-                                    <div key={product.id} className="inv-item" style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}>
-                                        {hasVariants ? (
-                                            <button onClick={() => toggle(product.id)} className="pnl-row"
-                                                style={{ width: '100%', border: 'none', background: 'transparent', fontFamily: 'inherit' }}>
-                                                {inner}
-                                            </button>
-                                        ) : (
-                                            <Link href={`/inventory/${product.id}`} className="pnl-row">{inner}</Link>
-                                        )}
+                                    <div key={product.id}>
+                                        <InventoryRow
+                                            href={hasVariants ? undefined : `/inventory/${product.id}`}
+                                            onClick={hasVariants ? () => toggle(product.id) : undefined}
+                                            image={image} name={product.name}
+                                            title={product.name} subtitle={subtitle}
+                                            tone={agotadas > 0 ? 'error' : 'dim'}
+                                            stock={stock} delay={delay}
+                                            trailing={
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
+                                                    <span style={{
+                                                        fontSize: 15.5, fontWeight: 700, letterSpacing: '-0.02em',
+                                                        color: stock <= 0 ? 'var(--toul-error)' : 'var(--toul-text)',
+                                                        fontVariantNumeric: 'tabular-nums',
+                                                    }}>
+                                                        {stock}
+                                                    </span>
+                                                    {hasVariants && (
+                                                        <ChevronDown size={15} className="inv-caret" data-open={isOpen} />
+                                                    )}
+                                                </span>
+                                            }
+                                        />
 
                                         {hasVariants && isOpen && (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, margin: '2px 0 6px 20px', paddingLeft: 12, borderLeft: '1px solid var(--toul-divider)' }}>
-                                                {variants.map(variant => {
+                                            <div style={{
+                                                display: 'flex', flexDirection: 'column', gap: 1,
+                                                margin: '2px 0 6px 22px', paddingLeft: 12,
+                                                borderLeft: '1px solid var(--toul-divider)',
+                                            }}>
+                                                {variants.map((variant, vi) => {
                                                     const vStock = Number(variant.stock) || 0
                                                     return (
-                                                        <Link key={variant.id} href={`/inventory/variant/${variant.id}`} className="pnl-row">
+                                                        <Link key={variant.id} href={`/inventory/variant/${variant.id}`}
+                                                            className="ivr ivr-item" style={{ animationDelay: `${vi * 30}ms` }}>
                                                             <span style={{ flex: 1, minWidth: 0 }}>
-                                                                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, color: 'var(--toul-text)' }}>{variant.name}</span>
-                                                                <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-text-dim)' }}>
-                                                                    {formatCOP(Math.round(vStock * (Number(variant.cpp) || 0)))} en bodega
+                                                                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, color: 'var(--toul-text)' }}>
+                                                                    {variant.name}
+                                                                </span>
+                                                                <span style={{ display: 'block', fontSize: 11.5, color: vStock <= 0 ? 'var(--toul-error)' : 'var(--toul-text-dim)' }}>
+                                                                    {vStock <= 0 ? 'se agotó'
+                                                                        : `${formatCOP(Math.round(vStock * (Number(variant.cpp) || 0)))} en bodega`}
                                                                 </span>
                                                             </span>
-                                                            <span style={{ fontSize: 14, fontWeight: 700, color: vStock <= 0 ? 'var(--toul-error)' : 'var(--toul-text-muted)' }}>
+                                                            <span style={{
+                                                                fontSize: 14, fontWeight: 700, flexShrink: 0,
+                                                                color: vStock <= 0 ? 'var(--toul-error)' : 'var(--toul-text-muted)',
+                                                                fontVariantNumeric: 'tabular-nums',
+                                                            }}>
                                                                 {vStock}
                                                             </span>
                                                         </Link>
@@ -508,38 +507,10 @@ export default function InventoryPage() {
     )
 }
 
-/** Un renglón de la bodega: etiqueta a la izquierda, dato a la derecha. */
-function Dato({ label, value, tone = 'default', onClick }: {
-    label: string; value: string; tone?: 'default' | 'warn'; onClick?: () => void
-}) {
-    const color = tone === 'warn' ? 'var(--toul-warning)' : 'var(--toul-text)'
-    const content = (
-        <>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--toul-text-dim)', textAlign: 'left' }}>{label}</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color, whiteSpace: 'nowrap' }}>{value}</span>
-        </>
-    )
-    const style: React.CSSProperties = {
-        display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-        padding: '7px 0', borderTop: '1px solid var(--toul-divider)',
-        background: 'transparent', border: 'none', borderTopWidth: 1, borderTopStyle: 'solid',
-        borderTopColor: 'var(--toul-divider)', fontFamily: 'inherit',
-    }
-    return onClick
-        ? <button onClick={onClick} style={{ ...style, cursor: 'pointer' }}>{content}</button>
-        : <div style={style}>{content}</div>
-}
-
-function Thumb({ src, size = 34 }: { src: string | null; size?: number }) {
+function Vacio({ texto }: { texto: string }) {
     return (
-        <span style={{
-            width: size, height: size, borderRadius: size > 38 ? 12 : 10, flexShrink: 0, overflow: 'hidden', position: 'relative',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))',
-        }}>
-            {src
-                ? <img src={src} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <Package size={size > 38 ? 16 : 14} style={{ color: 'var(--toul-text-faint)' }} />}
-        </span>
+        <p style={{ fontSize: 14, color: 'var(--toul-text-dim)', textAlign: 'center', padding: '36px 16px', margin: 0 }}>
+            {texto}
+        </p>
     )
 }

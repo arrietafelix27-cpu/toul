@@ -25,7 +25,11 @@ export const PANEL_CSS = `
     transition: color 160ms cubic-bezier(0.23,1,0.32,1); }
 
 .pnl-row { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: 12px;
-    text-decoration: none; position: relative;
+    text-decoration: none; position: relative; width: 100%;
+    /* Un <button> viene centrado y con su propia tipografía: sin esto
+       la misma fila se veía distinta según fuera enlace o botón */
+    text-align: left; font: inherit; color: inherit;
+    background: none; border: none; cursor: pointer;
     transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1); }
 .pnl-row:active { transform: scale(0.985); }
 
