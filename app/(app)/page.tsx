@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange, getDaysDiff } from '@/lib/utils'
-import { Settings, Calendar } from 'lucide-react'
+import { Settings, Calendar, AlertTriangle, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import useSWR from 'swr'
@@ -32,7 +32,7 @@ export default function DashboardPage() {
     const [customRange, setCustomRange] = useState<{ from: string; to: string } | null>(null)
 
     // ─── MAIN METRICS FETCHING ──────────────────────────────────────────────
-    const { data: dashboardData, isLoading: metricsLoading } = useSWR(
+    const { data: dashboardData, isLoading: metricsLoading, error: metricsError, mutate: retryMetrics } = useSWR(
         storeId ? ['dashboard-v3', storeId, period, customRange] : null,
         async () => {
             const range = period === 'custom' && customRange ? customRange : getDateRange(period)
@@ -297,6 +297,37 @@ export default function DashboardPage() {
 
     return (
         <>
+            {/* ── Cuando la carga falla ─────────────────────────────────────
+                Antes la pantalla caía a cero y decía que no habías vendido
+                nada. Un número falso es peor que un error: con esto el
+                usuario sabe que lo que ve no es su negocio. */}
+            {metricsError && (
+                <div style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 12,
+                    margin: '16px 16px 0', padding: '14px 16px', borderRadius: 16,
+                    background: 'var(--toul-warning-dim)', border: '1px solid rgba(255,214,10,0.25)',
+                }}>
+                    <AlertTriangle size={18} style={{ color: 'var(--toul-warning)', flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
+                            No se pudieron cargar tus números
+                        </p>
+                        <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '2px 0 10px', lineHeight: 1.5 }}>
+                            Lo que ves abajo no es tu negocio. Revisa tu conexión y vuelve a intentar.
+                        </p>
+                        <button onClick={() => retryMetrics()}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 13px',
+                                borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600,
+                                background: 'rgba(255,255,255,0.055)', border: '1px solid rgba(255,255,255,0.1)',
+                                color: 'var(--toul-text-muted)',
+                            }}>
+                            <RefreshCw size={13} /> Volver a intentar
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* ── MOBILE DASHBOARD ──────────────────────────────────────────── */}
             <div className="lg:hidden">
                 <MobileDashboard

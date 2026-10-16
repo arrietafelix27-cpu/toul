@@ -22,10 +22,10 @@ const MIGRATIONS = [
     'deploy_isla.sql', 'deploy_offline_conteo.sql', 'deploy_compras_simples.sql',
     'deploy_catalogo_publico.sql', 'deploy_inventario.sql',
     'deploy_compras_proveedor.sql', 'deploy_precision.sql',
-    'deploy_clientes.sql', 'deploy_cartera.sql', 'deploy_compras_detalle.sql',
+    'deploy_clientes.sql', 'deploy_cartera.sql', 'deploy_compras_detalle.sql', 'deploy_guardado_atomico.sql',
 ]
 
-const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs', 'inventario.test.mjs', 'compras-proveedor.test.mjs', 'precision.test.mjs', 'clientes.test.mjs', 'cartera.test.mjs', 'compras-detalle.test.mjs']
+const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs', 'inventario.test.mjs', 'compras-proveedor.test.mjs', 'precision.test.mjs', 'clientes.test.mjs', 'cartera.test.mjs', 'compras-detalle.test.mjs', 'guardado-atomico.test.mjs']
 
 async function runSuite(file) {
     const db = new PGlite()

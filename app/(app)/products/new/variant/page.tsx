@@ -229,48 +229,26 @@ export default function NewVariantProductPage() {
             imageUrl = await uploadImage(store.id, imageFile)
         }
 
-        const productPayload: Record<string, unknown> = {
-            store_id: store.id,
-            name: name.trim(),
-            category_id: categoryId || null,
-            sale_price: 0,
-            cost_price: 0,
-            cpp: 0,
-            stock: 0,
-            image_url: imageUrl,
-            is_active: true,
-        }
-        if (reference.trim()) productPayload.reference = reference.trim()
+        // Una sola llamada: antes eran tres escrituras seguidas y si se
+        // caía en la mitad quedaba un producto sin presentaciones —o el
+        // aviso decía "se creó, edítalo" cuando ya lo había borrado—.
+        const { data: hecho, error: crearErr } = await supabase.rpc('toul_create_variant_product', {
+            payload: {
+                name: name.trim(),
+                reference: reference.trim() || null,
+                categoryId: categoryId || null,
+                imageUrl,
+                attributes: activeAttrs.map(a => a.name.trim()),
+                variants: variantNames.map(n => ({
+                    name: n,
+                    price: Number(variantPrices[n].price),
+                    cost: Number(variantPrices[n]?.cost || 0),
+                })),
+            },
+        })
 
-        const { data: p1, error: e1 } = await supabase.from('products').insert(productPayload).select('id').single()
-        if (e1 || !p1) { toast.error(explainError(e1, 'No se pudo crear el producto. Revisa el nombre.')); setLoading(false); return }
-        const productId = p1.id
-
-        // Insert attributes
-        const { error: attrErr } = await supabase.from('product_variant_attributes').insert(
-            activeAttrs.map(a => ({ product_id: productId, name: a.name.trim() }))
-        )
-        if (attrErr) {
-            await supabase.from('products').delete().eq('id', productId)
-            toast.error('El producto se creó pero faltaron sus características. Edítalo para agregarlas.')
-            setLoading(false); return
-        }
-
-        // Insert variants
-        const { error: varErr } = await supabase.from('product_variants').insert(
-            variantNames.map(n => ({
-                store_id: store.id,
-                product_id: productId,
-                name: n,
-                sale_price: Number(variantPrices[n].price),
-                cost_price: Number(variantPrices[n]?.cost || 0),
-                cpp: Number(variantPrices[n]?.cost || 0),
-                is_active: true,
-            }))
-        )
-        if (varErr) {
-            await supabase.from('products').delete().eq('id', productId)
-            toast.error('El producto se creó pero faltaron sus presentaciones. Edítalo para agregarlas.')
+        if (crearErr || !hecho?.productId) {
+            toast.error(explainError(crearErr, 'No se pudo crear el producto. Revisa el nombre y las presentaciones.'))
             setLoading(false); return
         }
 

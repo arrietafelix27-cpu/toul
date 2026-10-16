@@ -2,14 +2,23 @@
  * TOUL — Utility functions
  */
 
-/** Format number as Colombian Peso — always rounds to prevent FP artifacts */
-export function formatCOP(amount: number): string {
+/**
+ * Plata en pesos. Siempre redondea, para que no salgan decimales raros.
+ *
+ * Cuando el dato no llegó —una consulta que falló, un campo que la base
+ * todavía no devuelve— antes salía "$ NaN" en pantalla. Ahora sale una
+ * raya: decir "no sé" es honesto, decir "$ 0" sería mentir.
+ * Un null sí vale cero: así lo guarda la base cuando no hay plata.
+ */
+export function formatCOP(amount: number | null | undefined): string {
+    const valor = Number(amount)
+    if (!Number.isFinite(valor)) return '—'
     return new Intl.NumberFormat('es-CO', {
         style: 'currency',
         currency: 'COP',
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
-    }).format(Math.round(amount))
+    }).format(Math.round(valor))
 }
 
 /** Format percentage change */

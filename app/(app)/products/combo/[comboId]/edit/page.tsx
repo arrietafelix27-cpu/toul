@@ -251,31 +251,24 @@ export default function EditComboPage() {
             }
         }
 
-        // UPDATE combo
-        const { error: comboErr } = await supabase.from('combos').update({
-            name: name.trim(),
-            category_id: categoryId || null,
-            sale_price: comboPriceNum,
-            image_url: imageUrl,
-        }).eq('id', comboId)
-
-        if (comboErr) { toast.error(explainError(comboErr, 'No se pudieron guardar los cambios del combo.')); setLoading(false); return }
-
-        // Replace combo_items: delete all + insert new
-        const { error: deleteErr } = await supabase.from('combo_items').delete().eq('combo_id', comboId)
-        if (deleteErr) { toast.error('No se pudieron guardar los productos del combo. Intenta de nuevo.'); setLoading(false); return }
-
-        const { error: itemsErr } = await supabase.from('combo_items').insert(
-            selectedItems.map(i => ({
-                combo_id: comboId,
-                product_id: i.productId,
-                variant_id: i.variantId,
+        // Todo en una sola llamada: antes esto borraba los productos del
+        // combo y después insertaba los nuevos, así que un error en la
+        // mitad lo dejaba vacío. Ahora o queda todo, o no cambia nada.
+        const { error: saveErr } = await supabase.rpc('toul_save_combo', {
+            p_combo_id: comboId,
+            p_name: name.trim(),
+            p_category_id: categoryId || null,
+            p_sale_price: comboPriceNum,
+            p_image_url: imageUrl,
+            p_items: selectedItems.map(i => ({
+                productId: i.productId,
+                variantId: i.variantId,
                 quantity: i.quantity,
-            }))
-        )
+            })),
+        })
 
-        if (itemsErr) {
-            toast.error('Error al guardar los productos del combo')
+        if (saveErr) {
+            toast.error(explainError(saveErr, 'No se pudieron guardar los cambios del combo.'))
             setLoading(false); return
         }
 
