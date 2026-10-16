@@ -11,6 +11,7 @@ import { formatCOP } from '@/lib/utils'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
 import { panelVariants, backdropVariants } from '@/lib/motion'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
+import { saleItemName } from '@/lib/types'
 import type { SaleDetailData } from '@/lib/types'
 
 const supabase = createClient()
@@ -126,7 +127,7 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, mostrarCli
                                         )}
                                     </div>
                                     <div className="flex-1">
-                                        <p className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>{item.products?.name || 'Producto'}</p>
+                                        <p className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>{saleItemName(item)}</p>
                                         <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>{item.quantity} × {formatCOP(item.unit_price)}</p>
                                     </div>
                                     <p className="font-bold text-sm" style={{ color: 'var(--toul-text)' }}>{formatCOP(item.unit_price * item.quantity)}</p>

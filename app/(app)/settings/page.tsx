@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
-import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User } from 'lucide-react'
+import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User, Download, Bug } from 'lucide-react'
 import { TeamSection } from '@/components/isla/TeamSection'
 import { ReceiptSettings } from '@/components/isla/ReceiptSettings'
 import { PushPrompt } from '@/components/isla/PushPrompt'
@@ -177,6 +177,48 @@ export default function SettingsPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Catálogo por link</p>
                     <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>Comparte tus productos por WhatsApp e Instagram</p>
+                </div>
+                <ChevronRight size={16} style={{ color: 'var(--toul-text-faint)', flexShrink: 0 }} />
+            </Link>
+
+            {/* Tus datos */}
+            <p className="toul-section-label" style={{ marginTop: 24 }}>Tus datos</p>
+            <div className="toul-card mb-4">
+                <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: '0 0 2px' }}>
+                    Descargar tu información
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                    Se baja un archivo que abre en Excel. Tus datos son tuyos: puedes llevártelos cuando quieras.
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {[
+                        { tipo: 'ventas', label: 'Ventas' },
+                        { tipo: 'productos', label: 'Productos' },
+                        { tipo: 'clientes', label: 'Clientes' },
+                        { tipo: 'gastos', label: 'Gastos' },
+                        { tipo: 'compras', label: 'Compras' },
+                    ].map(x => (
+                        <a key={x.tipo} href={`/api/export?tipo=${x.tipo}`} download
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 13px',
+                                borderRadius: 11, textDecoration: 'none', fontSize: 13.5, fontWeight: 500,
+                                background: 'var(--toul-surface-2)', border: '1px solid var(--toul-border)',
+                                color: 'var(--toul-text)',
+                            }}>
+                            <Download size={14} /> {x.label}
+                        </a>
+                    ))}
+                </div>
+            </div>
+
+            <Link href="/settings/errores" className="toul-card mb-4"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--toul-surface-2)', color: 'var(--toul-text-muted)' }}>
+                    <Bug size={17} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Fallas de la app</p>
+                    <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>Qué se ha roto y cuándo</p>
                 </div>
                 <ChevronRight size={16} style={{ color: 'var(--toul-text-faint)', flexShrink: 0 }} />
             </Link>

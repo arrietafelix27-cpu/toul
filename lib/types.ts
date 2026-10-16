@@ -362,6 +362,16 @@ export interface SaleItemDetail {
     unit_price: number
     unit_cost: number
     products: { name: string; image_url: string | null } | null
+    /** La presentación y el combo: sin esto el dueño veía "Sauvage" donde
+        el vendedor veía "Sauvage · 100ml" */
+    product_variants: { name: string } | null
+    combos: { name: string } | null
+}
+
+/** Cómo se llama de verdad lo que se vendió */
+export function saleItemName(item: SaleItemDetail): string {
+    if (item.combos?.name) return item.combos.name
+    return [item.products?.name ?? 'Producto', item.product_variants?.name].filter(Boolean).join(' · ')
 }
 
 export interface SaleDetailData {
@@ -382,5 +392,5 @@ export interface SaleDetailData {
 /** Lo que se pide a la base para pintar ese resumen */
 export const SALE_DETAIL_SELECT =
     'id, created_at, total, discount, payment_method, is_credit, customer_id, customer_name, cash_session_id, ' +
-    'sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url)), ' +
+    'sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url), product_variants(name), combos(name)), ' +
     'sale_payments(amount, payment_methods(name))'
