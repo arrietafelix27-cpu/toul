@@ -256,11 +256,17 @@ export default function SettingsPage() {
                 <ChevronRight size={16} style={{ color: 'var(--toul-text-faint)', flexShrink: 0 }} />
             </Link>
 
-            {/* Modo isla */}
-            <p className="toul-section-label" style={{ marginTop: 24 }}>Punto de venta (isla)</p>
-            <PushPrompt />
-            {storeId && <TeamSection storeId={storeId} />}
-            {storeId && <ReceiptSettings storeId={storeId} />}
+            {/* Punto físico: solo con el plan Pro, igual que en el menú.
+                A quien vende por Instagram, vendedores y tirillas no le
+                dicen nada. */}
+            {plan === 'pro' && (
+                <>
+                    <p className="toul-section-label" style={{ marginTop: 24 }}>Punto físico</p>
+                    <PushPrompt />
+                    {storeId && <TeamSection storeId={storeId} />}
+                    {storeId && <ReceiptSettings storeId={storeId} />}
+                </>
+            )}
 
             {/* Logout */}
             <button onClick={handleLogout}
