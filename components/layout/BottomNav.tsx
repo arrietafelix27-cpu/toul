@@ -2,10 +2,11 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-    Home, Package, Boxes, Wallet, Receipt, TrendingDown, Users, Truck,
+    Home, Package, Boxes, ArrowLeftRight, Receipt, TrendingDown, Users, Truck,
     Sparkles, BarChart3, Settings, Menu, ChevronRight, Plus, ShieldCheck, LockKeyhole,
 } from 'lucide-react'
 import { usePendingApprovalsCount } from '@/lib/isla/useSession'
+import { useStore } from '@/lib/hooks/useData'
 import { FullscreenToggle } from './FullscreenToggle'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence, useDragControls, type PanInfo } from 'framer-motion'
@@ -50,11 +51,15 @@ function CountBadge({ count }: { count: number }) {
     )
 }
 
-const ISLA_SECTION = {
-    label: 'Isla',
+// Solo lo necesita quien vende en un local o una isla. Quien vende por
+// Instagram no tiene un cajón que cuadrar, así que no le aparece: es lo
+// que separa el plan Pro del básico.
+const PUNTO_FISICO = {
+    label: 'Punto físico',
+    plan: 'pro' as const,
     items: [
-        { href: '/aprobaciones', icon: ShieldCheck, label: 'Aprobaciones', badge: true },
         { href: '/turnos', icon: LockKeyhole, label: 'Turnos de caja' },
+        { href: '/aprobaciones', icon: ShieldCheck, label: 'Aprobaciones', badge: true },
     ],
 }
 
@@ -66,12 +71,13 @@ const NAV_SECTIONS = [
         items: [
             { href: '/products', icon: Package, label: 'Catálogo' },
             { href: '/inventory', icon: Boxes, label: 'Inventario' },
-            { href: '/cash', icon: Wallet, label: 'Caja' },
             { href: '/ventas', icon: Receipt, label: 'Ventas' },
+            { href: '/expenses', icon: TrendingDown, label: 'Gastos' },
+            { href: '/movimientos', icon: ArrowLeftRight, label: 'Movimientos' },
             { href: '/providers', icon: Truck, label: 'Proveedores' },
         ],
     },
-    ISLA_SECTION,
+    PUNTO_FISICO,
     // Clientes es su propio mundo: adentro están Mis clientes y
     // Cuentas por cobrar. Va sin encabezado, para no repetir la palabra.
     { label: '', items: [{ href: '/customers', icon: Users, label: 'Clientes' }] },
@@ -83,6 +89,12 @@ const NAV_SECTIONS = [
         ],
     },
 ]
+
+/** Una sección marcada 'pro' solo se ve con el plan Pro. */
+function seVe(seccion: object, plan: string | undefined): boolean {
+    if (!('plan' in seccion)) return true
+    return (seccion as { plan?: string }).plan !== 'pro' || plan === 'pro'
+}
 
 /** Una opción está activa también dentro de sus pantallas de detalle. */
 function matchPath(pathname: string, href: string) {
@@ -115,6 +127,8 @@ function SidebarRow({ href, Icon, label, badge, active }: {
 }
 
 export function Sidebar() {
+    const { data: store } = useStore()
+    const plan = store?.plan
     const pathname = usePathname()
     const router = useRouter()
     const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
@@ -162,7 +176,7 @@ export function Sidebar() {
 
             {/* Secciones */}
             <nav className="flex-1 px-3 overflow-y-auto" style={{ paddingBottom: 8 }}>
-                {NAV_SECTIONS.map((section, si) => (
+                {NAV_SECTIONS.filter(s => seVe(s, plan)).map((section, si) => (
                     <div key={section.label || `s${si}`} style={{ marginBottom: 14 }}>
                         {section.label && (
                             <p style={{
@@ -198,7 +212,7 @@ const MOBILE_NAV = [
     { href: '/', icon: Home, label: 'Inicio' },
     { href: '/products', icon: Package, label: 'Catálogo' },
     { type: 'pos' as const },
-    { href: '/cash', icon: Wallet, label: 'Caja' },
+    { href: '/ventas', icon: Receipt, label: 'Ventas' },
     { type: 'menu' as const, icon: Menu, label: 'Más' },
 ]
 
@@ -209,10 +223,11 @@ const MENU_SECTIONS = [
             { href: '/inventory', icon: Boxes, label: 'Inventario' },
             { href: '/ventas', icon: Receipt, label: 'Ventas' },
             { href: '/expenses', icon: TrendingDown, label: 'Gastos' },
+            { href: '/movimientos', icon: ArrowLeftRight, label: 'Movimientos' },
             { href: '/providers', icon: Truck, label: 'Proveedores' },
         ],
     },
-    ISLA_SECTION,
+    PUNTO_FISICO,
     { label: '', items: [{ href: '/customers', icon: Users, label: 'Clientes' }] },
     {
         label: 'Inteligencia',
@@ -228,6 +243,8 @@ const MENU_SECTIONS = [
 ]
 
 export function BottomNav() {
+    const { data: store } = useStore()
+    const plan = store?.plan
     const pathname = usePathname()
     const router = useRouter()
     const [menuOpen, setMenuOpen] = useState(false)
@@ -300,7 +317,7 @@ export function BottomNav() {
                             overflowY: 'auto', overscrollBehavior: 'contain', touchAction: 'pan-y',
                             padding: '4px 16px calc(24px + env(safe-area-inset-bottom, 0px))',
                         }}>
-                            {MENU_SECTIONS.map((section, si) => (
+                            {MENU_SECTIONS.filter(s => seVe(s, plan)).map((section, si) => (
                                 <motion.div
                                     key={section.label || `s${si}`}
                                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}

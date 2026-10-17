@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
-import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User, Download, Bug } from 'lucide-react'
+import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User, Download, Bug, CreditCard, Sparkles } from 'lucide-react'
 import { TeamSection } from '@/components/isla/TeamSection'
 import { ReceiptSettings } from '@/components/isla/ReceiptSettings'
 import { PushPrompt } from '@/components/isla/PushPrompt'
@@ -33,6 +33,7 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false)
     const [coverageDays, setCoverageDays] = useState(7)
     const [creditDays, setCreditDays] = useState(30)
+    const [plan, setPlan] = useState<string>('basico')
 
     useEffect(() => { loadData() }, [])
 
@@ -45,6 +46,7 @@ export default function SettingsPage() {
             setStoreId(store.id); setStoreName(store.name); setCategory(store.category)
             setCoverageDays(store.stock_coverage_days ?? 7)
             setCreditDays(store.credit_default_days ?? 30)
+            setPlan(store.plan ?? 'basico')
         }
         setLoading(false)
     }
@@ -180,6 +182,37 @@ export default function SettingsPage() {
                 </div>
                 <ChevronRight size={16} style={{ color: 'var(--toul-text-faint)', flexShrink: 0 }} />
             </Link>
+
+            {/* Cómo te pagan */}
+            <Link href="/settings/metodos" className="toul-card mb-4"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--toul-surface-2)', color: 'var(--toul-text-muted)' }}>
+                    <CreditCard size={17} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Métodos de pago</p>
+                    <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>Efectivo, Nequi, datáfono… con qué te pagan</p>
+                </div>
+                <ChevronRight size={16} style={{ color: 'var(--toul-text-faint)', flexShrink: 0 }} />
+            </Link>
+
+            {/* Tu plan */}
+            <div className="toul-card mb-4" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                    style={{ background: 'var(--toul-accent-dim)', color: 'var(--toul-accent)' }}>
+                    <Sparkles size={17} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
+                        Plan {plan === 'pro' ? 'Pro' : 'Básico'}
+                    </p>
+                    <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0, lineHeight: 1.45 }}>
+                        {plan === 'pro'
+                            ? 'Incluye el punto físico: turnos de caja y aprobaciones.'
+                            : 'El Pro agrega el punto físico: turnos de caja y aprobaciones.'}
+                    </p>
+                </div>
+            </div>
 
             {/* Tus datos */}
             <p className="toul-section-label" style={{ marginTop: 24 }}>Tus datos</p>

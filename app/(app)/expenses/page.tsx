@@ -192,12 +192,12 @@ export default function ExpensesPage() {
 
             {/* Encabezado */}
             <div className="flex items-center gap-3 mb-5" style={{ position: 'relative' }}>
-                <Link href="/cash" aria-label="Volver"
+                <Link href="/" aria-label="Volver"
                     style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <ArrowLeft size={17} color="rgba(255,255,255,0.7)" />
                 </Link>
                 <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 2px' }}>Caja</p>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 2px' }}>Operaciones</p>
                     <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Gastos</h1>
                 </div>
                 <button onClick={abrirNuevo}

@@ -52,7 +52,7 @@ export function useStore() {
     return useSWR('current-store', async () => {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return null
-        const { data } = await supabase.from('stores').select('id, name, appearance').eq('owner_id', user.id).single()
+        const { data } = await supabase.from('stores').select('id, name, appearance, plan').eq('owner_id', user.id).single()
         return data
     }, { revalidateOnFocus: false, dedupingInterval: 3600000 }) // 1 hour cache
 }
