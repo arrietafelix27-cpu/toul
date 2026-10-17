@@ -1,16 +1,23 @@
 'use client'
 
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import { Gift, Layers, Package } from 'lucide-react'
-import { formatCOP } from '@/lib/utils'
-import { t } from '@/lib/motion'
 
 /* ══════════════════════════════════════════════════════════════
-   Una sola tarjeta para todo el catálogo.
-   La estructura nunca cambia — imagen cuadrada, nombre de dos
-   líneas, precio y un pie — para que la grilla se vea pareja
-   sin importar si es producto, presentaciones o combo.
+   Una tarjeta del catálogo.
+
+   La caja —fondo, borde, sombra— casi no existe: vive al 15%, de
+   modo que lo que flota sobre el fondo es la foto con su nombre y
+   su precio, no un rectángulo gris con cosas adentro. Al pasar el
+   cursor la caja sube al 45% y envuelve el producto: aparece
+   cuando la señalas, y se va cuando no.
+
+   Lo que nunca se atenúa es lo que sirve para reconocer el
+   producto de un vistazo: la foto, el nombre y el precio.
+
+   Sin foto, el cuadro no queda vacío: lleva la inicial del
+   producto. Una grilla pareja se lee de un vistazo; una dentada
+   —unas tarjetas altas y otras bajas— parece rota, no diseñada.
    ══════════════════════════════════════════════════════════════ */
 
 export type CatalogKind = 'simple' | 'presentaciones' | 'combo'
@@ -28,110 +35,138 @@ export interface CatalogCardData {
     href: string
 }
 
-const KIND_CHIP: Record<CatalogKind, { label: string; Icon: typeof Package } | null> = {
+export const CATALOG_CARD_CSS = `
+.cat {
+    position: relative; display: flex; flex-direction: column;
+    padding: 8px 8px 11px; border-radius: 20px; text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* La caja. Es solo esto lo que se funde con el fondo. */
+.cat::before {
+    content: ''; position: absolute; inset: 0; border-radius: 20px;
+    background: var(--toul-surface);
+    box-shadow: inset 0 0 0 1px var(--toul-border);
+    opacity: 0.15;
+    transition: opacity 260ms cubic-bezier(0.23, 1, 0.32, 1);
+    pointer-events: none;
+}
+
+.cat > * { position: relative; }
+.cat:active { transform: scale(0.975); }
+
+.cat-foto {
+    position: relative; width: 100%; overflow: hidden; flex-shrink: 0;
+    border-radius: 14px; aspect-ratio: 1 / 1;
+    background: linear-gradient(158deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+.cat-foto[data-sinfoto="true"] { background: linear-gradient(158deg, rgba(255,255,255,0.055), rgba(255,255,255,0.015)); }
+.cat-foto[data-agotado="true"] > img { opacity: 0.4; }
+
+.cat-foto > img {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    transition: transform 420ms cubic-bezier(0.23, 1, 0.32, 1), opacity 260ms ease;
+}
+
+.cat-inicial {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 40px; font-weight: 600; letter-spacing: -0.04em; line-height: 1;
+    color: rgba(255,255,255,0.1);
+}
+
+.cat-chip {
+    position: absolute; top: 7px; left: 7px;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 600; color: var(--toul-text-muted);
+    background: rgba(10,10,10,0.7); backdrop-filter: blur(10px);
+    border-radius: 999px; padding: 4px 8px;
+}
+
+.cat-senal {
+    position: absolute; bottom: 7px; right: 7px;
+    font-size: 10px; font-weight: 600; border-radius: 999px; padding: 4px 8px;
+}
+
+.cat-cuerpo { padding: 9px 4px 0; display: flex; flex-direction: column; gap: 2px; }
+
+.cat-nombre {
+    font-size: 13.5px; font-weight: 600; letter-spacing: -0.015em; color: var(--toul-text);
+    margin: 0; line-height: 1.3; height: 35px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.cat-precio {
+    font-size: 14.5px; font-weight: 700; letter-spacing: -0.025em; color: var(--toul-text);
+    margin: 0; line-height: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+}
+.cat-pie {
+    font-size: 11.5px; margin: 0; line-height: 16px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .cat:hover::before { opacity: 0.45; }
+    .cat:hover .cat-foto > img { transform: scale(1.035); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cat, .cat::before, .cat-foto > img { transition: none; }
+    .cat:active { transform: none; }
+}
+
+/* Entra escalonado, pero solo las primeras: con un catálogo grande
+   no se puede esperar a que aparezcan todas */
+.cat-entra { opacity: 0; transform: translateY(8px);
+    animation: cat-in 280ms cubic-bezier(0.23, 1, 0.32, 1) forwards; }
+@keyframes cat-in { to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+    .cat-entra { animation: none; opacity: 1; transform: none; }
+}
+`
+
+const CHIP: Record<CatalogKind, { label: string; Icon: typeof Package } | null> = {
     simple: null,
     presentaciones: { label: 'Presentaciones', Icon: Layers },
     combo: { label: 'Combo', Icon: Gift },
 }
 
 export function CatalogCard({ item, index }: { item: CatalogCardData; index: number }) {
-    const chip = KIND_CHIP[item.kind]
-    const outOfStock = item.stock === 0
-    const lowStock = typeof item.stock === 'number' && item.stock > 0 && item.stock <= 3
-    const Placeholder = item.kind === 'combo' ? Gift : item.kind === 'presentaciones' ? Layers : Package
+    const chip = CHIP[item.kind]
+    const agotado = item.stock === 0
+    const poco = typeof item.stock === 'number' && item.stock > 0 && item.stock <= 3
 
-    const footer = item.kind === 'combo'
-        ? 'Combo'
-        : item.kind === 'presentaciones'
-            ? `${item.presentations ?? 0} presentaciones`
-            : outOfStock ? 'Sin stock' : `${item.stock ?? 0} und`
+    const pie = item.kind === 'combo' ? 'Combo'
+        : item.kind === 'presentaciones' ? `${item.presentations ?? 0} presentaciones`
+            : agotado ? 'Se agotó' : `${item.stock ?? 0} und`
 
-    const footerColor = outOfStock ? 'var(--toul-error)'
-        : lowStock && item.kind === 'simple' ? 'var(--toul-warning)'
+    const colorPie = agotado ? 'var(--toul-error)'
+        : poco && item.kind === 'simple' ? 'var(--toul-warning)'
             : 'var(--toul-text-dim)'
 
-    // La entrada se escalona solo en las primeras tarjetas: con un
-    // catálogo grande no se puede esperar a que aparezcan todas
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ ...t.base, delay: Math.min(index, 11) * 0.03 }}
-        >
-            <Link
-                href={item.href}
-                style={{
-                    display: 'flex', flexDirection: 'column', textDecoration: 'none',
-                    borderRadius: 18, overflow: 'hidden',
-                    background: 'var(--toul-surface)', border: '1px solid var(--toul-border)',
-                    transition: 'background var(--toul-transition), border-color var(--toul-transition), transform 120ms var(--toul-ease)',
-                }}
-                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.98)' }}
-                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
-                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
-            >
-                {/* Con foto, cuadrada pase lo que pase: se recorta y nunca
-                    estira la tarjeta. Sin foto no vale la pena reservar un
-                    cuadro vacío — basta una franja con el icono. */}
-                <div style={{
-                    position: 'relative', width: '100%', overflow: 'hidden', flexShrink: 0,
-                    aspectRatio: item.image ? '1 / 1' : undefined,
-                    height: item.image ? undefined : 58,
-                    background: 'linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))',
-                    opacity: outOfStock ? 0.45 : 1,
-                }}>
-                    {item.image
-                        ? <img src={item.image} alt={item.name} loading="lazy"
-                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : <Placeholder size={26} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--toul-text-faint)' }} />}
+        <Link href={item.href} className="cat cat-entra"
+            style={{ animationDelay: `${Math.min(index, 11) * 30}ms` }}>
+            <span className="cat-foto" data-sinfoto={!item.image} data-agotado={agotado}>
+                {item.image
+                    ? <img src={item.image} alt={item.name} loading="lazy" />
+                    : <span className="cat-inicial">{item.name.trim().charAt(0).toUpperCase() || '·'}</span>}
 
-                    {chip && (
-                        <span style={{
-                            position: 'absolute', top: 8, left: 8,
-                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                            fontSize: 10, fontWeight: 600, color: 'var(--toul-text-muted)',
-                            background: 'rgba(10,10,10,0.72)', backdropFilter: 'blur(10px)',
-                            borderRadius: 999, padding: '4px 9px',
-                        }}>
-                            <chip.Icon size={11} /> {chip.label}
-                        </span>
-                    )}
+                {chip && (
+                    <span className="cat-chip"><chip.Icon size={11} /> {chip.label}</span>
+                )}
+                {item.badge && !agotado && (
+                    <span className="cat-senal" style={{ background: item.badge.bg, color: item.badge.text }}>
+                        {item.badge.label}
+                    </span>
+                )}
+            </span>
 
-                    {/* La señal no repite lo que ya dice el pie de la tarjeta */}
-                    {item.badge && !outOfStock && (
-                        <span style={{
-                            position: 'absolute', bottom: 8, right: 8,
-                            fontSize: 10, fontWeight: 600, borderRadius: 999, padding: '4px 9px',
-                            background: item.badge.bg, color: item.badge.text,
-                        }}>
-                            {item.badge.label}
-                        </span>
-                    )}
-                </div>
-
-                {/* Cuerpo — tres renglones de alto fijo: todas las tarjetas miden igual */}
-                <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <p style={{
-                        fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--toul-text)',
-                        margin: 0, lineHeight: 1.3, height: 36,
-                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                    }}>
-                        {item.name}
-                    </p>
-                    <p style={{
-                        fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-accent)', margin: 0,
-                        lineHeight: '20px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>
-                        {item.priceLabel}
-                    </p>
-                    <p style={{
-                        fontSize: 12, color: footerColor, margin: 0, lineHeight: '16px',
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>
-                        {footer}
-                    </p>
-                </div>
-            </Link>
-        </motion.div>
+            <span className="cat-cuerpo">
+                <span className="cat-nombre">{item.name}</span>
+                <span className="cat-precio">{item.priceLabel}</span>
+                <span className="cat-pie" style={{ color: colorPie }}>{pie}</span>
+            </span>
+        </Link>
     )
 }

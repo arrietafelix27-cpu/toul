@@ -5,16 +5,17 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Search, Package, Share, Tag, ArrowUpDown, Link2 } from 'lucide-react'
+import { Plus, Search, Package, Share, Tag, ArrowUpDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useToulData, useStore } from '@/lib/hooks/useData'
 import { staggerContainer, fadeUp } from '@/lib/motion'
 import type { Product } from '@/lib/types'
-import { CatalogCard, type CatalogCardData } from '@/components/products/CatalogCard'
+import { CatalogCard, CATALOG_CARD_CSS, type CatalogCardData } from '@/components/products/CatalogCard'
+import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { buildSignalContext, computeProductSignal, getSignalStyle, type SignalContext } from '@/lib/products/signals'
 
-const CatalogExportModal = dynamic(() => import('./CatalogExportModal').then(m => m.CatalogExportModal), { ssr: false })
+const ShareCatalogSheet = dynamic(() => import('@/components/products/ShareCatalogSheet').then(m => m.ShareCatalogSheet), { ssr: false })
 const CategoriesModal = dynamic(() => import('@/components/products/CategoriesModal').then(m => m.CategoriesModal), { ssr: false })
 
 /* ── Tipos y datos ──────────────────────────────────────── */
@@ -87,7 +88,7 @@ export default function ProductsPage() {
     const [search, setSearch] = useState('')
     const [typeFilter, setTypeFilter] = useState<TypeFilter>('todos')
     const [sortOrder, setSortOrder] = useState<SortOrder>('az')
-    const [showExport, setShowExport] = useState(false)
+    const [showShare, setShowShare] = useState(false)
     const [showCategories, setShowCategories] = useState(false)
 
     const variantsByProduct = useMemo(() => {
@@ -187,6 +188,8 @@ export default function ProductsPage() {
         <div className="px-4 md:px-8 pt-6 pb-24" style={{ position: 'relative' }}>
             <div className="toul-ambient" />
 
+            <style>{PANEL_CSS}{CATALOG_CARD_CSS}{MODULE_CSS}</style>
+
             {/* ── Encabezado ── */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible"
                 className="flex items-center justify-between gap-3 mb-4" style={{ position: 'relative' }}>
@@ -195,15 +198,15 @@ export default function ProductsPage() {
                     <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Catálogo</h1>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => setShowCategories(true)} aria-label="Categorías" style={iconButton}>
+                    <button onClick={() => setShowCategories(true)} aria-label="Categorías" className="cat-icono">
                         <Tag size={17} />
                     </button>
-                    <button onClick={() => setShowExport(true)} aria-label="Exportar catálogo" style={iconButton}>
+                    {/* Compartir el catálogo por link. Antes eran dos botones
+                        —exportar a PDF y "catálogo por link", que mandaba a
+                        Ajustes—. Uno toca compartir para mandarlo ya. */}
+                    <button onClick={() => setShowShare(true)} aria-label="Compartir catálogo" className="cat-icono">
                         <Share size={17} />
                     </button>
-                    <Link href="/settings/catalogo" aria-label="Catálogo por link" style={{ ...iconButton, textDecoration: 'none' }}>
-                        <Link2 size={17} />
-                    </Link>
                     <Link href="/products/new" className="hidden sm:flex"
                         style={{
                             alignItems: 'center', gap: 7, height: 42, padding: '0 16px', borderRadius: 12,
@@ -222,29 +225,19 @@ export default function ProductsPage() {
                     <input className="toul-input" placeholder="Buscar producto o referencia"
                         value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 42 }} />
                 </div>
-                <button onClick={cycleSort}
-                    style={{
-                        display: 'flex', alignItems: 'center', gap: 7, height: 48, padding: '0 14px', borderRadius: 14,
-                        background: 'var(--toul-surface)', border: '1px solid var(--toul-border)', color: 'var(--toul-text-muted)',
-                        fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0,
-                    }}>
+                <button onClick={cycleSort} className="cat-filtro"
+                    style={{ height: 48, borderRadius: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
                     <ArrowUpDown size={15} /> <span className="hidden sm:inline">{SORT_LABELS[sortOrder]}</span>
                 </button>
             </div>
 
             {/* ── Tipo ── */}
-            <div className="flex gap-1.5 flex-wrap mb-5">
+            <div className="cat-filtros mb-5">
                 {TYPE_FILTERS.map(filter => {
                     const active = typeFilter === filter.value
                     return (
-                        <button key={filter.value} onClick={() => setTypeFilter(filter.value)}
-                            style={{
-                                padding: '8px 14px', borderRadius: 12, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                                background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
-                                border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
-                                color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
-                                transition: 'background var(--toul-transition), border-color var(--toul-transition), color var(--toul-transition)',
-                            }}>
+                        <button key={filter.value} className="cat-filtro" data-on={active}
+                            onClick={() => setTypeFilter(filter.value)}>
                             {filter.label}
                         </button>
                     )
@@ -253,13 +246,13 @@ export default function ProductsPage() {
 
             {/* ── Grilla ── */}
             {isLoading ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(150px, 22vw, 210px), 1fr))', gap: 12 }}>
+                <div className="cat-grid">
                     {Array.from({ length: 8 }).map((_, i) => (
-                        <div key={i} className="skeleton" style={{ aspectRatio: '1 / 1.45', borderRadius: 18 }} />
+                        <div key={i} className="skeleton" style={{ aspectRatio: '1 / 1.42', borderRadius: 20 }} />
                     ))}
                 </div>
             ) : items.length === 0 ? (
-                <div className="toul-card" style={{ textAlign: 'center', padding: '48px 22px' }}>
+                <div style={{ textAlign: 'center', padding: '52px 22px' }}>
                     <Package size={32} strokeWidth={1.5} style={{ color: 'var(--toul-text-faint)', margin: '0 auto 12px' }} />
                     <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
                         {search ? 'No hay resultados' : typeFilter !== 'todos' ? 'Nada en esta categoría' : 'Tu catálogo está vacío'}
@@ -277,9 +270,7 @@ export default function ProductsPage() {
                     )}
                 </div>
             ) : (
-                <motion.div
-                    key={typeFilter + sortOrder}
-                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(150px, 22vw, 210px), 1fr))', gap: 12, alignItems: 'start' }}>
+                <motion.div key={typeFilter + sortOrder} className="cat-grid">
                     {items.map((item, index) => (
                         <CatalogCard key={`${item.kind}-${item.id}`} item={item} index={index} />
                     ))}
@@ -297,9 +288,7 @@ export default function ProductsPage() {
                 <Plus size={18} strokeWidth={2.6} /> Nuevo producto
             </Link>
 
-            <AnimatePresence>
-                {showExport && products && <CatalogExportModal products={products} onClose={() => setShowExport(false)} />}
-            </AnimatePresence>
+            <ShareCatalogSheet open={showShare} onClose={() => setShowShare(false)} />
             <AnimatePresence>
                 {showCategories && storeId && <CategoriesModal storeId={storeId} onClose={() => setShowCategories(false)} />}
             </AnimatePresence>
@@ -307,8 +296,48 @@ export default function ProductsPage() {
     )
 }
 
-const iconButton: React.CSSProperties = {
-    width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-    background: 'var(--toul-surface)', border: '1px solid var(--toul-border)', color: 'var(--toul-text-muted)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+/* ══════════════════════════════════════════════════════════════
+   El resto del módulo. La grilla se adapta sola al ancho —en el
+   celular caben dos tarjetas cómodas, no tres apretadas— y los
+   controles dejan de ser cajas para volverse píldoras.
+   ══════════════════════════════════════════════════════════════ */
+const MODULE_CSS = `
+.cat-grid { display: grid; gap: 14px; align-items: start;
+    grid-template-columns: repeat(auto-fill, minmax(clamp(154px, 21vw, 200px), 1fr)); }
+@media (max-width: 420px) {
+    .cat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 }
+
+.cat-icono { width: 42px; height: 42px; border-radius: 13px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    background: var(--toul-surface); border: 1px solid var(--toul-border); color: var(--toul-text-muted);
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1),
+                border-color 160ms cubic-bezier(0.23,1,0.32,1),
+                color 160ms cubic-bezier(0.23,1,0.32,1),
+                transform 140ms cubic-bezier(0.23,1,0.32,1); }
+.cat-icono:active { transform: scale(0.95); }
+
+.cat-filtro { height: 36px; padding: 0 14px; border-radius: 999px; cursor: pointer; flex-shrink: 0;
+    font-family: inherit; font-size: 13px; font-weight: 500; white-space: nowrap;
+    background: var(--toul-surface); border: 1px solid var(--toul-border); color: var(--toul-text-muted);
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1),
+                border-color 160ms cubic-bezier(0.23,1,0.32,1),
+                color 160ms cubic-bezier(0.23,1,0.32,1),
+                transform 140ms cubic-bezier(0.23,1,0.32,1); }
+.cat-filtro[data-on="true"] { background: var(--toul-surface-focused);
+    border-color: var(--toul-border-focused); color: var(--toul-accent); font-weight: 600; }
+.cat-filtro:active { transform: scale(0.97); }
+
+.cat-filtros { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.cat-filtros::-webkit-scrollbar { display: none; }
+
+@media (hover: hover) and (pointer: fine) {
+    .cat-icono:hover { border-color: rgba(255,255,255,0.18); color: var(--toul-text); }
+    .cat-filtro:hover { border-color: rgba(255,255,255,0.18); color: var(--toul-text); }
+    .cat-filtro[data-on="true"]:hover { color: var(--toul-accent); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cat-icono:active, .cat-filtro:active { transform: none; }
+}
+`
+
