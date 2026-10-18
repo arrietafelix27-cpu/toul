@@ -66,8 +66,13 @@ export function DesktopPurchase({
     selectedProviderId, setSelectedProviderId, dueDate, setDueDate,
     subtotal, total, saving, onSubmit,
 }: Props) {
+    // Abonar más de lo que vale la compra deja un saldo negativo en
+    // pantalla y el servidor lo rechaza con un error crudo
+    const abonoDemasiado = paymentMethod === 'credit' && Number(onlyDigits(initialPayment) || 0) > total
+
     const canSubmit = selectedItems.length > 0
         && !(paymentMethod === 'credit' && (!selectedProviderId || !dueDate))
+        && !abonoDemasiado
         && !saving
 
     const productsToShow = [...products]
@@ -350,6 +355,11 @@ export function DesktopPurchase({
                                         placeholder="0"
                                         value={withThousands(onlyDigits(initialPayment))}
                                         onChange={(e) => setInitialPayment(onlyDigits(e.target.value))} />
+                                    {abonoDemasiado && (
+                                        <p className="text-xs mt-1.5" style={{ color: 'var(--toul-error)' }}>
+                                            El abono no puede ser mayor que la compra ({formatCOP(total)}).
+                                        </p>
+                                    )}
                                 </div>
                             </>
                         )}
@@ -365,7 +375,7 @@ export function DesktopPurchase({
                             <div className="flex justify-between items-center pt-3 border-t" style={{ borderColor: 'var(--toul-border)' }}>
                                 <span className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>Saldo pendiente</span>
                                 <span className="text-sm font-bold" style={{ color: 'var(--toul-error)' }}>
-                                    {formatCOP(total - Number(initialPayment))}
+                                    {formatCOP(Math.max(0, total - Number(initialPayment)))}
                                 </span>
                             </div>
                         )}

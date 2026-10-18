@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
 import { createClient } from '@/lib/supabase/client'
+import { Thumb } from '@/components/ui/Thumb'
 import { formatCOP } from '@/lib/utils'
 import {
     ArrowLeft, Package, CreditCard, CheckCircle2, Navigation,
@@ -168,6 +169,10 @@ export default function NewPurchaseFlow() {
     const subtotal = selectedItems.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.cost)), 0)
     const total = subtotal
 
+    // Abonar más de lo que vale la compra deja un saldo negativo en
+    // pantalla y el servidor lo rechaza con un error crudo
+    const abonoDemasiado = paymentMethod === 'credit' && Number(onlyDigits(initialPayment) || 0) > total
+
     const handleSubmit = async () => {
         setSaving(true)
         try {
@@ -201,9 +206,8 @@ export default function NewPurchaseFlow() {
 
             toast.success('Compra registrada con éxito!')
             router.push('/inventory')
-        } catch (e: any) {
-            console.error(e)
-            toast.error(e.message || 'Error al registrar la compra')
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'No se pudo registrar la compra')
             setSaving(false)
         }
     }
@@ -269,10 +273,10 @@ export default function NewPurchaseFlow() {
                     <ArrowLeft size={17} strokeWidth={2} />
                 </button>
                 <div className="flex-1">
-                    <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 2px 0' }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px 0' }}>
                         Paso {step} de 3
                     </p>
-                    <h1 style={{ fontSize: 19, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>
+                    <h1 style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: 0 }}>
                         {step === 1 ? 'Seleccionar productos' : step === 2 ? 'Pago y proveedor' : 'Resumen de compra'}
                     </h1>
                 </div>
@@ -333,13 +337,7 @@ export default function NewPurchaseFlow() {
                                             <button
                                                 onClick={() => hasVariants ? toggleExpand(product.id) : (!added && addItem(product))}
                                                 className="w-full p-3 text-left flex items-center gap-3 transition-all active:scale-[0.99]">
-                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
-                                                    style={{ background: 'var(--toul-surface-2)' }}>
-                                                    {(product.images?.[0] || product.image_url)
-                                                        ? <img src={product.images?.[0] ?? product.image_url!} alt="" className="w-full h-full object-cover" />
-                                                        : <Package size={16} style={{ color: 'var(--toul-text-muted)' }} />
-                                                    }
-                                                </div>
+                                                <Thumb src={product.images?.[0] ?? product.image_url} name={product.name} size={40} />
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5 mb-0.5">
                                                         <p className="text-sm font-bold truncate" style={{ color: 'var(--toul-text)' }}>{product.name}</p>
@@ -419,7 +417,9 @@ export default function NewPurchaseFlow() {
                                                     style={{ background: 'var(--toul-surface-2)' }}>
                                                     {(item.product.images?.[0] || item.product.image_url)
                                                         ? <img src={item.product.images?.[0] ?? item.product.image_url!} alt="" className="w-full h-full object-cover" />
-                                                        : <Package size={16} style={{ color: 'var(--toul-text-muted)' }} />
+                                                        : <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text-faint)' }}>
+                                                            {item.product.name.trim().charAt(0).toUpperCase()}
+                                                          </span>
                                                     }
                                                 </div>
                                                 <div>
@@ -541,6 +541,11 @@ export default function NewPurchaseFlow() {
                                                 value={withThousands(onlyDigits(initialPayment))}
                                                 onChange={(e) => setInitialPayment(onlyDigits(e.target.value))}
                                             />
+                                            {abonoDemasiado && (
+                                                <p className="text-xs mt-1.5" style={{ color: 'var(--toul-error)' }}>
+                                                    El abono no puede ser mayor que la compra ({formatCOP(total)}).
+                                                </p>
+                                            )}
                                         </div>
                                         <div>
                                             <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>
@@ -560,7 +565,7 @@ export default function NewPurchaseFlow() {
                             </div>
 
                             <button
-                                disabled={paymentMethod === 'credit' && (!selectedProviderId || !dueDate)}
+                                disabled={paymentMethod === 'credit' && (!selectedProviderId || !dueDate || abonoDemasiado)}
                                 onClick={() => setStep(3)}
                                 className="toul-btn-primary w-full mt-6 flex items-center justify-center gap-2">
                                 Revisar resumen <Navigation size={18} />
@@ -604,7 +609,7 @@ export default function NewPurchaseFlow() {
                                             <div className="flex justify-between text-sm font-bold pt-2 border-t" style={{ borderColor: 'var(--toul-border)' }}>
                                                 <span style={{ color: 'var(--toul-text-muted)' }}>Saldo Pendiente</span>
                                                 <span style={{ color: 'var(--toul-error)' }}>
-                                                    {formatCOP(total - Number(initialPayment))}
+                                                    {formatCOP(Math.max(0, total - Number(initialPayment)))}
                                                 </span>
                                             </div>
                                         </>
