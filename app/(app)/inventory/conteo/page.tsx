@@ -12,6 +12,16 @@ import { formatCOP } from '@/lib/utils'
 import { useSessionContext } from '@/lib/isla/useSession'
 import { EASE_OUT_EMIL } from '@/components/ui'
 
+const CSS = `
+.ct-fila { display: flex; align-items: center; gap: 13px; padding: 11px 10px; border-radius: 14px;
+    text-decoration: none;
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1),
+                transform 160ms cubic-bezier(0.23,1,0.32,1); }
+.ct-fila:active { transform: scale(0.99); }
+@media (hover: hover) and (pointer: fine) { .ct-fila:hover { background: rgba(255,255,255,0.04); } }
+@media (prefers-reduced-motion: reduce) { .ct-fila:active { transform: none; } }
+`
+
 const supabase = createClient()
 
 interface CountRow {
@@ -57,6 +67,7 @@ export default function ConteosPage() {
 
     return (
         <div className="px-4 md:px-8 py-6 pb-24 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+            <style>{CSS}</style>
             <div className="toul-ambient" />
 
             <div className="flex items-center gap-3 mb-5" style={{ position: 'relative' }}>
@@ -70,7 +81,7 @@ export default function ConteosPage() {
                 </div>
             </div>
 
-            <div className="toul-card mb-5" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="mb-6" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ width: 44, height: 44, borderRadius: 14, background: 'var(--toul-accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <ClipboardList size={20} style={{ color: 'var(--toul-accent)' }} />
                 </div>
@@ -93,7 +104,7 @@ export default function ConteosPage() {
             {isLoading ? (
                 <div className="flex flex-col gap-2">{[0, 1, 2].map(i => <div key={i} className="skeleton" style={{ height: 72, borderRadius: 16 }} />)}</div>
             ) : (counts?.length ?? 0) === 0 ? (
-                <div className="toul-card" style={{ textAlign: 'center', padding: '40px 20px' }}>
+                <div style={{ textAlign: 'center', padding: '46px 20px' }}>
                     <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Todavía no has hecho conteos</p>
                     <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>
                         Hacerlo cada mes es la forma de detectar pérdidas a tiempo.
@@ -107,8 +118,7 @@ export default function ConteosPage() {
                             <motion.div key={count.id}
                                 initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.22, ease: EASE_OUT_EMIL, delay: Math.min(idx, 8) * 0.025 }}>
-                                <Link href={`/inventory/conteo/${count.id}`} className="toul-card toul-card-interactive"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 14, textDecoration: 'none' }}>
+                                <Link href={`/inventory/conteo/${count.id}`} className="ct-fila">
                                     <span style={{ flex: 1, minWidth: 0 }}>
                                         <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: 'var(--toul-text)' }}>
                                             {count.status === 'open' ? 'En curso' : count.status === 'cancelled' ? 'Cancelado' : `${count.counted_items} productos contados`}

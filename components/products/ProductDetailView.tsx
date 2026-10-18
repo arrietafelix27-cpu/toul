@@ -73,6 +73,18 @@ const KIND_LABEL: Record<ProductDetailProps['kind'], { label: string; Icon: type
 /* ── La medida del ancho vive aquí y no en globals.css ── */
 const LAYOUT_CSS = `
 .pdv { position: relative; max-width: 680px; margin: 0 auto; padding: 24px 16px 40px; container-type: inline-size; }
+
+/* El contenido se apoya en el fondo; donde hace falta agrupar, la
+   superficie apenas se insinúa en vez de dibujar una caja */
+.pdv-caja { border-radius: 16px; background: rgba(255,255,255,0.022);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04); }
+.pdv-fila { display: flex; align-items: center; gap: 12px; padding: 11px 10px; border-radius: 14px;
+    text-decoration: none; color: inherit;
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1),
+                transform 160ms cubic-bezier(0.23,1,0.32,1); }
+.pdv-fila:active { transform: scale(0.99); }
+@media (hover: hover) and (pointer: fine) { .pdv-fila:hover { background: rgba(255,255,255,0.04); } }
+@media (prefers-reduced-motion: reduce) { .pdv-fila:active { transform: none; } }
 .pdv-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; position: relative; }
 .pdv-grid { position: relative; }
 .pdv-name { font-size: 26px; }
@@ -109,7 +121,7 @@ function Stat({ label, value, tone = 'default', hint }: { label: string; value: 
             : tone === 'error' ? 'var(--toul-error)'
                 : 'var(--toul-text)'
     return (
-        <div className="toul-card" style={{ padding: '14px 16px', minWidth: 0 }}>
+        <div className="pdv-caja" style={{ padding: '14px 16px', minWidth: 0 }}>
             <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: 0, whiteSpace: 'nowrap' }}>{label}</p>
             <p style={{ fontSize: 19, fontWeight: 700, letterSpacing: '-0.03em', color, margin: '2px 0 0' }}>{value}</p>
             {hint && <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>{hint}</p>}
@@ -278,12 +290,11 @@ export function ProductDetailView(props: ProductDetailProps) {
                                         </>
                                     )
                                     return item.href ? (
-                                        <Link key={item.id} href={item.href} className="toul-card toul-card-interactive"
-                                            style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+                                        <Link key={item.id} href={item.href} className="pdv-fila">
                                             {body}
                                         </Link>
                                     ) : (
-                                        <div key={item.id} className="toul-card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div key={item.id} className="pdv-fila">
                                             {body}
                                         </div>
                                     )
@@ -295,7 +306,7 @@ export function ProductDetailView(props: ProductDetailProps) {
                     {/* ── Qué trae el combo ── */}
                     {components && components.length > 0 && (
                         <Section title="Qué trae" hint="Al vender el combo se descuenta cada uno de estos productos.">
-                            <div className="toul-card" style={{ padding: '4px 16px' }}>
+                            <div className="pdv-caja" style={{ padding: '4px 16px' }}>
                                 {components.map((item, i) => (
                                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--toul-divider)' : 'none' }}>
                                         <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--toul-text)' }}>{item.name}</span>
@@ -309,7 +320,7 @@ export function ProductDetailView(props: ProductDetailProps) {
                     {/* ── Cómo se vende ── */}
                     {sales && (
                         <Section title="Cómo se está vendiendo">
-                            <div className="toul-card" style={{ display: 'flex', flexWrap: 'wrap', gap: 20, justifyContent: 'space-between' }}>
+                            <div className="pdv-caja" style={{ padding: '16px 18px', display: 'flex', flexWrap: 'wrap', gap: 20, justifyContent: 'space-between' }}>
                                 <div>
                                     <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: 0 }}>Unidades ({sales.days} días)</p>
                                     <p style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: '2px 0 0' }}>{sales.units}</p>
@@ -328,7 +339,7 @@ export function ProductDetailView(props: ProductDetailProps) {
                     {/* ── Movimientos ── */}
                     {movements && movements.length > 0 && (
                         <Section title="Movimientos recientes">
-                            <div className="toul-card" style={{ padding: '4px 16px' }}>
+                            <div className="pdv-caja" style={{ padding: '4px 16px' }}>
                                 {movements.map((movement, i) => (
                                     <div key={movement.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--toul-divider)' : 'none' }}>
                                         <span style={{ minWidth: 0 }}>

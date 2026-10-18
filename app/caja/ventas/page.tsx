@@ -13,6 +13,16 @@ import { useOfflineSales } from '@/lib/isla/useOffline'
 import { EASE_OUT_EMIL } from '@/components/ui'
 import type { SaleVoid } from '@/lib/isla/types'
 
+const CSS = `
+.cv-tile { border-radius: 16px; padding: 14px 16px; background: rgba(255,255,255,0.025);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.045); }
+.cv-fila { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 64px;
+    padding: 10px 12px; border-radius: 14px; border: none; background: none;
+    font: inherit; color: inherit; text-align: left; cursor: pointer;
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1); }
+@media (hover: hover) and (pointer: fine) { .cv-fila:hover { background: rgba(255,255,255,0.04); } }
+`
+
 const supabase = createClient()
 
 export default function CajaVentasPage() {
@@ -54,6 +64,7 @@ export default function CajaVentasPage() {
 
     return (
         <div style={{ height: '100%', overflowY: 'auto', position: 'relative' }}>
+            <style>{CSS}</style>
             <div className="toul-ambient" />
             <div style={{ maxWidth: 820, margin: '0 auto', padding: '24px 20px 40px', position: 'relative' }}>
                 <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px' }}>
@@ -67,7 +78,7 @@ export default function CajaVentasPage() {
                         { label: 'Vendido', value: formatCOP(totals.total), accent: true },
                         { label: 'Con descuento', value: String(totals.discounts) },
                     ].map(k => (
-                        <div key={k.label} className="toul-card" style={{ padding: '14px 16px' }}>
+                        <div key={k.label} className="cv-tile">
                             <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: 0 }}>{k.label}</p>
                             <p style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', margin: '2px 0 0', color: k.accent ? 'var(--toul-accent)' : 'var(--toul-text)' }}>{k.value}</p>
                         </div>
@@ -79,7 +90,7 @@ export default function CajaVentasPage() {
                         {[0, 1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 72, borderRadius: 16 }} />)}
                     </div>
                 ) : (data?.sales.length ?? 0) === 0 ? (
-                    <div className="toul-card" style={{ textAlign: 'center', padding: '48px 20px' }}>
+                    <div style={{ textAlign: 'center', padding: '52px 20px' }}>
                         <ReceiptText size={32} strokeWidth={1.5} style={{ color: 'var(--toul-text-faint)', margin: '0 auto 12px' }} />
                         <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Aún no hay ventas</p>
                         <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>Las ventas de este turno aparecen aquí.</p>
@@ -96,8 +107,7 @@ export default function CajaVentasPage() {
                                     transition={{ duration: 0.22, ease: EASE_OUT_EMIL, delay: Math.min(idx, 8) * 0.025 }}
                                     whileTap={{ scale: 0.99 }}
                                     onClick={() => setSelected(sale)}
-                                    className="toul-card toul-card-interactive"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left', width: '100%', minHeight: 72, fontFamily: 'inherit' }}>
+                                    className="cv-fila">
                                     <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--toul-text-dim)', width: 48, flexShrink: 0 }}>
                                         {new Date(sale.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                                     </span>
@@ -123,7 +133,7 @@ export default function CajaVentasPage() {
                         <p className="toul-section-label" style={{ margin: '28px 0 10px 4px' }}>Anuladas</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             {data!.voids.map(v => (
-                                <div key={v.id} className="toul-card" style={{ display: 'flex', alignItems: 'center', gap: 14, opacity: 0.75 }}>
+                                <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 12px', opacity: 0.75 }}>
                                     <Ban size={18} style={{ color: 'var(--toul-error)', flexShrink: 0 }} />
                                     <span style={{ flex: 1, minWidth: 0 }}>
                                         <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--toul-text)' }}>{v.reason}</span>

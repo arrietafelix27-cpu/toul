@@ -11,6 +11,12 @@ import { useSessionContext } from '@/lib/isla/useSession'
 import { Sheet } from '@/components/isla/Sheet'
 import { EASE_OUT_EMIL } from '@/components/ui'
 
+const CSS = `
+.cd-caja { border-radius: 16px; background: rgba(255,255,255,0.022);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04); }
+.cd-fila { display: flex; align-items: center; gap: 12px; padding: 12px 12px; border-radius: 14px; }
+`
+
 const supabase = createClient()
 
 interface Row {
@@ -242,14 +248,14 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
                 </motion.div>
 
                 {differences.length === 0 ? (
-                    <div className="toul-card" style={{ textAlign: 'center', padding: '32px 20px' }}>
+                    <div style={{ textAlign: 'center', padding: '36px 20px' }}>
                         <Check size={28} style={{ color: 'var(--toul-accent)', margin: '0 auto 10px' }} />
                         <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Todo lo contado coincidió con el sistema</p>
                     </div>
                 ) : (
                     <>
                         <p className="toul-section-label">Diferencias</p>
-                        <div className="toul-card" style={{ padding: '4px 16px' }}>
+                        <div className="cd-caja" style={{ padding: '4px 16px' }}>
                             {differences.map((item, i) => {
                                 const key = item.variant_id ? `${item.product_id}:${item.variant_id}` : item.product_id
                                 const diff = Number(item.difference)
@@ -280,6 +286,7 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
     // ─── Conteo en curso ──────────────────────────────────────
     return (
         <div className="px-4 md:px-8 py-6 pb-32 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+            <style>{CSS}</style>
             <div className="toul-ambient" />
 
             <div className="flex items-center gap-3 mb-4" style={{ position: 'relative' }}>
@@ -317,7 +324,7 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
                     const done = value !== ''
                     const diff = done ? Number(value) - row.expected : 0
                     return (
-                        <div key={row.key} className="toul-card"
+                        <div key={row.key} className="cd-fila"
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
                                 borderColor: done ? 'var(--toul-border-focused)' : 'var(--toul-border)',
