@@ -12,6 +12,7 @@ import HeroChart from '@/components/dashboard/HeroChart'
 import { FinancialSummary } from '@/components/dashboard/FinancialSummary'
 import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
+import { PrimerosPasos } from '@/components/dashboard/PrimerosPasos'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Star } from 'lucide-react'
 
@@ -330,6 +331,10 @@ export default function DashboardPage() {
 
             {/* ── MOBILE DASHBOARD ──────────────────────────────────────────── */}
             <div className="lg:hidden">
+                {/* Desaparece solo apenas hace su primera venta */}
+                <div style={{ padding: '18px 16px 0' }}>
+                    <PrimerosPasos storeId={storeId} />
+                </div>
                 <MobileDashboard
                     storeName={storeName}
                     currentDate={currentDate}
@@ -360,6 +365,8 @@ export default function DashboardPage() {
                 animate="visible"
                 className="hidden lg:flex w-full max-w-none px-6 xl:px-8 py-6 min-h-screen flex-col gap-6"
             >
+                <PrimerosPasos storeId={storeId} />
+
                 {/* Identity Header — Calm, minimal */}
                 <motion.div variants={fadeUp} className="flex items-end justify-between mb-1">
                     <div>
