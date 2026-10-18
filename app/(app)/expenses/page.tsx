@@ -17,6 +17,17 @@ import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 
 const supabase = createClient()
 
+const CSS = `
+.gt-fila { display: flex; align-items: center; gap: 13px; width: 100%; padding: 11px 10px;
+    border-radius: 14px; border: none; background: none; font: inherit; color: inherit;
+    text-align: left; cursor: pointer;
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1),
+                transform 160ms cubic-bezier(0.23,1,0.32,1); }
+.gt-fila:active { transform: scale(0.99); }
+@media (hover: hover) and (pointer: fine) { .gt-fila:hover { background: rgba(255,255,255,0.038); } }
+@media (prefers-reduced-motion: reduce) { .gt-fila:active { transform: none; } }
+`
+
 /** Cada categoría con su cara, para reconocerla de un vistazo. */
 const CATEGORY_STYLE: Record<string, { Icon: typeof Receipt; color: string; dim: string }> = {
     publicidad: { Icon: Megaphone, color: '#bf5af2', dim: 'rgba(191,90,242,0.12)' },
@@ -188,6 +199,7 @@ export default function ExpensesPage() {
 
     return (
         <div className="px-4 md:px-8 pt-6 pb-10 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+            <style>{CSS}</style>
             <div className="toul-ambient" />
 
             {/* Encabezado */}
@@ -197,8 +209,8 @@ export default function ExpensesPage() {
                     <ArrowLeft size={17} color="rgba(255,255,255,0.7)" />
                 </Link>
                 <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 2px' }}>Operaciones</p>
-                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Gastos</h1>
+                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Operaciones</p>
+                    <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Gastos</h1>
                 </div>
                 <button onClick={abrirNuevo}
                     style={{
@@ -232,11 +244,11 @@ export default function ExpensesPage() {
             {/* Total del período */}
             <motion.div
                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.26, ease: EASE_OUT_EMIL }}
-                className="toul-card" style={{ padding: '20px 22px', marginBottom: 12 }}>
-                <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>
+                style={{ marginBottom: 18 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: 0 }}>
                     Gastaste {period === 'all' ? 'en total' : `en ${PERIODS.find(p => p.value === period)?.label.toLowerCase()}`}
                 </p>
-                <p style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: '2px 0 0' }}>
+                <p style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.045em', color: 'var(--toul-text)', margin: '6px 0 0', lineHeight: 1.05, fontVariantNumeric: 'tabular-nums' }}>
                     {formatCOP(total)}
                 </p>
                 <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>
@@ -267,7 +279,7 @@ export default function ExpensesPage() {
             {isLoading ? (
                 <div className="flex flex-col gap-2">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 64, borderRadius: 16 }} />)}</div>
             ) : rows.length === 0 ? (
-                <div className="toul-card" style={{ textAlign: 'center', padding: '44px 20px' }}>
+                <div style={{ textAlign: 'center', padding: '48px 20px' }}>
                     <Package size={30} strokeWidth={1.5} style={{ color: 'var(--toul-text-faint)', margin: '0 auto 12px' }} />
                     <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Sin gastos en este período</p>
                     <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
@@ -284,17 +296,13 @@ export default function ExpensesPage() {
                                     {formatCOP(items.reduce((sum, e) => sum + Number(e.amount), 0))}
                                 </p>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                 {items.map(expense => {
                                     const style = CATEGORY_STYLE[expense.category] ?? CATEGORY_STYLE.otros
                                     const label = EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label ?? 'Otros'
                                     return (
-                                        <button key={expense.id} className="toul-card"
-                                            onClick={() => abrirEdicion(expense)}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: 14, width: '100%',
-                                                textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer',
-                                            }}>
+                                        <button key={expense.id} className="gt-fila"
+                                            onClick={() => abrirEdicion(expense)}>
                                             <span style={{
                                                 width: 40, height: 40, borderRadius: 13, flexShrink: 0,
                                                 background: style.dim, display: 'flex', alignItems: 'center', justifyContent: 'center',

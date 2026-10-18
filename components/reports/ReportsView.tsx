@@ -29,11 +29,35 @@ const pct = (current: number, previous: number): number | null => {
     return ((current - previous) / Math.abs(previous)) * 100
 }
 
+/* El contenido se apoya en el fondo; lo que separa son líneas que se
+   desvanecen. El único bloque con color propio es el titular, porque
+   ahí sí el color es el dato: ganaste o perdiste. */
+const CSS = `
+.rp-sep { height: 1px; margin: 26px 0 0; background: var(--toul-divider); border: none;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent); }
+
+.rp-caja { border-radius: 16px; background: rgba(255,255,255,0.022);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04); }
+
+.rp-cifra { padding: 2px; }
+.rp-cifra + .rp-cifra { border-top: 1px solid var(--toul-divider); }
+
+.rp-enlace { display: block; text-decoration: none; border-radius: 16px; padding: 14px 16px;
+    background: rgba(255,255,255,0.022); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1),
+                transform 160ms cubic-bezier(0.23,1,0.32,1); }
+.rp-enlace:active { transform: scale(0.99); }
+@media (hover: hover) and (pointer: fine) { .rp-enlace:hover { background: rgba(255,255,255,0.045); } }
+@media (prefers-reduced-motion: reduce) { .rp-enlace:active { transform: none; } }
+`
+
 /* ── Piezas ─────────────────────────────────────────────── */
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
     return (
         <section style={{ marginTop: 28 }}>
+            <hr className="rp-sep" style={{ margin: '0 0 22px' }} />
             <h2 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '0 0 2px' }}>{title}</h2>
             {hint && <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '0 0 12px', lineHeight: 1.45 }}>{hint}</p>}
             {!hint && <div style={{ height: 12 }} />}
@@ -190,7 +214,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
 
     if (noData) {
         return (
-            <div className="toul-card" style={{ textAlign: 'center', padding: '48px 22px' }}>
+            <div style={{ textAlign: 'center', padding: '52px 22px' }}>
                 <p style={{ fontSize: 17, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Sin movimientos en {periodLabel.toLowerCase()}</p>
                 <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '6px 0 18px', lineHeight: 1.5 }}>
                     Cuando registres ventas o gastos, aquí verás si estás ganando o perdiendo y en qué se te va la plata.
@@ -211,6 +235,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
 
     return (
         <div>
+            <style>{CSS}</style>
             <motion.div
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, ease: EASE_OUT_EMIL }}
@@ -229,7 +254,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
 
             {/* ── 2. La cadena completa ── */}
             <Section title="De dónde sale ese número" hint="Se lee de arriba hacia abajo: cada línea le quita algo a la anterior.">
-                <div className="toul-card" style={{ padding: '6px 18px 14px' }}>
+                <div style={{ padding: '0 2px' }}>
                     <ChainRow
                         label="Vendiste"
                         help={`${c.salesCount} ${c.salesCount === 1 ? 'venta' : 'ventas'} · ${c.unitsSold} und · ticket promedio ${formatCOP(c.avgTicket)}`}
@@ -270,7 +295,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
                         { label: 'Ganancia bruta', value: c.grossProfit, prev: p.grossProfit, lowerIsBetter: false },
                         { label: 'Gastos', value: c.expenses, prev: p.expenses, lowerIsBetter: true },
                     ].map(item => (
-                        <div key={item.label} className="toul-card" style={{ padding: '14px 16px' }}>
+                        <div key={item.label} className="rp-caja" style={{ padding: '14px 16px' }}>
                             <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: 0 }}>{item.label}</p>
                             <p style={{ fontSize: 19, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: '2px 0 4px' }}>
                                 {formatCOP(item.value)}
@@ -283,7 +308,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
 
             {/* ── 3. Dónde se va la plata ── */}
             <Section title="Dónde se te va la plata" hint="Tus gastos, ordenados de mayor a menor.">
-                <div className="toul-card">
+                <div style={{ padding: '0 2px' }}>
                     <BarList
                         items={data.expensesByCategory}
                         total={c.expenses}
@@ -292,7 +317,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
                 </div>
 
                 {c.inventoryPurchases > 0 && (
-                    <div className="toul-card" style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div className="rp-caja" style={{ marginTop: 14, padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <Info size={17} style={{ color: 'var(--toul-info)', flexShrink: 0, marginTop: 2 }} />
                         <div>
                             <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
@@ -309,14 +334,14 @@ export function ReportsView({ data, loading, period, periodLabel }: {
 
             {/* ── 4. Qué deja plata ── */}
             <Section title="Lo que más te deja" hint="Ordenado por la ganancia que te dejó cada producto, no por cuánto vendiste.">
-                <div className="toul-card">
+                <div style={{ padding: '0 2px' }}>
                     <ProductTable rows={data.topProducts} emptyText="Aún no hay ventas en este período." />
                 </div>
             </Section>
 
             {data.worstProducts.length > 0 && (
                 <Section title="Lo que menos te deja" hint="Revisa si el precio está muy bajo o el costo muy alto.">
-                    <div className="toul-card">
+                    <div style={{ padding: '0 2px' }}>
                         <ProductTable rows={data.worstProducts} emptyText="Sin datos." highlightLow />
                     </div>
                 </Section>
@@ -329,7 +354,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
                         { title: 'Te deben', total: data.receivables.total, rows: data.receivables.top, color: 'var(--toul-accent)', empty: 'Nadie te debe. Bien ahí.', href: '/customers?ver=cobros' },
                         { title: 'Debes', total: data.payables.total, rows: data.payables.top, color: 'var(--toul-error)', empty: 'No le debes a ningún proveedor.', href: '/providers' },
                     ]).map(box => (
-                        <Link key={box.title} href={box.href} className="toul-card toul-card-interactive" style={{ textDecoration: 'none', display: 'block' }}>
+                        <Link key={box.title} href={box.href} className="rp-enlace">
                             <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>{box.title}</p>
                             <p style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.03em', color: box.color, margin: '2px 0 10px' }}>
                                 {formatCOP(box.total)}
@@ -353,7 +378,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
 
             {/* ── 6. Inventario ── */}
             <Section title="Tu plata guardada" hint="Lo que tienes en mercancía, valorado a lo que te costó.">
-                <div className="toul-card" style={{ display: 'flex', flexWrap: 'wrap', gap: 20, justifyContent: 'space-between' }}>
+                <div className="rp-caja" style={{ padding: '16px 18px', display: 'flex', flexWrap: 'wrap', gap: 20, justifyContent: 'space-between' }}>
                     <div>
                         <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>Valor del inventario</p>
                         <p style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: '2px 0 0' }}>
@@ -375,7 +400,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
                 </div>
 
                 {data.inventory.stale.length > 0 && (
-                    <div className="toul-card" style={{ marginTop: 10 }}>
+                    <div className="rp-caja" style={{ marginTop: 14, padding: '16px 18px' }}>
                         <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)', margin: '0 0 2px' }}>Plata quieta</p>
                         <p style={{ fontSize: 13, color: 'var(--toul-text-muted)', margin: '0 0 12px' }}>
                             Con stock y sin una sola venta en este período.
@@ -411,7 +436,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
                 <motion.div
                     initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.22, ease: EASE_OUT_EMIL }}
-                    className="toul-card" style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    className="rp-caja" style={{ marginTop: 10, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {[
                         ['Vendiste', 'Suma de todas las ventas del período, incluidas las fiadas. Las ventas anuladas no cuentan.'],
                         ['Te costó esa mercancía', 'Lo que pagaste por cada producto vendido, usando su costo promedio al momento de la venta.'],

@@ -12,6 +12,12 @@ import { EASE_OUT_EMIL } from '@/components/ui'
 
 const supabase = createClient()
 
+const CSS = `
+.mv-fila { display: flex; align-items: center; gap: 13px; padding: 11px 10px; border-radius: 14px;
+    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1); }
+@media (hover: hover) and (pointer: fine) { .mv-fila:hover { background: rgba(255,255,255,0.035); } }
+`
+
 /** Salidas de plata. Todo lo demás cuenta como entrada. */
 const OUT_TYPES = ['expense', 'purchase', 'provider_payment', 'transfer_out']
 
@@ -98,6 +104,7 @@ export default function MovimientosPage() {
 
     return (
         <div className="px-4 md:px-8 pt-6 pb-8 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+            <style>{CSS}</style>
             <div className="toul-ambient" />
 
             <div className="flex items-center gap-3 mb-5" style={{ position: 'relative' }}>
@@ -106,8 +113,8 @@ export default function MovimientosPage() {
                     <ArrowLeft size={17} color="rgba(255,255,255,0.7)" />
                 </Link>
                 <div>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 2px' }}>Operaciones</p>
-                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Movimientos</h1>
+                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Operaciones</p>
+                    <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Movimientos</h1>
                 </div>
             </div>
 
@@ -150,7 +157,7 @@ export default function MovimientosPage() {
             {isLoading ? (
                 <div className="flex flex-col gap-2">{[0, 1, 2, 3, 4].map(i => <div key={i} className="skeleton" style={{ height: 66, borderRadius: 16 }} />)}</div>
             ) : movements.length === 0 ? (
-                <div className="toul-card" style={{ textAlign: 'center', padding: '44px 20px' }}>
+                <div style={{ textAlign: 'center', padding: '48px 20px' }}>
                     <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Sin movimientos en este período</p>
                     <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>Cambia el filtro o registra un gasto.</p>
                 </div>
@@ -162,7 +169,7 @@ export default function MovimientosPage() {
                             <motion.div key={m.id}
                                 initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.22, ease: EASE_OUT_EMIL, delay: Math.min(idx, 10) * 0.02 }}
-                                className="toul-card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                className="mv-fila">
                                 <span style={{
                                     width: 38, height: 38, borderRadius: 12, flexShrink: 0,
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',

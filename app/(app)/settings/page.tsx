@@ -74,8 +74,8 @@ export default function SettingsPage() {
         <div className="px-4 md:px-8 pt-6 pb-8 fade-in" style={{ position: 'relative' }}>
             <div className="toul-ambient" />
             <div className="mb-6" style={{ position: 'relative' }}>
-                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px 0' }}>Sistema</p>
-                <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Mi negocio</h1>
+                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Sistema</p>
+                <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Mi negocio</h1>
             </div>
 
             {/* Account */}

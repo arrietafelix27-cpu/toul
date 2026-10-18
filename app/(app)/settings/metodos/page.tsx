@@ -78,8 +78,8 @@ export default function MetodosPagoPage() {
                     <ArrowLeft size={17} color="rgba(255,255,255,0.7)" />
                 </Link>
                 <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 2px' }}>Ajustes</p>
-                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Métodos de pago</h1>
+                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Ajustes</p>
+                    <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Métodos de pago</h1>
                 </div>
                 <button onClick={() => setAdding(true)}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, height: 42, padding: '0 16px', borderRadius: 12, border: 'none', background: 'var(--toul-accent)', color: '#000', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 20px var(--toul-accent-glow)' }}>

@@ -65,8 +65,8 @@ export default function ConteosPage() {
                     <ArrowLeft size={17} strokeWidth={2} color="rgba(255,255,255,0.7)" />
                 </Link>
                 <div>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 2px' }}>Inventario</p>
-                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Conteos</h1>
+                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Inventario</p>
+                    <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Conteos</h1>
                 </div>
             </div>
 
