@@ -56,6 +56,18 @@ const CSS = PANEL_CSS + `
     mask-image: linear-gradient(to bottom, transparent, #000 40%, #000);
 }
 .fs-body { position: relative; z-index: 2; display: flex; flex-direction: column; height: 100%; padding: 18px 20px; }
+
+/* En el celular el gráfico queda ARRIBA, no a la izquierda: el
+   degradado horizontal dibujaba una caja en vez de fundirse. Aquí
+   el panel se apoya en el fondo y el degradado baja desde arriba. */
+@media (max-width: 1023px) {
+    .fs-root { border: none; border-radius: 0; overflow: visible; }
+    .fs-root::before {
+        background: linear-gradient(to bottom, rgba(255,255,255,0.022) 0%, transparent 70%);
+    }
+    .fs-root::after { display: none; }
+    .fs-body { padding: 2px 2px 0; }
+}
 .fs-band { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
 .fs-line { height: 1px; background: var(--toul-divider); flex-shrink: 0; }
 

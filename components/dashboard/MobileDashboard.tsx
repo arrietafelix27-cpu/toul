@@ -3,29 +3,26 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PendingPanel, type PendingData } from './PendingPanel'
 import { AIAdvisor } from './AIAdvisor'
-import { formatCOP } from '@/lib/utils'
-import { Skeleton } from '@/components/ui/Skeleton'
+import { FinancialSummary, type FinancialSummaryMetrics } from './FinancialSummary'
+import { PANEL_CSS } from './panelStyles'
 import { fadeUp } from '@/lib/motion'
-import { Package, Calendar } from 'lucide-react'
-import Link from 'next/link'
+import { Calendar } from 'lucide-react'
+import { Thumb } from '@/components/ui/Thumb'
 import type { AIInsight } from '@/lib/types'
 import HeroChart from './HeroChart'
+
+type Period = 'today' | 'week' | 'month' | 'total' | 'custom'
 
 interface MobileDashboardProps {
     storeName: string
     currentDate: string
     storeId: string | null
-    period: 'today' | 'week' | 'month' | 'total' | 'custom'
-    setPeriod: (p: any) => void
+    period: Period
+    setPeriod: (p: Period) => void
     customRange: { from: string; to: string } | null
     setCustomRange: (r: { from: string; to: string } | null) => void
-    metrics: {
-        revenue: number
-        expenses: number
-        netProfit: number
-        salesCount: number
-        avgTicket: number
-    }
+    metrics: FinancialSummaryMetrics
+    periodLabel: string
     topProduct: { name: string; image_url: string | null; units: number } | null
     pending: PendingData
     insight: AIInsight | null
@@ -33,7 +30,6 @@ interface MobileDashboardProps {
     insightsLoading: boolean
 }
 
-type Period = 'today' | 'week' | 'month' | 'total' | 'custom'
 const PERIODS: { value: Period; label: string }[] = [
     { value: 'today', label: 'Hoy' },
     { value: 'week', label: 'Semana' },
@@ -43,7 +39,7 @@ const PERIODS: { value: Period; label: string }[] = [
 export default function MobileDashboard({
     storeName, currentDate, storeId, period, setPeriod,
     customRange, setCustomRange,
-    metrics, topProduct, pending, insight,
+    metrics, periodLabel, topProduct, pending, insight,
     loading, insightsLoading
 }: MobileDashboardProps) {
     const [showCalendar, setShowCalendar] = useState(false)
@@ -73,6 +69,11 @@ export default function MobileDashboard({
 
     return (
         <div className="px-4 pb-32 pt-5 flex flex-col gap-5" style={{ position: 'relative' }}>
+            <style>{PANEL_CSS}{`
+                .md-sep { height: 1px; margin: 4px 0 18px; background: var(--toul-divider); border: none;
+                    -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+                    mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent); }
+            `}</style>
             <div className="toul-ambient" />
 
             {/* 1️⃣ Saludo + controles de periodo */}
@@ -208,96 +209,43 @@ export default function MobileDashboard({
                 />
             </motion.div>
 
-            {/* 3️⃣ Bloque financiero compacto — 2 columns */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.08 }}
-                className="grid grid-cols-2 gap-3"
-            >
-                {/* Gastos */}
-                <Link href="/expenses" className="toul-card flex flex-col gap-1 active:scale-[0.98]"
-                    style={{ textDecoration: 'none', padding: 16, transition: 'transform 0.15s var(--toul-ease)' }}>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--toul-text-dim)' }}>Gastos</span>
-                    {loading ? (
-                        <Skeleton width="80px" height="1.4rem" className="opacity-10" />
-                    ) : (
-                        <span style={{
-                            fontSize: 20, fontWeight: 700, letterSpacing: '-0.03em',
-                            color: 'var(--toul-error)', fontVariantNumeric: 'tabular-nums',
-                        }}>
-                            {formatCOP(metrics.expenses)}
-                        </span>
-                    )}
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--toul-text-faint)', marginTop: 2 }}>
-                        Agregar gasto →
-                    </span>
-                </Link>
-
-                {/* Utilidad */}
-                <div className="toul-card flex flex-col gap-1" style={{ padding: 16 }}>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--toul-text-dim)' }}>Utilidad</span>
-                    {loading ? (
-                        <Skeleton width="90px" height="1.4rem" className="opacity-10" />
-                    ) : (
-                        <span style={{
-                            fontSize: 20, fontWeight: 700, letterSpacing: '-0.03em',
-                            color: 'var(--toul-accent)', fontVariantNumeric: 'tabular-nums',
-                        }}>
-                            {formatCOP(metrics.netProfit)}
-                        </span>
-                    )}
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--toul-text-faint)', marginTop: 2 }}>
-                        Ventas – Costo – Gastos
-                    </span>
-                </div>
+            {/* 3️⃣ El mismo resumen financiero de computador. Antes aquí
+                había dos tarjetitas con gastos y utilidad, que no
+                coincidían con lo que el dueño veía en su pantalla grande. */}
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.08 }}>
+                <FinancialSummary metrics={metrics} loading={loading} periodLabel={periodLabel} />
             </motion.div>
 
-            {/* 4️⃣ Producto estrella del día */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.12 }}>
-                {loading ? (
-                    <Skeleton height="56px" className="rounded-2xl opacity-10" />
-                ) : topProduct ? (
-                    <div className="toul-card flex items-center gap-3" style={{ padding: '12px 16px' }}>
-                        <div className="rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden"
-                            style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--toul-border)' }}>
-                            {topProduct.image_url
-                                ? <img src={topProduct.image_url} className="w-full h-full object-cover rounded-full" alt={topProduct.name} />
-                                : <Package size={16} color="rgba(255,255,255,0.4)" />
-                            }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--toul-text)', letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{topProduct.name}</p>
-                            <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--toul-text-dim)', fontVariantNumeric: 'tabular-nums' }}>{topProduct.units} vendidos hoy</p>
-                        </div>
-                        <span style={{
-                            fontSize: 10, fontWeight: 600, letterSpacing: '-0.01em',
-                            padding: '4px 9px', borderRadius: 8, flexShrink: 0,
-                            background: 'var(--toul-warning-dim)',
-                            color: 'var(--toul-warning)',
-                            border: '1px solid rgba(255,214,10,0.2)',
-                        }}>
-                            Top hoy
+            <hr className="md-sep" />
+
+            {/* 4️⃣ Lo que más salió */}
+            {!loading && topProduct && (
+                <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.12 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Thumb src={topProduct.image_url} name={topProduct.name} size={38} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--toul-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {topProduct.name}
                         </span>
-                    </div>
-                ) : (
-                    <div className="toul-card flex items-center gap-3" style={{ padding: '12px 16px' }}>
-                        <Package size={16} color="rgba(255,255,255,0.4)" />
-                        <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--toul-text-dim)' }}>Sin ventas hoy</p>
-                    </div>
-                )}
-            </motion.div>
+                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-text-dim)' }}>
+                            {topProduct.units} {topProduct.units === 1 ? 'vendido' : 'vendidos'} · lo que más salió
+                        </span>
+                    </span>
+                </motion.div>
+            )}
 
             {/* 5️⃣ Plata pendiente */}
             {!loading && (pending.customerDebts.length > 0 || pending.providerDebts.length > 0) && (
-                <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.14 }}
-                    className="toul-card" style={{ padding: 16 }}>
+                <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.14 }}>
+                    <hr className="md-sep" />
                     <PendingPanel pending={pending} storeName={storeName} compact />
                 </motion.div>
             )}
 
             {/* 6️⃣ TOUL AI */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.16 }}>
-                <div className="toul-card" style={{ padding: 16 }}>
-                    <AIAdvisor insight={insight} loading={insightsLoading || loading} />
-                </div>
+                <hr className="md-sep" />
+                <AIAdvisor insight={insight} loading={insightsLoading || loading} />
             </motion.div>
 
         </div>

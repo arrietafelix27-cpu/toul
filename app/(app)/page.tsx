@@ -344,12 +344,18 @@ export default function DashboardPage() {
                     customRange={customRange}
                     setCustomRange={setCustomRange}
                     metrics={{
-                        revenue: dashboardData?.metrics.revenue || 0,
-                        expenses: dashboardData?.metrics.expenses || 0,
-                        netProfit: dashboardData?.metrics.netProfit || 0,
                         salesCount: dashboardData?.metrics.salesCount || 0,
-                        avgTicket: dashboardData?.metrics.avgTicket || 0,
+                        unitsSold: dashboardData?.metrics.unitsSold || 0,
+                        creditAmount: dashboardData?.metrics.creditAmount || 0,
+                        expenses: dashboardData?.metrics.expenses || 0,
+                        expensesTopCategory: dashboardData?.metrics.expensesTopCategory ?? null,
+                        grossProfit: dashboardData?.metrics.grossProfit || 0,
+                        netProfit: dashboardData?.metrics.netProfit || 0,
+                        revenue: dashboardData?.metrics.revenue || 0,
+                        prevGrossProfit: dashboardData?.metrics.prevGrossProfit || 0,
+                        prevNetProfit: dashboardData?.metrics.prevNetProfit || 0,
                     }}
+                    periodLabel={periodLabel}
                     topProduct={topProduct}
                     pending={dashboardData?.pending || { customerDebts: [], providerDebts: [] }}
                     insight={insights?.[0] || null}
