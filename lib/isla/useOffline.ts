@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { listPendingSales, syncPendingSales, type PendingSale } from './offline'
+import { listPendingSales, removePendingSale, syncPendingSales, type PendingSale } from './offline'
 
 export interface OfflineState {
     online: boolean
@@ -11,26 +11,33 @@ export interface OfflineState {
     syncing: boolean
     sync: (includeFailed?: boolean) => Promise<void>
     refresh: () => void
+    /** Saca de la cola una venta que el dueño decidió descartar */
+    discard: (clientSaleId: string) => void
 }
 
-/** Estado de conexión y ventas guardadas esperando ser enviadas. */
-export function useOfflineSales(): OfflineState {
+/** Estado de conexión y ventas de ESTA tienda esperando ser cargadas. */
+export function useOfflineSales(storeId: string | null | undefined): OfflineState {
     const [online, setOnline] = useState(true)
     const [pending, setPending] = useState<PendingSale[]>([])
     const [syncing, setSyncing] = useState(false)
 
-    const refresh = useCallback(() => setPending(listPendingSales()), [])
+    const refresh = useCallback(() => setPending(listPendingSales(storeId)), [storeId])
 
     const sync = useCallback(async (includeFailed = false) => {
         if (!navigator.onLine) return
         setSyncing(true)
         try {
-            await syncPendingSales(includeFailed)
+            await syncPendingSales(storeId, includeFailed)
         } finally {
             setSyncing(false)
             refresh()
         }
-    }, [refresh])
+    }, [refresh, storeId])
+
+    const discard = useCallback((clientSaleId: string) => {
+        removePendingSale(storeId, clientSaleId)
+        refresh()
+    }, [storeId, refresh])
 
     useEffect(() => {
         setOnline(navigator.onLine)
@@ -43,7 +50,7 @@ export function useOfflineSales(): OfflineState {
 
         // Reintento periódico por si el navegador no avisa del cambio de red
         const timer = setInterval(() => {
-            if (navigator.onLine && listPendingSales().some(s => s.status === 'pending')) void sync()
+            if (navigator.onLine && listPendingSales(storeId).some(s => s.status === 'pending')) void sync()
             else refresh()
         }, 20_000)
 
@@ -53,7 +60,7 @@ export function useOfflineSales(): OfflineState {
             window.removeEventListener('offline', goOffline)
             clearInterval(timer)
         }
-    }, [sync, refresh])
+    }, [sync, refresh, storeId])
 
     return {
         online,
@@ -63,5 +70,6 @@ export function useOfflineSales(): OfflineState {
         syncing,
         sync,
         refresh,
+        discard,
     }
 }

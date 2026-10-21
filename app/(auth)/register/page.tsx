@@ -2,13 +2,12 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { entrarDeCero, limpiarDatosDeCuenta, marcarCuenta } from '@/lib/session/limpiarCuenta'
 import { Eye, EyeOff, Zap } from 'lucide-react'
 
 export default function RegisterPage() {
     const supabase = createClient()
-    const router = useRouter()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [confirm, setConfirm] = useState('')
@@ -32,7 +31,10 @@ export default function RegisterPage() {
             setNeedsConfirmation(true)
             return
         }
-        router.push('/onboarding')
+        // Cuenta nueva en un equipo que pudo tener otra: se entra de cero
+        await limpiarDatosDeCuenta()
+        marcarCuenta(data.user?.id ?? null)
+        entrarDeCero('/onboarding')
     }
 
     return (

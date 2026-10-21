@@ -9,6 +9,7 @@ import { LockKeyhole, Printer } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { PriceField, EASE_OUT_EMIL } from '@/components/ui'
 import { useCaja } from '@/components/isla/CajaContext'
+import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { CashSummary } from '@/components/isla/CashSummary'
 import { Sheet } from '@/components/isla/Sheet'
 import { printCashClose } from '@/lib/isla/receipt'
@@ -17,6 +18,9 @@ import type { CashSession, CashSessionSummary } from '@/lib/isla/types'
 export default function CajaCierrePage() {
     const router = useRouter()
     const { ctx, session, refreshSession } = useCaja()
+    // Cerrar sesión pasa por un solo lugar: carga lo pendiente, avisa si
+    // algo no se pudo cargar y no deja nada de la cuenta en el equipo
+    const { cerrar: cerrarSesion, cerrando: saliendo, dialogo: dialogoSalir } = useCerrarSesion(ctx.storeId)
     const [counted, setCounted] = useState('')
     const [notes, setNotes] = useState('')
     const [confirmOpen, setConfirmOpen] = useState(false)
@@ -58,9 +62,10 @@ export default function CajaCierrePage() {
                             <Printer size={17} /> Imprimir cierre
                         </button>
                         <button className="toul-btn-primary" onClick={() => router.push('/caja')}>Abrir nuevo turno</button>
-                        <button className="toul-btn-ghost" onClick={async () => { await createClient().auth.signOut(); router.replace('/login') }}>
-                            Cerrar sesión
+                        <button className="toul-btn-ghost" onClick={cerrarSesion} disabled={saliendo}>
+                            {saliendo ? 'Cerrando sesión…' : 'Cerrar sesión'}
                         </button>
+                        {dialogoSalir}
                     </div>
                 </motion.div>
             </div>

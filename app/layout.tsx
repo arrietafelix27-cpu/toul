@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import { ErrorWatcher } from '@/components/ErrorWatcher'
+import { AccountWatcher } from '@/components/AccountWatcher'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" className="dark">
       <body className={`${inter.className} bg-slate-950 text-white antialiased`}>
         <ErrorWatcher />
+        <AccountWatcher />
         {children}
         <Toaster
           position="top-center"

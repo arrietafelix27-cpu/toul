@@ -54,5 +54,8 @@ export function useStore() {
         if (!user) return null
         const { data } = await supabase.from('stores').select('id, name, appearance, plan').eq('owner_id', user.id).single()
         return data
-    }, { revalidateOnFocus: false, dedupingInterval: 3600000 }) // 1 hour cache
+    // Antes se recordaba una hora sin volver a preguntar: si cambiabas de
+    // cuenta dentro de esa hora, la app seguía creyendo que eras la tienda
+    // anterior. Ahora se pregunta como todo lo demás.
+    }, { revalidateOnFocus: false })
 }

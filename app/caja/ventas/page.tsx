@@ -27,7 +27,7 @@ const supabase = createClient()
 
 export default function CajaVentasPage() {
     const { ctx, session } = useCaja()
-    const offline = useOfflineSales()
+    const offline = useOfflineSales(ctx.storeId)
     const [selected, setSelected] = useState<SaleListRow | null>(null)
 
     // Con turno abierto: ventas del turno. Sin turno: mis ventas de hoy.

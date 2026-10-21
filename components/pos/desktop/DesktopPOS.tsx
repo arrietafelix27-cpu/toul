@@ -22,6 +22,7 @@ import { useCreditApproval, type CreditApprovalState } from '@/lib/isla/useCredi
 import { createClient } from '@/lib/supabase/client'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
 import { useOfflineSales } from '@/lib/isla/useOffline'
+import { useSessionContext } from '@/lib/isla/useSession'
 import { getCachedStoreInfo, queueSale } from '@/lib/isla/offline'
 import type { ReceiptData } from '@/lib/isla/types'
 import toast from 'react-hot-toast'
@@ -1388,7 +1389,11 @@ export default function DesktopPOS() {
     const { cart, payment } = usePOSFlow()
     const { mutate: globalMutate } = useSWRConfig()
     const { mode, role, autoPrint, cashSessionId, sellerName, onViewHistory } = usePOSMode()
-    const { online, sync } = useOfflineSales()
+    // La tienda de quien vende: las ventas sin internet se guardan a su
+    // nombre, para que ninguna otra cuenta de este equipo las vea
+    const { data: sesion } = useSessionContext()
+    const storeId = sesion?.storeId ?? null
+    const { online, sync } = useOfflineSales(storeId)
 
     const [saleSnap, setSaleSnap] = useState<DesktopSaleSnapshot | null>(null)
     const [submitting, setSubmitting] = useState(false)
@@ -1426,7 +1431,7 @@ export default function DesktopPOS() {
 
     // Tirilla de una venta hecha sin internet: se arma con lo que hay en el computador
     const buildLocalReceipt = useCallback((snapshot: SaleSnapshot, clientSaleId: string, soldAt: string): ReceiptData => {
-        const store = getCachedStoreInfo()
+        const store = getCachedStoreInfo(storeId)
         return {
             saleId: clientSaleId,
             createdAt: soldAt,
@@ -1448,7 +1453,7 @@ export default function DesktopPOS() {
             payments: snapshot.payments.map(p => ({ method: p.methodName, amount: p.amount })),
             isCredit: snapshot.isCredit,
         }
-    }, [sellerName])
+    }, [sellerName, storeId])
 
     const handleSubmit = useCallback(async () => {
         if (submitting || cart.isEmpty) return
@@ -1497,7 +1502,7 @@ export default function DesktopPOS() {
         // Guardar en el computador para enviarla cuando vuelva el internet
         const saveForLater = () => {
             const receipt = buildLocalReceipt(snapshot, clientSaleId, soldAt)
-            const saved = queueSale({
+            const saved = queueSale(storeId, {
                 clientSaleId,
                 soldAt,
                 total: snapshot.total,
@@ -1550,7 +1555,7 @@ export default function DesktopPOS() {
             const message = err instanceof Error ? err.message : 'Error inesperado al procesar la venta.'
             setSubmitError(message)
         }
-    }, [submitting, cart, payment, globalMutate, needsApproval, approval, mode, autoPrint, handlePrint, cashSessionId, buildLocalReceipt, sync])
+    }, [submitting, cart, payment, globalMutate, needsApproval, approval, mode, autoPrint, handlePrint, cashSessionId, buildLocalReceipt, sync, storeId])
 
     const handleNewSale = useCallback(() => {
         setSaleSnap(null)

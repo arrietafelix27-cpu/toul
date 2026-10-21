@@ -1,11 +1,20 @@
 // TOUL — Service worker
 // 1. Notificaciones de aprobaciones.
 // 2. Que la caja abra y funcione aunque se caiga el internet.
-//    No se guarda nada sensible: solo la pantalla y los archivos de la app.
+//
+// Antes guardaba una copia de TODO lo que la app pedía al servidor,
+// sin saber de qué cuenta era —incluido el archivo de exportar con
+// todas las ventas—, y esa copia sobrevivía al cerrar sesión. Ahora
+// solo guarda lo que la caja necesita para vender sin señal, y la app
+// la borra al cerrar sesión. Al subir esta versión, la copia vieja
+// (v2) se borra sola.
 
 const SHELL_CACHE = 'toul-shell-v2'
-const DATA_CACHE = 'toul-data-v2'
+const DATA_CACHE = 'toul-data-v3'
 const KEEP = [SHELL_CACHE, DATA_CACHE]
+
+/** Lo único del servidor que vale la pena tener sin internet */
+const SIN_INTERNET = ['/api/pos-data', '/api/payment-methods', '/api/customers']
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -69,8 +78,10 @@ self.addEventListener('fetch', (event) => {
         return
     }
 
-    // Catálogo, métodos de pago y clientes: última copia buena si no hay señal
-    if (url.pathname.startsWith('/api/')) {
+    // Catálogo, métodos de pago y clientes: última copia buena si no hay
+    // señal. Todo lo demás —exportaciones incluidas— va directo al servidor
+    // y no se guarda.
+    if (SIN_INTERNET.includes(url.pathname)) {
         event.respondWith(networkFirst(request, DATA_CACHE))
     }
 })

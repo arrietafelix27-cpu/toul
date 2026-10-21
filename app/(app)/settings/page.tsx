@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react'
 import { capitalizeFirst } from '@/lib/format/text'
 import { explainError } from '@/lib/errors'
+import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User, Download, Bug, CreditCard, Sparkles } from 'lucide-react'
@@ -24,7 +24,6 @@ const CATEGORIES = [
 
 export default function SettingsPage() {
     const supabase = createClient()
-    const router = useRouter()
     const [email, setEmail] = useState('')
     const [storeName, setStoreName] = useState('')
     const [category, setCategory] = useState('')
@@ -65,10 +64,9 @@ export default function SettingsPage() {
         setSaving(false)
     }
 
-    async function handleLogout() {
-        await supabase.auth.signOut()
-        router.push('/login')
-    }
+    // Cerrar sesión pasa por un solo lugar: carga lo pendiente, avisa si
+    // algo no se pudo cargar y no deja nada de la cuenta en el equipo
+    const { cerrar: handleLogout, cerrando: saliendo, dialogo: dialogoSalir } = useCerrarSesion(storeId || null)
 
     return (
         <div className="px-4 md:px-8 pt-6 pb-8 fade-in" style={{ position: 'relative' }}>
@@ -269,10 +267,11 @@ export default function SettingsPage() {
             )}
 
             {/* Logout */}
-            <button onClick={handleLogout}
+            {dialogoSalir}
+            <button onClick={handleLogout} disabled={saliendo}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-colors"
                 style={{ background: 'var(--toul-error-dim)', color: 'var(--toul-error)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                <LogOut size={16} /> Cerrar sesión
+                <LogOut size={16} /> {saliendo ? 'Cerrando sesión…' : 'Cerrar sesión'}
             </button>
         </div>
     )

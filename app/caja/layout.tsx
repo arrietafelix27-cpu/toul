@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ShoppingBag, ReceiptText, LockKeyhole, LayoutDashboard, LogOut, Printer, ChevronDown, X } from 'lucide-react'
 import { POSProvider } from '@/components/pos/POSContext'
@@ -10,6 +10,7 @@ import { CajaContext } from '@/components/isla/CajaContext'
 import { useOpenCashSession, useSessionContext } from '@/lib/isla/useSession'
 import { useOfflineSales } from '@/lib/isla/useOffline'
 import { cacheStoreInfo } from '@/lib/isla/offline'
+import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { OfflineBar } from '@/components/isla/OfflineBar'
 import { createClient } from '@/lib/supabase/client'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
@@ -32,13 +33,12 @@ function Spinner() {
 
 export default function CajaLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
-    const router = useRouter()
     const { data: ctx, isLoading } = useSessionContext()
     const { data: session, isLoading: sessionLoading, mutate: refreshSession } = useOpenCashSession(ctx?.storeId)
     const [autoPrint, setAutoPrint] = useState(true)
     const [menuOpen, setMenuOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
-    const offline = useOfflineSales()
+    const offline = useOfflineSales(ctx?.storeId)
 
     useEffect(() => {
         try {
@@ -56,9 +56,10 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     }, [])
 
     useEffect(() => {
-        if (!ctx?.storeId) return
-        createClient().from('stores').select('name, nit, address, phone, receipt_footer').eq('id', ctx.storeId).single()
-            .then(({ data }) => { if (data) cacheStoreInfo(data) })
+        const storeId = ctx?.storeId
+        if (!storeId) return
+        createClient().from('stores').select('name, nit, address, phone, receipt_footer').eq('id', storeId).single()
+            .then(({ data }) => { if (data) cacheStoreInfo(storeId, data) })
     }, [ctx?.storeId])
 
     useEffect(() => {
@@ -75,10 +76,9 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
         })
     }
 
-    const logout = async () => {
-        await createClient().auth.signOut()
-        router.replace('/login')
-    }
+    // Cerrar sesión pasa por un solo lugar: carga lo pendiente, avisa si
+    // algo no se pudo cargar y no deja nada de la cuenta en el equipo
+    const { cerrar: logout, dialogo: dialogoSalir } = useCerrarSesion(ctx?.storeId)
 
     const value = useMemo(() => ctx ? ({
         ctx, session: session ?? null, sessionLoading, refreshSession, autoPrint,
@@ -90,6 +90,7 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
 
     return (
         <CajaContext.Provider value={value}>
+            {dialogoSalir}
             <POSProvider>
                 <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--toul-bg)', overflow: 'hidden' }}>
                     {/* ── Barra superior ───────────────────────────── */}

@@ -5,20 +5,18 @@ import { CloudUpload, AlertTriangle, Printer, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCOP } from '@/lib/utils'
 import { printReceipt } from '@/lib/isla/receipt'
-import { removePendingSale } from '@/lib/isla/offline'
 import type { OfflineState } from '@/lib/isla/useOffline'
 import { ConfirmSheet } from './ConfirmSheet'
 
 /** Ventas guardadas en este computador que todavía no llegan al servidor. */
 export function PendingSales({ offline }: { offline: OfflineState }) {
-    const { pending, refresh, sync, syncing } = offline
+    const { pending, sync, syncing, discard: descartar } = offline
     const [discarding, setDiscarding] = useState<string | null>(null)
     if (pending.length === 0) return null
 
     function discard(clientSaleId: string) {
-        removePendingSale(clientSaleId)
+        descartar(clientSaleId)
         setDiscarding(null)
-        refresh()
         toast.success('Venta descartada')
     }
 

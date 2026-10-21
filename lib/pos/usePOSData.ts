@@ -2,23 +2,28 @@
 
 import { useMemo } from 'react'
 import useSWR from 'swr'
+import { useSessionContext } from '@/lib/isla/useSession'
 import type { Product, PaymentMethodConfig, Customer } from '@/lib/types'
 
 // ─── Fetchers ─────────────────────────────────────────────────
 // Guarda la última respuesta buena en el computador: si se cae internet,
 // la caja sigue mostrando productos, métodos de pago y clientes.
+// La copia lleva el nombre de la tienda: antes era una sola para todo
+// el equipo, y si se caía el internet otra cuenta veía los productos
+// y clientes de la anterior.
 const CACHE_PREFIX = 'toul-pos-cache:'
 
-const jsonFetcher = async (url: string) => {
+const jsonFetcher = async ([url, storeId]: [string, string]) => {
+    const llave = `${CACHE_PREFIX}${storeId}:${url}`
     try {
         const res = await fetch(url)
         if (!res.ok) throw new Error(String(res.status))
         const data = await res.json()
-        try { localStorage.setItem(CACHE_PREFIX + url, JSON.stringify(data)) } catch { /* sin espacio */ }
+        try { localStorage.setItem(llave, JSON.stringify(data)) } catch { /* sin espacio */ }
         return data
     } catch (err) {
         try {
-            const cached = localStorage.getItem(CACHE_PREFIX + url)
+            const cached = localStorage.getItem(llave)
             if (cached) return JSON.parse(cached)
         } catch { /* sin almacenamiento */ }
         throw err
@@ -68,20 +73,25 @@ export interface POSDataState {
  * Keeps data fresh but avoids re-fetching while the POS is open.
  */
 export function usePOSData(enabled: boolean): POSDataState {
+    // La tienda de quien vende: la memoria y la copia sin internet van a su nombre
+    const { data: sesion } = useSessionContext()
+    const storeId = sesion?.storeId ?? null
+    const listo = enabled && !!storeId
+
     const { data: prodData, error: prodErr } = useSWR(
-        enabled ? '/api/pos-data' : null,
+        listo ? ['/api/pos-data', storeId] : null,
         jsonFetcher,
         { revalidateOnFocus: false, dedupingInterval: 30_000 }
     )
 
     const { data: methData, error: methErr } = useSWR(
-        enabled ? '/api/payment-methods' : null,
+        listo ? ['/api/payment-methods', storeId] : null,
         jsonFetcher,
         { revalidateOnFocus: false, dedupingInterval: 60_000 }
     )
 
     const { data: custData, error: custErr } = useSWR(
-        enabled ? '/api/customers' : null,
+        listo ? ['/api/customers', storeId] : null,
         jsonFetcher,
         { revalidateOnFocus: false, dedupingInterval: 30_000 }
     )

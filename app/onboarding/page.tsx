@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
+import { entrarDeCero } from '@/lib/session/limpiarCuenta'
 import { Zap, Check, KeyRound, Store } from 'lucide-react'
 
 const CATEGORIES = [
@@ -41,7 +42,9 @@ export default function OnboardingPage() {
             return
         }
         toast.success('¡Negocio creado! Bienvenido a TOUL 🎉')
-        router.push('/')
+        // La app arranca de cero con la tienda nueva: si entra con la
+        // navegación normal, todavía recuerda que no había tienda
+        entrarDeCero('/')
     }
 
     async function handleJoin() {

@@ -2,13 +2,12 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { entrarDeCero, limpiarDatosDeCuenta, marcarCuenta } from '@/lib/session/limpiarCuenta'
 import { Eye, EyeOff, Zap } from 'lucide-react'
 
 export default function LoginPage() {
     const supabase = createClient()
-    const router = useRouter()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
@@ -17,7 +16,7 @@ export default function LoginPage() {
     async function handleLogin(e: React.FormEvent) {
         e.preventDefault()
         setLoading(true)
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) {
             // Mensaje según la causa real: "correo incorrecto" confundía cuando
             // lo que faltaba era confirmar la cuenta desde el correo
@@ -30,8 +29,13 @@ export default function LoginPage() {
                 toast.error('Correo o contraseña incorrectos')
             }
         } else {
-            router.push('/')
-            router.refresh()
+            // Se entra de cero: si en este equipo quedó algo de otra cuenta
+            // —porque la sesión venció en vez de cerrarse—, se borra antes
+            // de mostrar nada
+            await limpiarDatosDeCuenta()
+            marcarCuenta(data.user?.id ?? null)
+            entrarDeCero('/')
+            return
         }
         setLoading(false)
     }
