@@ -1,9 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { entrarDeCero } from '@/lib/session/limpiarCuenta'
+import { explainError } from '@/lib/errors'
+import { AceptarTerminos, datosDeAceptacion, yaAcepto } from '@/components/auth/AceptarTerminos'
 import { Zap, Check, KeyRound, Store } from 'lucide-react'
 
 const CATEGORIES = [
@@ -26,6 +28,30 @@ export default function OnboardingPage() {
     const [storeName, setStoreName] = useState('')
     const [category, setCategory] = useState('')
     const [loading, setLoading] = useState(false)
+    // Quien entra con Google no pasa por el registro: acepta aquí los términos
+    const [debeAceptar, setDebeAceptar] = useState(false)
+    const [aceptado, setAceptado] = useState(false)
+    const [faltaAceptar, setFaltaAceptar] = useState(false)
+
+    useEffect(() => {
+        let vigente = true
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            if (vigente && user && !yaAcepto(user.user_metadata)) setDebeAceptar(true)
+        })
+        return () => { vigente = false }
+    }, [supabase])
+
+    async function elegirCamino(camino: 1 | 'join') {
+        if (debeAceptar) {
+            if (!aceptado) { setFaltaAceptar(true); return }
+            setLoading(true)
+            const { error } = await supabase.auth.updateUser({ data: datosDeAceptacion() })
+            setLoading(false)
+            if (error) { toast.error(explainError(error, 'No se pudo guardar. Intenta de nuevo.')); return }
+            setDebeAceptar(false)
+        }
+        setStep(camino)
+    }
 
     async function handleFinish() {
         if (!storeName.trim()) { toast.error('Ingresa el nombre de tu negocio'); return }
@@ -83,7 +109,7 @@ export default function OnboardingPage() {
                             { key: 1 as const, icon: Store, title: 'Tengo un negocio', text: 'Crea tu negocio y administra todo.' },
                             { key: 'join' as const, icon: KeyRound, title: 'Soy vendedor', text: 'Tengo un código que me dio el administrador.' },
                         ].map(opt => (
-                            <button key={String(opt.key)} onClick={() => setStep(opt.key)}
+                            <button key={String(opt.key)} onClick={() => elegirCamino(opt.key)} disabled={loading}
                                 className="flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-[0.98]"
                                 style={{ background: 'var(--toul-surface)', border: '1px solid var(--toul-border)', color: 'var(--toul-text)' }}>
                                 <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -97,6 +123,11 @@ export default function OnboardingPage() {
                             </button>
                         ))}
                     </div>
+                    {debeAceptar && (
+                        <div style={{ marginTop: 20 }}>
+                            <AceptarTerminos aceptado={aceptado} onCambio={setAceptado} error={faltaAceptar} />
+                        </div>
+                    )}
                 </div>
             )}
 

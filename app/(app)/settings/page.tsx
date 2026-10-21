@@ -10,6 +10,7 @@ import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User, Download, Bug, Cr
 import { TeamSection } from '@/components/isla/TeamSection'
 import { ReceiptSettings } from '@/components/isla/ReceiptSettings'
 import { PushPrompt } from '@/components/isla/PushPrompt'
+import { SeguridadCuenta } from '@/components/settings/SeguridadCuenta'
 
 const CATEGORIES = [
     { value: 'ropa', label: '👗 Ropa y accesorios' },
@@ -265,6 +266,8 @@ export default function SettingsPage() {
                     {storeId && <ReceiptSettings storeId={storeId} />}
                 </>
             )}
+
+            {email && <SeguridadCuenta storeId={storeId || null} email={email} />}
 
             {/* Logout */}
             {dialogoSalir}

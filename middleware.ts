@@ -40,9 +40,11 @@ export async function middleware(request: NextRequest) {
     const isServiceWorker = pathname === '/sw.js' || pathname === '/manifest.json'
     // Catálogo por link: lo abre cualquier cliente, sin cuenta
     const isPublicCatalog = pathname === '/t' || pathname.startsWith('/t/')
+    // Términos y política de datos: se leen antes de tener cuenta
+    const isLegal = pathname === '/terminos' || pathname === '/privacidad'
 
-    // Skip middleware for API routes, PWA files and the public catalog
-    if (isApi || isServiceWorker || isPublicCatalog) return supabaseResponse
+    // Skip middleware for API routes, PWA files, the public catalog and legal pages
+    if (isApi || isServiceWorker || isPublicCatalog || isLegal) return supabaseResponse
 
     // Recuperar contraseña: accesible con o sin sesión (el enlace del correo inicia sesión)
     if (isResetPassword) return supabaseResponse

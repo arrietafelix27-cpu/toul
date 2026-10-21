@@ -1,10 +1,21 @@
 'use client'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { explainError } from '@/lib/errors'
 import { entrarDeCero, limpiarDatosDeCuenta, marcarCuenta } from '@/lib/session/limpiarCuenta'
+import { AceptarTerminos, datosDeAceptacion } from '@/components/auth/AceptarTerminos'
+import { CodigoCorreo } from '@/components/auth/CodigoCorreo'
+import { BotonGoogle } from '@/components/auth/BotonGoogle'
 import { Eye, EyeOff, Zap } from 'lucide-react'
+
+/** Cuenta nueva en un equipo que pudo tener otra: se entra de cero */
+async function entrar(userId: string) {
+    await limpiarDatosDeCuenta()
+    marcarCuenta(userId)
+    entrarDeCero('/onboarding')
+}
 
 export default function RegisterPage() {
     const supabase = createClient()
@@ -12,30 +23,59 @@ export default function RegisterPage() {
     const [password, setPassword] = useState('')
     const [confirm, setConfirm] = useState('')
     const [showPassword, setShowPassword] = useState(false)
+    const [aceptado, setAceptado] = useState(false)
+    const [faltaAceptar, setFaltaAceptar] = useState(false)
     const [loading, setLoading] = useState(false)
-    const [needsConfirmation, setNeedsConfirmation] = useState(false)
+    /** Correo al que se mandó el código para activar la cuenta */
+    const [pendiente, setPendiente] = useState<string | null>(null)
 
     async function handleRegister(e: React.FormEvent) {
         e.preventDefault()
-        if (password !== confirm) { toast.error('Las contraseñas no coinciden'); return }
         if (password.length < 8) { toast.error('La contraseña debe tener al menos 8 caracteres'); return }
+        if (password !== confirm) { toast.error('Las contraseñas no coinciden'); return }
+        if (!aceptado) { setFaltaAceptar(true); return }
         setLoading(true)
-        const { data, error } = await supabase.auth.signUp({ email, password })
-        setLoading(false)
+        const correo = email.trim()
+        const { data, error } = await supabase.auth.signUp({
+            email: correo,
+            password,
+            // Queda en la cuenta qué versión de los términos aceptó y cuándo
+            options: { data: datosDeAceptacion() },
+        })
         if (error) {
-            toast.error(error.message)
+            setLoading(false)
+            toast.error(explainError(error, 'No se pudo crear la cuenta. Intenta de nuevo.'))
             return
         }
-        // Si el proyecto pide confirmar el correo, no hay sesión todavía
-        if (!data.session) {
-            setNeedsConfirmation(true)
+        // Con la confirmación encendida, Supabase no avisa que el correo ya
+        // existía (para no revelar quién tiene cuenta): devuelve una cuenta
+        // vacía, sin forma de entrar
+        if (data.user && data.user.identities?.length === 0) {
+            setLoading(false)
+            toast.error(explainError({ code: 'user_already_exists' }))
             return
         }
-        // Cuenta nueva en un equipo que pudo tener otra: se entra de cero
-        await limpiarDatosDeCuenta()
-        marcarCuenta(data.user?.id ?? null)
-        entrarDeCero('/onboarding')
+        // Sin confirmación de correo, la cuenta ya quedó lista
+        if (data.session) { await entrar(data.session.user.id); return }
+        setLoading(false)
+        setPendiente(correo)
     }
+
+    const verificarCodigo = useCallback(async (codigo: string) => {
+        if (!pendiente) return null
+        const { data, error } = await supabase.auth.verifyOtp({ email: pendiente, token: codigo, type: 'signup' })
+        if (error || !data.user) return explainError(error, 'El código no es correcto o ya venció.')
+        await entrar(data.user.id)
+        return null
+    }, [pendiente, supabase])
+
+    const reenviarCodigo = useCallback(async () => {
+        if (!pendiente) return null
+        const { error } = await supabase.auth.resend({ type: 'signup', email: pendiente })
+        return error ? explainError(error) : null
+    }, [pendiente, supabase])
+
+    const cambiarCorreo = useCallback(() => setPendiente(null), [])
 
     return (
         <div className="min-h-dvh flex flex-col items-center justify-center px-5 py-10"
@@ -46,22 +86,19 @@ export default function RegisterPage() {
                     <Zap size={26} fill="white" className="text-white" />
                 </div>
                 <h1 className="text-3xl font-bold gradient-text">TOUL</h1>
-                <p className="text-sm mt-1" style={{ color: 'var(--toul-text-muted)' }}>Crea tu cuenta gratis</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--toul-text-muted)' }}>Tu negocio, bajo control</p>
             </div>
 
             <div className="w-full max-w-sm rounded-3xl p-6"
                 style={{ background: 'var(--toul-surface)', border: '1px solid var(--toul-border)' }}>
-                {needsConfirmation ? (
-                    <div className="text-center py-4">
-                        <div className="text-4xl mb-4">📬</div>
-                        <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--toul-text)' }}>Confirma tu correo</h2>
-                        <p className="text-sm mb-6" style={{ color: 'var(--toul-text-muted)' }}>
-                            Te enviamos un correo a <strong style={{ color: 'var(--toul-text)' }}>{email}</strong>.
-                            Ábrelo y toca el enlace para activar la cuenta. Revisa también el correo no deseado.
+                {pendiente ? (
+                    <div className="fade-in">
+                        <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--toul-text)' }}>Revisa tu correo</h2>
+                        <p className="text-sm mb-1" style={{ color: 'var(--toul-text-muted)' }}>
+                            Escribe el código de 6 números para activar tu cuenta.
                         </p>
-                        <Link href="/login" className="toul-btn-primary" style={{ textDecoration: 'none' }}>
-                            Ya confirmé, entrar
-                        </Link>
+                        <div style={{ height: 8 }} />
+                        <CodigoCorreo email={pendiente} onVerificar={verificarCodigo} onReenviar={reenviarCodigo} onCambiarCorreo={cambiarCorreo} />
                     </div>
                 ) : (
                 <>
@@ -70,30 +107,38 @@ export default function RegisterPage() {
 
                 <form onSubmit={handleRegister} className="flex flex-col gap-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Correo</label>
-                        <input className="toul-input" type="email" placeholder="hola@minegocio.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                        <label htmlFor="correo" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Correo</label>
+                        <input id="correo" className="toul-input" type="email" inputMode="email" autoComplete="email" autoCapitalize="none"
+                            placeholder="hola@minegocio.com" value={email} onChange={e => setEmail(e.target.value)} required />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Contraseña</label>
+                        <label htmlFor="clave" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Contraseña</label>
                         <div className="relative">
-                            <input className="toul-input pr-10" type={showPassword ? 'text' : 'password'} placeholder="Mínimo 8 caracteres" value={password} onChange={e => setPassword(e.target.value)} required />
-                            <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--toul-text-subtle)' }}>
+                            <input id="clave" className="toul-input pr-10" type={showPassword ? 'text' : 'password'} autoComplete="new-password"
+                                placeholder="Mínimo 8 caracteres" value={password} onChange={e => setPassword(e.target.value)} required />
+                            <button type="button" onClick={() => setShowPassword(v => !v)}
+                                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--toul-text-subtle)' }}>
                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                             </button>
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Confirmar contraseña</label>
-                        <input className="toul-input" type={showPassword ? 'text' : 'password'} placeholder="Repite tu contraseña" value={confirm} onChange={e => setConfirm(e.target.value)} required />
+                        <label htmlFor="confirmar" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Confirmar contraseña</label>
+                        <input id="confirmar" className="toul-input" type={showPassword ? 'text' : 'password'} autoComplete="new-password"
+                            placeholder="Repite tu contraseña" value={confirm} onChange={e => setConfirm(e.target.value)} required />
                     </div>
+                    <AceptarTerminos aceptado={aceptado} onCambio={setAceptado} error={faltaAceptar} />
                     <button type="submit" className="toul-btn-primary mt-1" disabled={loading}>
-                        {loading ? 'Creando cuenta...' : 'Crear cuenta gratis'}
+                        {loading ? 'Creando cuenta...' : 'Crear cuenta'}
                     </button>
                 </form>
 
-                <p className="text-center text-sm mt-4" style={{ color: 'var(--toul-text-muted)' }}>
+                <BotonGoogle />
+
+                <p className="text-center text-sm mt-5" style={{ color: 'var(--toul-text-muted)' }}>
                     ¿Ya tienes cuenta?{' '}
-                    <Link href="/login" className="font-semibold hover:underline" style={{ color: 'var(--toul-accent)' }}>Ingresa aquí</Link>
+                    <Link href="/login" className="font-semibold hover:underline" style={{ color: 'var(--toul-accent)' }}>Entra aquí</Link>
                 </p>
                 </>
                 )}

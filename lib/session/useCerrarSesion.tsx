@@ -1,7 +1,9 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
+import { explainError } from '@/lib/errors'
 import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { listPendingSales, syncPendingSales } from '@/lib/isla/offline'
 import { borrarSesionDelEquipo, entrarDeCero, limpiarDatosDeCuenta, marcarCuenta } from './limpiarCuenta'
@@ -20,30 +22,56 @@ import { borrarSesionDelEquipo, entrarDeCero, limpiarDatosDeCuenta, marcarCuenta
         sale igual, se quedan guardadas solo para esta tienda.
      3. Se cierra la sesión, se borra todo lo demás y la app arranca
         de cero en la pantalla de entrada.
+
+   "En todos los equipos" además le pide al servidor que corte las
+   sesiones abiertas en otros celulares y computadores (por si se
+   perdió uno). Eso solo se puede con internet.
    ══════════════════════════════════════════════════════════════ */
+
+const SIN_INTERNET_TODOS = 'Necesitas internet para cerrar la sesión en todos los equipos.'
 
 export function useCerrarSesion(storeId: string | null | undefined) {
     const [sinCargar, setSinCargar] = useState(0)
     const [cerrando, setCerrando] = useState(false)
+    const enTodos = useRef(false)
 
     const salir = useCallback(async () => {
         setCerrando(true)
-        let fallo = false
-        try {
-            const { error } = await createClient().auth.signOut()
-            fallo = !!error
-        } catch {
-            fallo = true
+        if (enTodos.current) {
+            // Aquí no hay plan B: si el servidor no se entera, los otros
+            // equipos siguen adentro. Se avisa y no se sale.
+            let error: unknown = null
+            try {
+                error = (await createClient().auth.signOut({ scope: 'global' })).error
+            } catch (e) {
+                error = e
+            }
+            if (error) {
+                toast.error(navigator.onLine ? explainError(error, 'No se pudo cerrar la sesión en los otros equipos. Intenta de nuevo.') : SIN_INTERNET_TODOS)
+                setSinCargar(0)
+                setCerrando(false)
+                return
+            }
+        } else {
+            let fallo = false
+            try {
+                const { error } = await createClient().auth.signOut()
+                fallo = !!error
+            } catch {
+                fallo = true
+            }
+            // Sin internet, Supabase deja la sesión puesta: se quita a mano
+            if (fallo) borrarSesionDelEquipo()
         }
-        // Sin internet, Supabase deja la sesión puesta: se quita a mano
-        if (fallo) borrarSesionDelEquipo()
         // Las otras pestañas abiertas se enteran por este cambio y se van también
         marcarCuenta(null)
         await limpiarDatosDeCuenta()
         entrarDeCero('/login')
     }, [])
 
-    const cerrar = useCallback(async () => {
+    const empezar = useCallback(async (todos: boolean) => {
+        enTodos.current = todos
+        if (todos && !navigator.onLine) { toast.error(SIN_INTERNET_TODOS); return }
         setCerrando(true)
         if (storeId) {
             if (navigator.onLine) {
@@ -58,6 +86,9 @@ export function useCerrarSesion(storeId: string | null | undefined) {
         }
         await salir()
     }, [storeId, salir])
+
+    const cerrar = useCallback(() => empezar(false), [empezar])
+    const cerrarEnTodos = useCallback(() => empezar(true), [empezar])
 
     const dialogo = (
         <ConfirmSheet
@@ -74,5 +105,5 @@ export function useCerrarSesion(storeId: string | null | undefined) {
         />
     )
 
-    return { cerrar, cerrando, dialogo }
+    return { cerrar, cerrarEnTodos, cerrando, dialogo }
 }

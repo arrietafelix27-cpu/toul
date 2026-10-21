@@ -1,18 +1,18 @@
 'use client'
-import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { Eye, EyeOff, Zap, ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { explainError } from '@/lib/errors'
+import { entrarDeCero, limpiarDatosDeCuenta, marcarCuenta } from '@/lib/session/limpiarCuenta'
 
 type Status = 'checking' | 'ready' | 'invalid' | 'done'
 
 function ResetPasswordForm() {
     const supabase = createClient()
-    const router = useRouter()
-    const params = useSearchParams()
     const [status, setStatus] = useState<Status>('checking')
+    const [userId, setUserId] = useState<string | null>(null)
     const [password, setPassword] = useState('')
     const [confirm, setConfirm] = useState('')
     const [showPassword, setShowPassword] = useState(false)
@@ -20,20 +20,17 @@ function ResetPasswordForm() {
 
     useEffect(() => {
         let cancelled = false
-        async function verify() {
-            // El enlace del correo trae ?code= (PKCE). Se canjea por una sesión temporal.
-            const code = params.get('code')
-            if (code) {
-                const { error } = await supabase.auth.exchangeCodeForSession(code)
-                if (!cancelled) setStatus(error ? 'invalid' : 'ready')
-                return
-            }
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!cancelled) setStatus(session ? 'ready' : 'invalid')
-        }
-        verify()
+        // Se llega aquí con la cuenta ya abierta por el código del correo.
+        // (Si llega un enlace viejo con ?code=, Supabase lo canjea solo al
+        // arrancar; canjearlo otra vez a mano era lo que lo hacía fallar.)
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (cancelled) return
+            if (window.location.search) window.history.replaceState(null, '', '/reset-password')
+            setUserId(session?.user.id ?? null)
+            setStatus(session ? 'ready' : 'invalid')
+        })
         return () => { cancelled = true }
-    }, [params, supabase])
+    }, [supabase])
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
@@ -42,10 +39,13 @@ function ResetPasswordForm() {
         setSaving(true)
         const { error } = await supabase.auth.updateUser({ password })
         setSaving(false)
-        if (error) { toast.error('No se pudo cambiar la contraseña. Pide un enlace nuevo.'); return }
+        if (error) { toast.error(explainError(error, 'No se pudo cambiar la contraseña. Intenta de nuevo.')); return }
         setStatus('done')
         toast.success('Contraseña actualizada')
-        setTimeout(() => router.push('/'), 1200)
+        // Se entra de cero, como en cualquier entrada
+        await limpiarDatosDeCuenta()
+        if (userId) marcarCuenta(userId)
+        setTimeout(() => entrarDeCero('/'), 900)
     }
 
     return (
@@ -59,12 +59,12 @@ function ResetPasswordForm() {
 
             {status === 'invalid' && (
                 <div className="text-center py-4">
-                    <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--toul-text)' }}>Enlace vencido</h2>
+                    <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--toul-text)' }}>Primero confirma que eres tú</h2>
                     <p className="text-sm mb-6" style={{ color: 'var(--toul-text-muted)' }}>
-                        Este enlace ya no sirve. Pide uno nuevo para cambiar tu contraseña.
+                        Para poner una contraseña nueva te enviamos un código a tu correo.
                     </p>
                     <Link href="/forgot-password" className="toul-btn-primary" style={{ textDecoration: 'none' }}>
-                        Pedir enlace nuevo
+                        Pedir código
                     </Link>
                 </div>
             )}
@@ -77,7 +77,7 @@ function ResetPasswordForm() {
                         <div>
                             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Contraseña</label>
                             <div className="relative">
-                                <input className="toul-input pr-10" type={showPassword ? 'text' : 'password'} placeholder="Mínimo 8 caracteres"
+                                <input className="toul-input pr-10" type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Mínimo 8 caracteres"
                                     value={password} onChange={e => setPassword(e.target.value)} required autoFocus />
                                 <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2"
                                     style={{ color: 'var(--toul-text-subtle)' }} aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
@@ -87,7 +87,7 @@ function ResetPasswordForm() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>Confirmar contraseña</label>
-                            <input className="toul-input" type={showPassword ? 'text' : 'password'} placeholder="Repite la contraseña"
+                            <input className="toul-input" type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Repite la contraseña"
                                 value={confirm} onChange={e => setConfirm(e.target.value)} required />
                         </div>
                         <button type="submit" className="toul-btn-primary" disabled={saving}>
@@ -107,7 +107,7 @@ function ResetPasswordForm() {
             {status !== 'done' && (
                 <Link href="/login" className="flex items-center gap-1.5 justify-center text-sm mt-4 hover:underline"
                     style={{ color: 'var(--toul-text-muted)' }}>
-                    <ArrowLeft size={14} /> Volver al login
+                    <ArrowLeft size={14} /> Volver a entrar
                 </Link>
             )}
         </div>
@@ -124,9 +124,7 @@ export default function ResetPasswordPage() {
                 </div>
                 <h1 className="text-3xl font-bold gradient-text">TOUL</h1>
             </div>
-            <Suspense>
-                <ResetPasswordForm />
-            </Suspense>
+            <ResetPasswordForm />
         </div>
     )
 }

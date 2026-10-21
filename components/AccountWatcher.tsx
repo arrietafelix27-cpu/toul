@@ -22,7 +22,7 @@ import {
    ══════════════════════════════════════════════════════════════ */
 
 /** Pantallas que se ven sin cuenta: ahí no hay nada que proteger */
-const PUBLICAS = ['/login', '/register', '/forgot-password', '/reset-password', '/t']
+const PUBLICAS = ['/login', '/register', '/forgot-password', '/reset-password', '/t', '/terminos', '/privacidad']
 
 function enPantallaPublica() {
     const ruta = window.location.pathname
