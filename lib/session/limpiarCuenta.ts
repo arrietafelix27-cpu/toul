@@ -77,6 +77,33 @@ export async function limpiarDatosDeCuenta(): Promise<void> {
     } catch { /* sin soporte */ }
 }
 
+/**
+ * Borra la sesión del equipo a mano.
+ *
+ * Sin internet, Supabase no borra la sesión si no puede avisarle al
+ * servidor: devuelve un error y la deja puesta. El vendedor confirmaba
+ * "cerrar sesión" y la app lo devolvía adentro. Esto quita la sesión
+ * del equipo igual; el servidor se entera cuando vuelva la señal.
+ */
+export function borrarSesionDelEquipo(): void {
+    try {
+        for (const parte of document.cookie.split(';')) {
+            const nombre = parte.split('=')[0]?.trim()
+            if (nombre && nombre.startsWith('sb-') && nombre.includes('-auth-token')) {
+                document.cookie = `${nombre}=; Max-Age=0; path=/`
+            }
+        }
+    } catch { /* sin acceso a cookies */ }
+    try {
+        const llaves: string[] = []
+        for (let i = 0; i < localStorage.length; i++) {
+            const llave = localStorage.key(i)
+            if (llave && llave.startsWith('sb-') && llave.includes('-auth-token')) llaves.push(llave)
+        }
+        llaves.forEach(l => localStorage.removeItem(l))
+    } catch { /* almacenamiento bloqueado */ }
+}
+
 /** Deja anotado qué cuenta está usando este equipo. */
 export function marcarCuenta(userId: string | null): void {
     try {

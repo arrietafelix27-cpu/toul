@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { listPendingSales, syncPendingSales } from '@/lib/isla/offline'
-import { entrarDeCero, limpiarDatosDeCuenta, marcarCuenta } from './limpiarCuenta'
+import { borrarSesionDelEquipo, entrarDeCero, limpiarDatosDeCuenta, marcarCuenta } from './limpiarCuenta'
 
 /* ══════════════════════════════════════════════════════════════
    Cerrar sesión.
@@ -28,9 +28,15 @@ export function useCerrarSesion(storeId: string | null | undefined) {
 
     const salir = useCallback(async () => {
         setCerrando(true)
+        let fallo = false
         try {
-            await createClient().auth.signOut()
-        } catch { /* si falla, se limpia igual: el servidor ya no reconoce la sesión vieja */ }
+            const { error } = await createClient().auth.signOut()
+            fallo = !!error
+        } catch {
+            fallo = true
+        }
+        // Sin internet, Supabase deja la sesión puesta: se quita a mano
+        if (fallo) borrarSesionDelEquipo()
         // Las otras pestañas abiertas se enteran por este cambio y se van también
         marcarCuenta(null)
         await limpiarDatosDeCuenta()
