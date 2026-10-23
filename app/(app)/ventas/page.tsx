@@ -37,6 +37,26 @@ function formatDateTime(iso: string) {
 
 const PAGE_SIZE = 40
 
+/* PC: tabla. En una sola fila de lado a lado lo vendido quedaba a un
+   extremo de la pantalla y el total al otro; con columnas se compara
+   de un vistazo. El celular sigue con su lista. */
+const VT_CSS = `
+.vt-tabla { display: none; }
+@media (min-width: 1024px) {
+    .vt-tabla { display: block; }
+    .vt-cabeza, .vt-fila { display: grid; grid-template-columns: 118px minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 1fr) 120px 110px; gap: 16px; align-items: center; }
+    .vt-cabeza { padding: 0 12px 9px; border-bottom: 1px solid var(--toul-divider); margin-bottom: 4px;
+        font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--toul-text-faint); }
+    .vt-fila { width: 100%; padding: 11px 12px; border-radius: 12px; border: none; background: none; font-family: inherit;
+        text-align: left; cursor: pointer; color: inherit; transition: background-color 160ms var(--toul-ease-emil); }
+    .vt-fila > span { min-width: 0; }
+    .vt-1 { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vt-2 { display: block; font-size: 12px; color: var(--toul-text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+    .vt-num { text-align: right; font-variant-numeric: tabular-nums; }
+}
+@media (hover: hover) and (pointer: fine) { .vt-fila:hover { background: var(--toul-surface-3); } }
+`
+
 type Kind = 'todas' | 'contado' | 'credito' | 'descuento'
 
 const KINDS: { value: Kind; label: string }[] = [
@@ -246,7 +266,8 @@ export default function VentasPage() {
     ]
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-8" style={{ position: 'relative' }}>
+        <div className="px-4 md:px-8 pt-6 pb-8 max-w-[1180px] mx-auto" style={{ position: 'relative' }}>
+            <style>{VT_CSS}</style>
             <div className="toul-ambient" />
             {/* Header */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" className="mb-5" style={{ position: 'relative' }}>
@@ -458,8 +479,46 @@ export default function VentasPage() {
                 />
             ) : (
                 <>
+                    {/* PC */}
+                    <div className="vt-tabla">
+                        <div className="vt-cabeza" aria-hidden>
+                            <span>Fecha</span><span>Qué se vendió</span><span>Cliente</span><span>Pago</span>
+                            <span className="vt-num">Total</span><span className="vt-num">Utilidad</span>
+                        </div>
+                        {filtered.map(sale => {
+                            const profit = Math.round(sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0))
+                            const summary = sale.sale_items.slice(0, 2).map(i => (i.products as { name?: string } | null)?.name || 'Producto').join(', ')
+                            const more = sale.sale_items.length > 2 ? ` +${sale.sale_items.length - 2}` : ''
+                            const vendedor = sale.seller_name && sale.seller_name !== 'Administrador' ? sale.seller_name : null
+                            return (
+                                <button key={sale.id} className="vt-fila" onClick={() => setSelectedSale(sale)}>
+                                    <span className="vt-1" style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>{formatDateTime(sale.created_at)}</span>
+                                    <span>
+                                        <span className="vt-1" style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)' }}>{summary}{more}</span>
+                                        <span className="vt-2">#{sale.id.slice(0, 8).toUpperCase()}{vendedor ? ` · ${vendedor}` : ''}</span>
+                                    </span>
+                                    <span>
+                                        <span className="vt-1" style={{ fontSize: 13.5, color: sale.customer_name ? 'var(--toul-text)' : 'var(--toul-text-faint)' }}>
+                                            {sale.customer_name || 'Sin cliente'}
+                                        </span>
+                                        {sale.is_credit && <span className="vt-2" style={{ color: 'var(--toul-warning)', fontWeight: 600 }}>A crédito</span>}
+                                    </span>
+                                    <span>
+                                        <span className="vt-1" style={{ fontSize: 13.5, color: 'var(--toul-text-muted)' }}>{methodLabel(sale.payment_method)}</span>
+                                        {sale.discount > 0 && <span className="vt-2" style={{ color: 'var(--toul-warning)' }}>Dto. {formatCOP(sale.discount)}</span>}
+                                    </span>
+                                    <span className="vt-num vt-1" style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--toul-text)' }}>{formatCOP(sale.total)}</span>
+                                    <span className="vt-num vt-1" style={{ fontSize: 13.5, fontWeight: 600, color: profit >= 0 ? 'var(--toul-accent)' : 'var(--toul-error)' }}>
+                                        {profit >= 0 ? '+' : '−'}{formatCOP(Math.abs(profit))}
+                                    </span>
+                                </button>
+                            )
+                        })}
+                    </div>
+
+                    {/* Celular */}
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible"
-                        className="flex flex-col gap-2">
+                        className="flex flex-col gap-2 lg:hidden">
                         {filtered.map(sale => {
                             const profit = sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0)
                             const summary = sale.sale_items.slice(0, 2).map(i => (i.products as any)?.name || 'Producto').join(', ')

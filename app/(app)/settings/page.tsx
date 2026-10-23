@@ -23,6 +23,17 @@ const CATEGORIES = [
     { value: 'otros', label: '📦 Otros' },
 ]
 
+/* PC: en una sola columna las casillas iban de lado a lado de la
+   pantalla. Ahí las secciones se reparten en dos columnas, en el mismo
+   orden que en el celular, sin partir ninguna tarjeta por la mitad. */
+const ST_CSS = `
+@media (min-width: 1024px) {
+    .st-cols { column-count: 2; column-gap: 28px; }
+    .st-cols > * { break-inside: avoid; }
+    .st-cols .toul-section-label { break-after: avoid; }
+}
+`
+
 export default function SettingsPage() {
     const supabase = createClient()
     const [email, setEmail] = useState('')
@@ -70,13 +81,15 @@ export default function SettingsPage() {
     const { cerrar: handleLogout, cerrando: saliendo, dialogo: dialogoSalir } = useCerrarSesion(storeId || null)
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-8 fade-in" style={{ position: 'relative' }}>
+        <div className="px-4 md:px-8 pt-6 pb-8 fade-in max-w-[1080px] mx-auto" style={{ position: 'relative' }}>
+            <style>{ST_CSS}</style>
             <div className="toul-ambient" />
             <div className="mb-6" style={{ position: 'relative' }}>
                 <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Sistema</p>
                 <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Mi negocio</h1>
             </div>
 
+            <div className="st-cols">
             {/* Account */}
             <div className="toul-card mb-4">
                 <div className="flex items-center gap-3 mb-0">
@@ -276,6 +289,7 @@ export default function SettingsPage() {
                 style={{ background: 'var(--toul-error-dim)', color: 'var(--toul-error)', border: '1px solid rgba(239,68,68,0.2)' }}>
                 <LogOut size={16} /> {saliendo ? 'Cerrando sesión…' : 'Cerrar sesión'}
             </button>
+            </div>
         </div>
     )
 }

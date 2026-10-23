@@ -123,6 +123,20 @@ const CSS = PANEL_CSS + `
                 transform 160ms cubic-bezier(0.23,1,0.32,1); }
 .hc-fila:active { transform: scale(0.99); }
 
+/* PC: tabla. En una sola fila de lado a lado el proveedor quedaba a
+   un extremo y el total al otro; con columnas se lee de un vistazo */
+.hc-pc, .hc-cabeza { display: none; }
+@media (min-width: 1024px) {
+    .hc-page { max-width: 980px !important; }
+    .hc-movil { display: none !important; }
+    .hc-pc { display: grid; }
+    .hc-cabeza { display: grid; padding: 0 10px 8px; border-bottom: 1px solid var(--toul-divider); margin-bottom: 4px;
+        font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--toul-text-faint); }
+    .hc-pc, .hc-cabeza { grid-template-columns: 96px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 130px; gap: 16px; align-items: center; }
+    .hc-pc > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hc-num { text-align: right; font-variant-numeric: tabular-nums; }
+}
+
 @media (hover: hover) and (pointer: fine) {
     .hc-chip:hover { border-color: rgba(255,255,255,0.18); color: var(--toul-text); }
     .hc-chip[data-on="true"]:hover { color: var(--toul-accent); }
@@ -323,15 +337,37 @@ export default function ComprasPage() {
                     </div>
                 ) : (
                     <>
+                        <div className="hc-cabeza" aria-hidden>
+                            <span>Fecha</span><span>Proveedor</span><span>Productos</span><span>Pago</span><span className="hc-num">Total</span>
+                        </div>
                         <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                             className="hc-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                             {lista.map(c => {
                                 const unidades = (c.purchase_items ?? []).reduce((s, i) => s + Number(i.quantity), 0)
                                 const refs = (c.purchase_items ?? []).length
                                 const deuda = deudas?.get(c.id)
+                                const vencida = deuda ? estaVencida(deuda.vence) : false
                                 return (
                                     <motion.div key={c.id} variants={staggerItem}>
-                                        <button className="hc-fila" disabled={abriendo === c.id} onClick={() => abrir(c.id)}>
+                                        {/* PC: una fila de tabla */}
+                                        <button className="hc-fila hc-pc" disabled={abriendo === c.id} onClick={() => abrir(c.id)}>
+                                            <span style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>{fecha(c.created_at)}</span>
+                                            <span style={{ fontSize: 14, fontWeight: 600, color: c.providers ? 'var(--toul-text)' : 'var(--toul-text-dim)' }}>
+                                                {c.providers?.name ?? 'Sin proveedor'}
+                                            </span>
+                                            <span style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>
+                                                {refs} {refs === 1 ? 'producto' : 'productos'} · {unidades} und
+                                            </span>
+                                            <span style={{ fontSize: 13, fontWeight: deuda ? 600 : 400,
+                                                color: deuda ? (vencida ? 'var(--toul-error)' : 'var(--toul-warning)') : 'var(--toul-text-dim)' }}>
+                                                {deuda ? `Debes ${formatCOP(deuda.falta)}${vencida ? ' · vencida' : ''}`
+                                                    : c.is_credit ? 'Crédito pagado' : 'De contado'}
+                                            </span>
+                                            <span className="hc-num" style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--toul-text)' }}>
+                                                {abriendo === c.id ? '…' : formatCOP(Number(c.total))}
+                                            </span>
+                                        </button>
+                                        <button className="hc-fila hc-movil" disabled={abriendo === c.id} onClick={() => abrir(c.id)}>
                                             <span style={{ width: 38, height: 38, borderRadius: 12, flexShrink: 0,
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                 background: 'rgba(255,255,255,0.055)' }}>

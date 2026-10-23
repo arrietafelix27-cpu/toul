@@ -59,6 +59,13 @@ export interface StockDetailProps {
 const CSS = PANEL_CSS + `
 .sd-wrap { position: relative; max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
 @media (min-width: 768px) { .sd-wrap { padding-left: 32px; padding-right: 32px; } }
+/* PC: lo que hay y cuánto dura a la izquierda, lo que se movió a la
+   derecha. En una sola columna los movimientos iban de lado a lado */
+@media (min-width: 1100px) {
+    .sd-wrap { max-width: 1080px; }
+    .sd-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+    .sd-der > section:first-child { margin-top: 0 !important; }
+}
 .sd-stat { padding: 14px 16px; border-radius: 16px; background: var(--toul-surface); border: 1px solid var(--toul-border); min-width: 0; }
 .sd-min { width: 76px; height: 38px; border-radius: 11px; padding: 0 12px; font-family: inherit;
     background: var(--toul-surface-2); border: 1px solid var(--toul-border); color: var(--toul-text);
@@ -116,6 +123,8 @@ export function StockDetail(props: StockDetailProps) {
                 </div>
             </div>
 
+            <div className="sd-cols">
+            <div>
             {/* ── Identidad ── */}
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
@@ -240,7 +249,9 @@ export function StockDetail(props: StockDetailProps) {
             )}
 
             {extra}
+            </div>
 
+            <div className="sd-der">
             {/* ── Qué se movió ── */}
             <section style={{ marginTop: 20 }}>
                 <p className="pnl-label" style={{ marginBottom: 8 }}>Movimientos</p>
@@ -267,6 +278,9 @@ export function StockDetail(props: StockDetailProps) {
                     </div>
                 )}
             </section>
+
+            </div>
+            </div>
 
             <div style={{ marginTop: 20 }}>
                 <Link href={catalogHref} className="pnl-link">

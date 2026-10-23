@@ -89,6 +89,16 @@ const CSS = PANEL_CSS + ROW_CSS + `
 .inv-wrap { position: relative; max-width: 1000px; margin: 0 auto; padding: 24px 16px 96px; container-type: inline-size; }
 @media (min-width: 768px) { .inv-wrap { padding-left: 32px; padding-right: 32px; } }
 
+/* PC: en una sola columna el nombre quedaba a un lado de la pantalla y
+   la cantidad al otro. Ahí se parte en dos: a la izquierda cuánto
+   aguantas y qué pedir (siempre a la vista), a la derecha la bodega */
+@media (min-width: 1100px) {
+    .inv-wrap { max-width: 1180px; }
+    .inv-cols { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 48px; align-items: start; }
+    .inv-izq { position: sticky; top: 24px; }
+    .inv-sep-medio { display: none; }
+}
+
 /* Lo que separa son líneas que se desvanecen, no bordes de cajas */
 .inv-sep { height: 1px; margin: 26px 0; background: var(--toul-divider); border: none;
     -webkit-mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
@@ -294,6 +304,8 @@ export default function InventoryPage() {
                 </Link>
             </motion.div>
 
+            <div className="inv-cols">
+            <div className="inv-izq">
             {/* ── Cuánto aguantas: el único número que manda ── */}
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.04, ease: [0.23, 1, 0.32, 1] }}
@@ -346,8 +358,9 @@ export default function InventoryPage() {
             {!overview
                 ? <Skeleton height="140px" className="rounded-2xl" />
                 : <ReorderPanel items={reorder} />}
+            </div>
 
-            <hr className="inv-sep" />
+            <hr className="inv-sep inv-sep-medio" />
 
             {/* ── Todo lo que tienes ── */}
             <section>
@@ -498,6 +511,7 @@ export default function InventoryPage() {
                     </>
                 )}
             </section>
+            </div>
 
             {storeId && (
                 <StockAdjustSheet open={adjustOpen} storeId={storeId}
