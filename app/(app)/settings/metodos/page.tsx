@@ -77,9 +77,10 @@ export default function MetodosPagoPage() {
                     style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <ArrowLeft size={17} color="rgba(255,255,255,0.7)" />
                 </Link>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Ajustes</p>
-                    <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Métodos de pago</h1>
+                    {/* En celular, al lado del botón, a 26 px el título se partía en dos */}
+                    <h1 className="text-[22px] min-[400px]:text-[26px]" style={{ fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0, whiteSpace: 'nowrap' }}>Métodos de pago</h1>
                 </div>
                 <button onClick={() => setAdding(true)}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, height: 42, padding: '0 16px', borderRadius: 12, border: 'none', background: 'var(--toul-accent)', color: '#000', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 20px var(--toul-accent-glow)' }}>

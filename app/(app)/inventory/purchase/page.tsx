@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
 import { createClient } from '@/lib/supabase/client'
 import { Thumb } from '@/components/ui/Thumb'
@@ -18,6 +18,7 @@ import toast from 'react-hot-toast'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { DesktopPurchase } from '@/components/inventory/DesktopPurchase'
 import { tomarPedido } from '@/lib/inventory/pedido'
+import { Sheet } from '@/components/isla/Sheet'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -53,6 +54,9 @@ export default function NewPurchaseFlow() {
     const [sortBy, setSortBy] = useState<'A-Z' | 'Stock' | 'Recientes'>('Recientes')
     const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
     const [expandedInPicker, setExpandedInPicker] = useState<Set<string>>(new Set())
+    // Celular: con productos ya agregados, la lista para agregar más se abre en una hoja
+    const [pickerOpen, setPickerOpen] = useState(false)
+    const cerrarPicker = useCallback(() => setPickerOpen(false), [])
 
     // Step 2: Payment
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit'>('cash')
@@ -256,44 +260,10 @@ export default function NewPurchaseFlow() {
         )
     }
 
-    return (
-        <div className="px-4 md:px-8 pt-6 pb-24 max-w-2xl mx-auto" style={{ position: 'relative' }}>
-            <div className="toul-ambient" />
-
-            {/* Header */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex items-center gap-3 mb-6" style={{ position: 'relative' }}>
-                <button onClick={() => step > 1 ? setStep(step - 1 as 1 | 2) : router.push('/inventory')}
-                    className="flex items-center justify-center transition-all active:scale-90"
-                    style={{
-                        width: 36, height: 36, borderRadius: 12,
-                        background: 'rgba(255,255,255,0.07)',
-                        color: 'rgba(255,255,255,0.7)',
-                        border: 'none',
-                    }}>
-                    <ArrowLeft size={17} strokeWidth={2} />
-                </button>
-                <div className="flex-1">
-                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px 0' }}>
-                        Paso {step} de 3
-                    </p>
-                    <h1 style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: 0 }}>
-                        {step === 1 ? 'Seleccionar productos' : step === 2 ? 'Pago y proveedor' : 'Resumen de compra'}
-                    </h1>
-                </div>
-            </motion.div>
-
-            {loading ? (
-                <div className="animate-pulse space-y-4">
-                    <div className="h-12 rounded-xl" style={{ background: 'var(--toul-surface-2)' }} />
-                    <div className="h-32 rounded-2xl" style={{ background: 'var(--toul-surface-2)' }} />
-                </div>
-            ) : (
-                <AnimatePresence mode="wait">
-
-                    {/* ── STEP 1: SELECT ITEMS ─────────────────────────────── */}
-                    {step === 1 && (
-                        <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-
+    // Buscador + lista para agregar productos. Sin productos va en la
+    // pantalla; con productos, en una hoja que se abre con "Agregar más"
+    const picker = (
+        <div className="space-y-4">
                             {/* Search and Sort */}
                             <div className="flex flex-col gap-3">
                                 <div className="relative">
@@ -324,7 +294,7 @@ export default function NewPurchaseFlow() {
                             </div>
 
                             {/* Product List */}
-                            <div className="toul-card overflow-hidden max-h-[400px] overflow-y-auto">
+                            <div className="toul-card overflow-hidden">
                                 {productsToShow.map(product => {
                                     const productVariants = variantsByProduct[product.id]
                                     const hasVariants = productVariants && productVariants.length > 0
@@ -406,8 +376,57 @@ export default function NewPurchaseFlow() {
                                     </div>
                                 )}
                             </div>
+        </div>
+    )
+
+    return (
+        <div className="px-4 md:px-8 pt-6 pb-28 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+            <div className="toul-ambient" />
+
+            {/* Header */}
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex items-center gap-3 mb-6" style={{ position: 'relative' }}>
+                <button onClick={() => step > 1 ? setStep(step - 1 as 1 | 2) : router.push('/inventory')}
+                    className="flex items-center justify-center transition-all active:scale-90"
+                    style={{
+                        width: 36, height: 36, borderRadius: 12,
+                        background: 'rgba(255,255,255,0.07)',
+                        color: 'rgba(255,255,255,0.7)',
+                        border: 'none',
+                    }}>
+                    <ArrowLeft size={17} strokeWidth={2} />
+                </button>
+                <div className="flex-1">
+                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px 0' }}>
+                        Paso {step} de 3
+                    </p>
+                    <h1 style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: 0 }}>
+                        {step === 1 ? 'Seleccionar productos' : step === 2 ? 'Pago y proveedor' : 'Resumen de compra'}
+                    </h1>
+                </div>
+            </motion.div>
+
+            {loading ? (
+                <div className="animate-pulse space-y-4">
+                    <div className="h-12 rounded-xl" style={{ background: 'var(--toul-surface-2)' }} />
+                    <div className="h-32 rounded-2xl" style={{ background: 'var(--toul-surface-2)' }} />
+                </div>
+            ) : (
+                <AnimatePresence mode="wait">
+
+                    {/* ── STEP 1: SELECT ITEMS ─────────────────────────────── */}
+                    {step === 1 && (
+                        <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+
+                            {/* Sin productos todavía: la lista va directo en la pantalla,
+                                sin cajita con scroll propio */}
+                            {selectedItems.length === 0 && picker}
 
                             {/* Selected Items */}
+                            {selectedItems.length > 0 && (
+                                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 10px' }}>
+                                    En esta compra · {selectedItems.length}
+                                </p>
+                            )}
                             <div className="space-y-3">
                                 {selectedItems.map(item => (
                                     <div key={item.itemKey} className="toul-card p-3">
@@ -451,23 +470,13 @@ export default function NewPurchaseFlow() {
                                 ))}
                             </div>
 
-                            {/* Subtotal */}
                             {selectedItems.length > 0 && (
-                                <div className="toul-card p-4 mt-6">
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-medium text-sm" style={{ color: 'var(--toul-text)' }}>Total a Pagar</span>
-                                        <span className="font-bold text-xl" style={{ color: 'var(--toul-accent)' }}>{formatCOP(total)}</span>
-                                    </div>
-                                </div>
+                                <button onClick={() => setPickerOpen(true)}
+                                    className="w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed font-semibold text-sm transition-transform active:scale-[0.98]"
+                                    style={{ height: 52, color: 'var(--toul-accent)', borderColor: 'var(--toul-border-focused)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    <Plus size={17} strokeWidth={2.4} /> Agregar más productos
+                                </button>
                             )}
-
-                            {/* Next Button */}
-                            <button
-                                disabled={selectedItems.length === 0}
-                                onClick={() => setStep(2)}
-                                className="toul-btn-primary w-full mt-6 flex items-center justify-center gap-2">
-                                Siguiente paso <Navigation size={18} />
-                            </button>
                         </motion.div>
                     )}
 
@@ -653,6 +662,38 @@ export default function NewPurchaseFlow() {
                     )}
                 </AnimatePresence>
             )}
+
+            {/* Paso 1: el total y el botón de seguir quedan siempre a la mano */}
+            {step === 1 && !loading && (
+                <div style={{
+                    position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 30,
+                    padding: '12px 16px calc(12px + env(safe-area-inset-bottom, 0px))',
+                    background: 'rgba(10,10,10,0.88)', backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)',
+                    borderTop: '1px solid var(--toul-border)',
+                }}>
+                    <div className="max-w-2xl mx-auto" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: 0 }}>
+                                {selectedItems.length === 0 ? 'Elige qué compraste'
+                                    : selectedItems.length === 1 ? '1 producto' : `${selectedItems.length} productos`}
+                            </p>
+                            <p style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: 0, lineHeight: 1.2 }}>
+                                {formatCOP(Math.round(total))}
+                            </p>
+                        </div>
+                        <button disabled={selectedItems.length === 0} onClick={() => setStep(2)}
+                            className="toul-btn-primary flex items-center justify-center gap-2"
+                            style={{ width: 'auto', padding: '0 22px', flexShrink: 0 }}>
+                            Siguiente <Navigation size={17} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <Sheet open={pickerOpen} onClose={cerrarPicker} title="Agregar productos" width={520}
+                footer={<button className="toul-btn-primary" onClick={cerrarPicker}>Listo</button>}>
+                {picker}
+            </Sheet>
         </div>
     )
 }

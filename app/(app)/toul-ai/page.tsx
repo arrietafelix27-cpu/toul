@@ -179,7 +179,9 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
     ]
 
     return (
-        <div className="flex h-[100dvh] overflow-hidden" style={{ background: 'var(--toul-bg)' }}>
+        // El chat ocupa la pantalla justa: el margen negativo anula el espacio
+        // que el marco de la app deja abajo para el menú (aquí no hay menú)
+        <div className="flex h-[100dvh] overflow-hidden -mb-20 md:-mb-8" style={{ background: 'var(--toul-bg)' }}>
             <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">
 
                 {/* ── Header ─────────────────────────────────────────── */}

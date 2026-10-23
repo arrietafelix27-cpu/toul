@@ -36,6 +36,14 @@ const priceLabel = (item: PublicItem) =>
         ? formatCOP(Number(item.priceMin))
         : `${formatCOP(Number(item.priceMin))} – ${formatCOP(Number(item.priceMax))}`
 
+/** En la tarjeta el rango completo no cabe en dos columnas de celular y
+ *  salía mocho ("$ 100.000 – $ 200…"). Ahí va "Desde", como en el catálogo
+ *  de adentro; el rango completo se ve al abrir el producto. */
+const priceShort = (item: PublicItem) =>
+    Number(item.priceMin) === Number(item.priceMax)
+        ? formatCOP(Number(item.priceMin))
+        : `Desde ${formatCOP(Number(item.priceMin))}`
+
 const CSS = `
 .pc-wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px 56px; }
 .pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 22vw, 230px), 1fr)); gap: 12px; }
@@ -191,7 +199,7 @@ export function PublicCatalog({ store, items }: { store: PublicStore; items: Pub
                                         fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-accent)', margin: 0,
                                         lineHeight: '20px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                                     }}>
-                                        {priceLabel(item)}
+                                        {priceShort(item)}
                                     </p>
                                 </div>
                             </motion.button>

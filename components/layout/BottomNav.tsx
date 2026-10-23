@@ -242,6 +242,11 @@ const MENU_SECTIONS = [
     },
 ]
 
+/** Pantallas de trabajo que necesitan todo el celular. Ahí el menú de
+ *  abajo tapaba lo importante: la casilla para escribirle a TOUL AI y el
+ *  botón de terminar el conteo. Cada una tiene su botón para volver. */
+const SIN_MENU = [/^\/toul-ai$/, /^\/inventory\/conteo\/[^/]+$/, /^\/inventory\/purchase$/]
+
 export function BottomNav() {
     const { data: store } = useStore()
     const plan = store?.plan
@@ -263,6 +268,8 @@ export function BottomNav() {
     const handleDragEnd = (_: unknown, info: PanInfo) => {
         if (info.offset.y > 110 || info.velocity.y > 520) setMenuOpen(false)
     }
+
+    if (SIN_MENU.some(ruta => ruta.test(pathname))) return null
 
     return (
         <>

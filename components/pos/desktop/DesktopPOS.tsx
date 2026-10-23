@@ -74,7 +74,13 @@ function ProductList() {
     const [showSort, setShowSort] = useState(false)
     const [expandedVariantProduct, setExpandedVariantProduct] = useState<string | null>(null)
 
-    useEffect(() => { setTimeout(() => searchRef.current?.focus(), 300) }, [])
+    // En PC se puede escribir de una. En el celular no: abrir el teclado
+    // apenas entra tapaba media pantalla y aplastaba todo
+    useEffect(() => {
+        if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
+        const t = setTimeout(() => searchRef.current?.focus(), 300)
+        return () => clearTimeout(t)
+    }, [])
 
     const sorted = useMemo(() => {
         let list = [...data.products]
@@ -104,9 +110,9 @@ function ProductList() {
     }, [data.products, data.variantsByProduct, search, sortKey, cart.cartMap])
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '20px 24px', position: 'relative' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: narrow ? '14px 16px 0' : '20px 24px', position: 'relative' }}>
             {/* Header with close button */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: narrow ? 10 : 14 }}>
                 <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--toul-pos-text-main)', margin: 0, letterSpacing: '-0.02em' }}>
                     Nueva venta
                 </h2>

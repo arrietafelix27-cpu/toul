@@ -66,8 +66,9 @@ export default function CajaPage() {
                             padding: '10px 16px', background: 'var(--toul-surface)',
                             borderBottom: '1px solid var(--toul-border)',
                         }}>
-                            <span style={{ flex: 1, fontSize: 13, color: 'var(--toul-text-muted)' }}>
-                                Vendiendo sin turno de caja. Ábrelo si estás atendiendo en la isla.
+                            <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--toul-text-muted)' }}>
+                                <span className="hidden md:inline">Vendiendo sin turno de caja. Ábrelo si estás atendiendo en la isla.</span>
+                                <span className="md:hidden">Estás vendiendo sin turno abierto.</span>
                             </span>
                             <button onClick={() => setOpenShift(true)}
                                 style={{
