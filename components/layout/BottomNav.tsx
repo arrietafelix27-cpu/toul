@@ -243,9 +243,17 @@ const MENU_SECTIONS = [
 ]
 
 /** Pantallas de trabajo que necesitan todo el celular. Ahí el menú de
- *  abajo tapaba lo importante: la casilla para escribirle a TOUL AI y el
- *  botón de terminar el conteo. Cada una tiene su botón para volver. */
-const SIN_MENU = [/^\/toul-ai$/, /^\/inventory\/conteo\/[^/]+$/, /^\/inventory\/purchase$/]
+ *  abajo tapaba lo importante (la casilla para escribirle a TOUL AI, el
+ *  botón de terminar el conteo) o se apilaba con el botón de guardar.
+ *  Cada una tiene su botón para volver. */
+const SIN_MENU = [
+    /^\/toul-ai$/,
+    /^\/inventory\/conteo\/[^/]+$/,
+    /^\/inventory\/purchase$/,
+    /^\/products\/new\/(simple|variant|combo)$/,
+    /^\/products\/[^/]+\/edit$/,
+    /^\/products\/combo\/[^/]+\/edit$/,
+]
 
 export function BottomNav() {
     const { data: store } = useStore()

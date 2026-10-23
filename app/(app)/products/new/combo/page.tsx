@@ -255,12 +255,11 @@ export default function NewComboPage() {
         <div style={{ position: 'relative', minHeight: '100dvh' }}>
             <div className="toul-ambient" />
 
-            <div style={{
+            <div className="max-w-[520px] lg:max-w-[1040px]" style={{
                 position: 'relative',
                 padding: '20px 18px 0',
-                paddingBottom: 'calc(190px + env(safe-area-inset-bottom, 0px))',
-                maxWidth: 520,
-                margin: '0 auto',
+                paddingBottom: 'calc(120px + env(safe-area-inset-bottom, 0px))',
+                    margin: '0 auto',
             }}>
 
                 {/* HEADER */}
@@ -294,6 +293,12 @@ export default function NewComboPage() {
                 <form
                     id="ncp-form"
                     onSubmit={e => { e.preventDefault(); if (buttonState === 'ready') handleSave() }}>
+
+                    {/* PC: datos a la izquierda, precios y contenido a la derecha */}
+
+                    <div className="lg:grid lg:grid-cols-2 lg:gap-x-12 lg:items-start">
+
+                    <div>
 
                     {/* FOTO */}
                     <motion.section
@@ -395,7 +400,9 @@ export default function NewComboPage() {
                         </div>
                     </motion.section>
 
-                    <hr className="toul-divider" />
+                    </div>
+<div>
+<hr className="toul-divider lg:hidden" />
 
                     {/* PRODUCTOS DEL COMBO */}
                     <motion.section
@@ -787,21 +794,24 @@ export default function NewComboPage() {
                         </AnimatePresence>
                     </motion.section>
 
-                </form>
+                </div>
+</div>
+</form>
             </div>
 
             {/* FIXED BOTTOM SAVE */}
-            <div style={{
+            <div className="left-0 md:left-60" style={{
                 position: 'fixed',
-                bottom: 'calc(70px + env(safe-area-inset-bottom, 0px))',
-                left: 0, right: 0,
-                padding: '28px 18px 12px',
+                bottom: 0,
+                right: 0,
+                padding: '28px 18px calc(12px + env(safe-area-inset-bottom, 0px))',
                 background: 'linear-gradient(to top, var(--toul-bg) 65%, transparent)',
                 zIndex: 30,
                 pointerEvents: 'none',
             }}>
-                <div style={{ maxWidth: 520, margin: '0 auto' }}>
+                <div className="max-w-[520px] lg:max-w-[1040px] lg:flex lg:justify-end" style={{ margin: '0 auto' }}>
                     <motion.button
+                        className="w-full lg:w-[300px]"
                         form="ncp-form"
                         type="submit"
                         disabled={buttonState === 'disabled' || buttonState === 'loading' || buttonState === 'saved'}
@@ -809,7 +819,7 @@ export default function NewComboPage() {
                         transition={SPRING_PRESS}
                         style={{
                             pointerEvents: 'auto',
-                            width: '100%',
+                            
                             height: 54,
                             borderRadius: 16,
                             border: buttonState === 'saved'

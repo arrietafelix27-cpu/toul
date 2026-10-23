@@ -415,12 +415,11 @@ export default function EditProductPage() {
                 WebkitBackdropFilter: 'blur(20px)',
                 borderBottom: '1px solid rgba(255,255,255,0.06)',
             }}>
-                <div style={{
+                <div className="max-w-[520px] lg:max-w-[1040px]" style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr auto 1fr',
                     alignItems: 'center',
                     padding: '14px 18px 12px',
-                    maxWidth: 520,
                     margin: '0 auto',
                     gap: 10,
                 }}>
@@ -449,62 +448,20 @@ export default function EditProductPage() {
                         Editar producto
                     </h1>
                     <div style={{ justifySelf: 'end' }}>
-                        {/* Save button — only visible/active in SIMPLE mode */}
-                        {!hasVariants && (
-                            <motion.button
-                                type="button"
-                                onClick={handleSaveSimple}
-                                disabled={!isDirty || saving}
-                                whileTap={isDirty && !saving ? { scale: 0.97 } : undefined}
-                                transition={SPRING_PRESS}
-                                style={{
-                                    height: 30,
-                                    padding: '0 12px',
-                                    borderRadius: 9,
-                                    border: 'none',
-                                    background: isDirty && !saving ? '#32d74b' : 'rgba(255,255,255,0.07)',
-                                    color: isDirty && !saving ? '#000' : 'rgba(255,255,255,0.3)',
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    letterSpacing: '-0.01em',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    cursor: isDirty && !saving ? 'pointer' : 'not-allowed',
-                                    boxShadow: isDirty && !saving ? '0 4px 14px rgba(50,215,75,0.25)' : 'none',
-                                    transition: 'background 0.2s var(--toul-ease), color 0.2s var(--toul-ease), box-shadow 0.2s var(--toul-ease)',
-                                    fontFamily: 'inherit',
-                                }}>
-                                {saving ? (
-                                    <>
-                                        <Loader2 size={11} strokeWidth={2.6}
-                                            style={{ animation: 'spin 0.7s linear infinite' }} />
-                                        <span>Guardando...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Check size={12} strokeWidth={2.8} />
-                                        <span>Guardar</span>
-                                    </>
-                                )}
-                            </motion.button>
-                        )}
+                        {/* Guardar va abajo, en el mismo lugar que al crear */}
                     </div>
                 </div>
             </div>
 
             {/* ─── Content ─── */}
-            <div style={{
+            <div className="max-w-[520px] lg:max-w-[1040px]" style={{
                 position: 'relative',
                 padding: '18px 18px 0',
-                paddingBottom: hasVariants
-                    ? 'calc(190px + env(safe-area-inset-bottom, 0px))'
-                    : '40px',
-                maxWidth: 520,
+                paddingBottom: 'calc(120px + env(safe-area-inset-bottom, 0px))',
                 margin: '0 auto',
             }}>
                 {hasVariants ? (
-                    <>
+                    <div className="lg:max-w-[640px]">
                         {/* Product header (readonly) */}
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
@@ -677,9 +634,11 @@ export default function EditProductPage() {
                                 })}
                             </div>
                         </motion.div>
-                    </>
+                    </div>
                 ) : (
-                    <>
+                    <div className="lg:grid lg:grid-cols-2 lg:gap-x-12 lg:items-start">
+                    {/* PC: foto y datos a la izquierda, precios a la derecha */}
+                    <div>
                         {/* ─── PHOTO (single full-width) ─── */}
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
@@ -764,8 +723,10 @@ export default function EditProductPage() {
                             </div>
                         </motion.div>
 
+                        </div>
+                    <div>
                         {/* ─── DIVISOR ─── */}
-                        <div style={{
+                        <div className="lg:hidden" style={{
                             height: 1,
                             background: 'rgba(255,255,255,0.06)',
                             margin: '12px 0',
@@ -861,35 +822,35 @@ export default function EditProductPage() {
                                 )}
                             </AnimatePresence>
                         </motion.div>
-                    </>
+                    </div>
+                    </div>
                 )}
             </div>
 
-            {/* ─── FIXED BOTTOM SAVE (variantes mode only) ─── */}
-            {hasVariants && (
-                <div style={{
+            {/* ─── FIXED BOTTOM SAVE ─── */}
+                <div className="left-0 md:left-60" style={{
                     position: 'fixed',
-                    bottom: 'calc(70px + env(safe-area-inset-bottom, 0px))',
-                    left: 0, right: 0,
-                    padding: '28px 18px 12px',
-                    background: 'linear-gradient(to top, #0a0a0a 65%, transparent)',
+                    bottom: 0,
+                    right: 0,
+                    padding: '28px 18px calc(12px + env(safe-area-inset-bottom, 0px))',
+                    background: 'linear-gradient(to top, var(--toul-bg) 65%, transparent)',
                     zIndex: 30,
                     pointerEvents: 'none',
                 }}>
-                    <div style={{ maxWidth: 520, margin: '0 auto' }}>
+                    <div className="max-w-[520px] lg:max-w-[1040px] lg:flex lg:justify-end" style={{ margin: '0 auto' }}>
                         <motion.button
+                            className="w-full lg:w-[300px]"
                             type="button"
-                            onClick={handleSaveVariants}
+                            onClick={hasVariants ? handleSaveVariants : handleSaveSimple}
                             disabled={!isDirty || saving}
                             whileTap={isDirty && !saving ? { scale: 0.97 } : undefined}
                             transition={SPRING_PRESS}
                             style={{
                                 pointerEvents: 'auto',
-                                width: '100%',
                                 height: 50,
                                 borderRadius: 14,
                                 border: 'none',
-                                background: isDirty && !saving ? '#32d74b' : 'rgba(255,255,255,0.07)',
+                                background: isDirty && !saving ? 'var(--toul-accent)' : 'rgba(255,255,255,0.07)',
                                 color: isDirty && !saving ? '#000' : 'rgba(255,255,255,0.3)',
                                 fontSize: 15,
                                 fontWeight: 600,
@@ -899,7 +860,7 @@ export default function EditProductPage() {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: 8,
-                                boxShadow: isDirty && !saving ? '0 4px 24px rgba(50,215,75,0.25)' : 'none',
+                                boxShadow: isDirty && !saving ? '0 4px 24px var(--toul-accent-glow)' : 'none',
                                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                 fontFamily: 'inherit',
                             }}>
@@ -918,7 +879,6 @@ export default function EditProductPage() {
                         </motion.button>
                     </div>
                 </div>
-            )}
 
             {/* Hidden file input (simple mode) */}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
