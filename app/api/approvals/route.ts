@@ -6,10 +6,13 @@ import { notifyAdmins } from '@/lib/isla/push'
 /**
  * POST /api/approvals
  *
- * Crea una solicitud de aprobación (anular venta o vender a crédito) vía el RPC
- * `toul_request_approval` y avisa por notificación push a los administradores.
+ * Crea una solicitud de aprobación (anular venta, devolver productos o vender
+ * a crédito) vía el RPC `toul_request_approval` y avisa por notificación push
+ * a los administradores.
  *
- * Body: { type: 'void_sale' | 'credit_sale', saleId?, amount?, reason?, details? }
+ * Body: { type: 'void_sale' | 'return_sale' | 'credit_sale', saleId?, amount?, reason?, details? }
+ * En una devolución, details = { items: [{ saleItemId, quantity }], methodId } y
+ * el monto lo calcula la base: no se confía en el que mande el equipo.
  */
 export async function POST(request: Request) {
     const supabase = await createClient()
@@ -24,7 +27,7 @@ export async function POST(request: Request) {
     }
 
     const type = body.type
-    if (type !== 'void_sale' && type !== 'credit_sale') {
+    if (type !== 'void_sale' && type !== 'credit_sale' && type !== 'return_sale') {
         return NextResponse.json({ error: 'Tipo de solicitud inválido' }, { status: 400 })
     }
 
@@ -54,7 +57,9 @@ export async function POST(request: Request) {
 
     const sent = await notifyAdmins(supabase, requestId, type === 'void_sale'
         ? { title: 'Solicitud de anulación', body: `${who} quiere anular una venta de ${amount}`, url: '/aprobaciones', tag: requestId }
-        : { title: 'Solicitud de crédito', body: `${who} quiere fiar ${amount}${customer ? ` a ${customer}` : ''}`, url: '/aprobaciones', tag: requestId }
+        : type === 'return_sale'
+            ? { title: 'Solicitud de devolución', body: `${who} quiere devolver ${amount} de una venta`, url: '/aprobaciones', tag: requestId }
+            : { title: 'Solicitud de crédito', body: `${who} quiere fiar ${amount}${customer ? ` a ${customer}` : ''}`, url: '/aprobaciones', tag: requestId }
     )
 
     return NextResponse.json({ id: requestId, notified: sent })

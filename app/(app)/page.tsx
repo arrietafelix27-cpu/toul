@@ -73,13 +73,23 @@ export default function DashboardPage() {
             ])
 
             // Fetch previous data for variations
-            const [prevSales, prevExpenses] = await Promise.all([
+            const [prevSales, prevExpenses, returns, prevReturns] = await Promise.all([
                 supabase.from('sales').select('total, sale_items(unit_price, unit_cost, quantity)').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01'),
-                supabase.from('expenses').select('amount').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01')
+                supabase.from('expenses').select('amount').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01'),
+                // Lo devuelto resta el día en que se devuelve. Antes de activar
+                // las devoluciones la tabla no existe y no llega nada
+                supabase.from('sale_returns').select('total, cost_total').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
+                supabase.from('sale_returns').select('total, cost_total').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01'),
             ])
+            const devuelto = (rows: { total: number; cost_total: number }[] | null) => ({
+                total: (rows || []).reduce((s, d) => s + Number(d.total), 0),
+                cost: (rows || []).reduce((s, d) => s + Number(d.cost_total), 0),
+            })
+            const returned = devuelto(returns.data)
+            const prevReturned = devuelto(prevReturns.data)
 
             // 1. CALCULATE TOP ROW METRICS
-            const currentRevenue = Math.round((sales.data || []).reduce((s, r) => s + r.total, 0))
+            const currentRevenue = Math.round((sales.data || []).reduce((s, r) => s + r.total, 0) - returned.total)
             const currentExpenses = Math.round((expenses.data || []).reduce((s, e) => s + e.amount, 0))
             const salesCount = (sales.data || []).length
             const avgTicket = salesCount > 0 ? Math.round(currentRevenue / salesCount) : 0
@@ -110,6 +120,8 @@ export default function DashboardPage() {
                 }
             }
 
+            currentCost = Math.round(currentCost - returned.cost)
+
             const currentNetProfit = Math.round(currentRevenue - currentCost - currentExpenses)
             const currentGrossProfit = Math.round(currentRevenue - currentCost)
 
@@ -132,7 +144,7 @@ export default function DashboardPage() {
             const expensesTopCategory = topExpense ? topExpense[0] : null
 
             // Previous periods for variation
-            const pRev = Math.round((prevSales.data || []).reduce((s, r) => s + r.total, 0))
+            const pRev = Math.round((prevSales.data || []).reduce((s, r) => s + r.total, 0) - prevReturned.total)
             const pExp = Math.round((prevExpenses.data || []).reduce((s, e) => s + e.amount, 0))
             const pSalesCount = (prevSales.data || []).length
 
@@ -142,6 +154,7 @@ export default function DashboardPage() {
                     pCost += Math.round((item.unit_cost || 0) * item.quantity)
                 }
             }
+            pCost = Math.round(pCost - prevReturned.cost)
             const pNetProfit = Math.round(pRev - pCost - pExp)
             const pGrossProfit = Math.round(pRev - pCost)
 

@@ -369,7 +369,7 @@ export interface SaleItemDetail {
 }
 
 /** Cómo se llama de verdad lo que se vendió */
-export function saleItemName(item: SaleItemDetail): string {
+export function saleItemName(item: Pick<SaleItemDetail, 'products' | 'product_variants' | 'combos'>): string {
     if (item.combos?.name) return item.combos.name
     return [item.products?.name ?? 'Producto', item.product_variants?.name].filter(Boolean).join(' · ')
 }
@@ -394,3 +394,31 @@ export const SALE_DETAIL_SELECT =
     'id, created_at, total, discount, payment_method, is_credit, customer_id, customer_name, cash_session_id, ' +
     'sale_items(product_id, quantity, unit_price, unit_cost, products(name, image_url), product_variants(name), combos(name)), ' +
     'sale_payments(amount, payment_methods(name))'
+
+/* ── Devoluciones parciales ───────────────────────────────────────
+   Una venta puede tener varias: cada una dice qué volvió, cuánto se
+   le devolvió en plata y cuánto se le bajó de la deuda si era fiado. */
+export interface SaleReturn {
+    id: string
+    sale_id: string
+    created_at: string
+    /** Lo devuelto, a precio de venta (ya con el descuento de la venta) */
+    total: number
+    /** Lo que costó esa mercancía: se resta de la ganancia */
+    cost_total: number
+    refunded: number
+    debt_reduced: number
+    reason: string
+    requested_by_name: string | null
+    approved_by_name: string | null
+    payment_methods: { name: string } | null
+    sale_return_items: {
+        sale_item_id: string
+        quantity: number
+        sale_items: Pick<SaleItemDetail, 'products' | 'product_variants' | 'combos'> | null
+    }[]
+}
+
+export const SALE_RETURN_SELECT =
+    'id, sale_id, created_at, total, cost_total, refunded, debt_reduced, reason, requested_by_name, approved_by_name, ' +
+    'payment_methods(name), sale_return_items(sale_item_id, quantity, sale_items(products(name, image_url), product_variants(name), combos(name)))'

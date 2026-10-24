@@ -58,8 +58,9 @@ interface SaleItemRow {
     products: { name: string } | null
 }
 interface SaleRow { total: number; sale_items: SaleItemRow[] }
+interface ReturnRow { total: number; cost_total: number }
 
-function totalsFrom(sales: SaleRow[], expenses: { amount: number }[], purchases: { total: number }[]): ReportTotals {
+function totalsFrom(sales: SaleRow[], expenses: { amount: number }[], purchases: { total: number }[], returns: ReturnRow[]): ReportTotals {
     let revenue = 0, cogs = 0, units = 0
     for (const sale of sales) {
         revenue += Number(sale.total) || 0
@@ -67,6 +68,11 @@ function totalsFrom(sales: SaleRow[], expenses: { amount: number }[], purchases:
             units += Number(item.quantity) || 0
             cogs += (Number(item.unit_cost) || 0) * (Number(item.quantity) || 0)
         }
+    }
+    // Lo devuelto resta el día en que se devuelve: de lo vendido y de lo que costó
+    for (const ret of returns) {
+        revenue -= Number(ret.total) || 0
+        cogs -= Number(ret.cost_total) || 0
     }
     const expenseTotal = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
     const grossProfit = revenue - cogs
@@ -138,7 +144,7 @@ export default function ReportesPage() {
             const inRange = (query: any, column = 'created_at', r: Range = range) =>
                 query.gte(column, r.from).lte(column, r.to)
 
-            const [sales, prevSales, expenses, prevExpenses, purchases, prevPurchases, customers, providers, products] = await Promise.all([
+            const [sales, prevSales, expenses, prevExpenses, purchases, prevPurchases, customers, providers, products, returns, prevReturns] = await Promise.all([
                 inRange(supabase.from('sales').select(SALE_SELECT).eq('store_id', storeId)),
                 inRange(supabase.from('sales').select(SALE_SELECT).eq('store_id', storeId), 'created_at', prev),
                 inRange(supabase.from('expenses').select('amount, category').eq('store_id', storeId)),
@@ -148,6 +154,9 @@ export default function ReportesPage() {
                 supabase.from('customers').select('id, name, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }),
                 supabase.from('providers').select('id, name, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }),
                 supabase.from('products').select('id, name, stock, cpp, low_stock_threshold').eq('store_id', storeId).eq('is_active', true),
+                // Antes de activar las devoluciones la tabla no existe y no llega nada
+                inRange(supabase.from('sale_returns').select('total, cost_total').eq('store_id', storeId)),
+                inRange(supabase.from('sale_returns').select('total, cost_total').eq('store_id', storeId), 'created_at', prev),
             ])
 
             const currentSales = (sales.data ?? []) as unknown as SaleRow[]
@@ -165,11 +174,12 @@ export default function ReportesPage() {
             const inventoryValue = productRows.reduce((sum, p) => sum + (Number(p.stock) || 0) * (Number(p.cpp) || 0), 0)
 
             return {
-                current: totalsFrom(currentSales, expenseRows, (purchases.data ?? []) as { total: number }[]),
+                current: totalsFrom(currentSales, expenseRows, (purchases.data ?? []) as { total: number }[], (returns.data ?? []) as ReturnRow[]),
                 previous: totalsFrom(
                     (prevSales.data ?? []) as unknown as SaleRow[],
                     (prevExpenses.data ?? []) as { amount: number }[],
                     (prevPurchases.data ?? []) as { total: number }[],
+                    (prevReturns.data ?? []) as ReturnRow[],
                 ),
                 expensesByCategory: [...byCategory.entries()]
                     .map(([label, amount]) => ({ label, amount: Math.round(amount) }))

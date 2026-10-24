@@ -5,12 +5,13 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import toast from 'react-hot-toast'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowUpRight, Ban, Package, Printer, UserRound, X } from 'lucide-react'
+import { ArrowUpRight, Ban, Package, Printer, Undo2, UserRound, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
 import { panelVariants, backdropVariants } from '@/lib/motion'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
+import { useDevolucionesDeVenta, DIAS_PARA_DEVOLVER } from './DevolucionSheet'
 import { saleItemName } from '@/lib/types'
 import type { SaleDetailData } from '@/lib/types'
 
@@ -23,26 +24,40 @@ const supabase = createClient()
    el historial de ventas y la ficha del cliente. Una sola copia
    quiere decir que una venta se ve igual en toda la app.
 
-   Lo que cambia entre un lado y otro son las acciones: anular solo
-   se puede desde Ventas, porque mueve inventario, caja y deuda.
+   Lo que cambia entre un lado y otro son las acciones: anular y
+   devolver solo se pueden desde Ventas, porque mueven inventario,
+   caja y deuda. Una venta con devoluciones ya no se anula: se
+   devuelve lo que falta.
    ══════════════════════════════════════════════════════════════ */
 
 function formatDateTime(iso: string) {
     return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
-export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, mostrarCliente = true, verEnVentas = false }: {
+export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, onDevolver, mostrarCliente = true, verEnVentas = false }: {
     sale: SaleDetailData | null
     onClose: () => void
     /** Solo donde se puede corregir a quién fue la venta */
     onChangeCustomer?: (sale: SaleDetailData) => void
     /** Solo en Ventas: anular mueve inventario, caja y deuda */
     onVoid?: () => void
+    /** Solo en Ventas: devolver una parte también mueve inventario, caja y deuda */
+    onDevolver?: () => void
     /** En la ficha del cliente sobra: ya sabes de quién es */
     mostrarCliente?: boolean
     verEnVentas?: boolean
 }) {
     const [printing, setPrinting] = useState(false)
+
+    // null: las devoluciones todavía no están activas en este negocio
+    const { data: devoluciones } = useDevolucionesDeVenta(sale?.id ?? null)
+    const devuelto = (devoluciones ?? []).reduce((s, d) => s + Number(d.total), 0)
+    const gananciaDevuelta = (devoluciones ?? []).reduce((s, d) => s + Number(d.total) - Number(d.cost_total), 0)
+    const unidadesDevueltas = (devoluciones ?? []).reduce((s, d) => s + d.sale_return_items.reduce((n, i) => n + Number(i.quantity), 0), 0)
+    const unidades = (sale?.sale_items ?? []).reduce((s, i) => s + Number(i.quantity), 0)
+    const dentroDelPlazo = !!sale && Date.now() - new Date(sale.created_at).getTime() <= DIAS_PARA_DEVOLVER * 86_400_000
+    const puedeDevolver = !!onDevolver && devoluciones !== null && dentroDelPlazo && unidadesDevueltas < unidades
+    const puedeAnular = !!onVoid && !(devoluciones?.length)
 
     // Nombres reales de los métodos de pago del negocio (Datáfono, Addi, etc.)
     const { data: methodNames } = useSWR('method-names', async () => {
@@ -177,10 +192,32 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, mostrarCli
                                 <span className="font-bold" style={{ color: 'var(--toul-text)' }}>Total</span>
                                 <span className="text-xl font-bold" style={{ color: 'var(--toul-accent)' }}>{formatCOP(sale.total)}</span>
                             </div>
+                            {/* Lo que devolvió después: la venta no se borra, queda anotado */}
+                            {(devoluciones?.length ?? 0) > 0 && (
+                                <div className="flex flex-col gap-2 pt-1">
+                                    {devoluciones!.map(d => (
+                                        <div key={d.id} className="flex justify-between gap-3">
+                                            <span style={{ minWidth: 0 }}>
+                                                <span className="text-sm block" style={{ color: 'var(--toul-text-muted)' }}>
+                                                    Devolvió {d.sale_return_items.map(i => `${i.quantity}× ${i.sale_items ? saleItemName(i.sale_items) : 'Producto'}`).join(', ')}
+                                                </span>
+                                                <span className="block" style={{ fontSize: 12, color: 'var(--toul-text-dim)' }}>
+                                                    {formatDateTime(d.created_at)} · {Number(d.refunded) > 0 ? `por ${d.payment_methods?.name ?? 'el mismo medio'}` : 'se bajó de la deuda'} · {d.reason}
+                                                </span>
+                                            </span>
+                                            <span className="text-sm font-medium" style={{ color: 'var(--toul-warning)', flexShrink: 0 }}>−{formatCOP(d.total)}</span>
+                                        </div>
+                                    ))}
+                                    <div className="flex justify-between">
+                                        <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Quedó en</span>
+                                        <span className="text-sm font-semibold" style={{ color: 'var(--toul-text)' }}>{formatCOP(Math.max(sale.total - devuelto, 0))}</span>
+                                    </div>
+                                </div>
+                            )}
                             <div className="flex justify-between">
                                 <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Utilidad estimada</span>
                                 <span className="font-semibold text-sm" style={{ color: 'var(--toul-accent)' }}>
-                                    {formatCOP(sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0))}
+                                    {formatCOP(Math.round(sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0) - gananciaDevuelta))}
                                 </span>
                             </div>
                             {sale.seller_name && (
@@ -201,7 +238,13 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, mostrarCli
                                     disabled={printing} onClick={() => imprimir(sale.id)}>
                                     <Printer size={16} /> {printing ? 'Preparando…' : 'Tirilla'}
                                 </button>
-                                {onVoid && (
+                                {puedeDevolver && (
+                                    <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-text)' }}
+                                        onClick={onDevolver}>
+                                        <Undo2 size={16} /> Devolver
+                                    </button>
+                                )}
+                                {puedeAnular && (
                                     <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-error)' }}
                                         onClick={onVoid}>
                                         <Ban size={16} /> Anular

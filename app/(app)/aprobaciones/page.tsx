@@ -4,10 +4,11 @@ import { useState } from 'react'
 import useSWR, { useSWRConfig } from 'swr'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { Ban, CreditCard, Check, X, Inbox } from 'lucide-react'
+import { Ban, CreditCard, Check, X, Inbox, Undo2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useSessionContext } from '@/lib/isla/useSession'
+import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
 import { PushPrompt } from '@/components/isla/PushPrompt'
 import { Sheet } from '@/components/isla/Sheet'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
@@ -30,7 +31,7 @@ const ago = (iso: string) => {
     return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
-interface SaleInfo { id: string; total: number; created_at: string; seller_name: string | null; sale_items: { quantity: number; products: { name: string } | null; combos: { name: string } | null }[] }
+interface SaleInfo { id: string; total: number; created_at: string; seller_name: string | null; sale_items: { id: string; quantity: number; products: { name: string } | null; combos: { name: string } | null }[] }
 
 export default function AprobacionesPage() {
     const { data: ctx } = useSessionContext()
@@ -38,6 +39,7 @@ export default function AprobacionesPage() {
     const [rejecting, setRejecting] = useState<ApprovalRequest | null>(null)
     const [note, setNote] = useState('')
     const [busyId, setBusyId] = useState<string | null>(null)
+    const { methods } = usePaymentMethods()
 
     const { data, isLoading, mutate } = useSWR(ctx ? ['aprobaciones', ctx.storeId] : null, async () => {
         const [pending, history] = await Promise.all([
@@ -46,7 +48,7 @@ export default function AprobacionesPage() {
         ])
         const saleIds = (pending.data ?? []).map(r => r.sale_id).filter(Boolean)
         const sales = saleIds.length
-            ? (await supabase.from('sales').select('id, total, created_at, seller_name, sale_items(quantity, products(name), combos(name))').in('id', saleIds)).data ?? []
+            ? (await supabase.from('sales').select('id, total, created_at, seller_name, sale_items(id, quantity, products(name), combos(name))').in('id', saleIds)).data ?? []
             : []
         return {
             pending: (pending.data ?? []) as ApprovalRequest[],
@@ -66,6 +68,7 @@ export default function AprobacionesPage() {
         if (status === 'expired') toast.error('La solicitud ya había vencido')
         else if (!approve) toast.success('Solicitud rechazada')
         else if (req.type === 'void_sale') toast.success('Venta anulada. Inventario y caja actualizados.')
+        else if (req.type === 'return_sale') toast.success('Devolución hecha. Inventario y caja actualizados.')
         else toast.success('Crédito aprobado. El vendedor ya puede confirmar la venta.')
         setRejecting(null)
         setNote('')
@@ -88,13 +91,15 @@ export default function AprobacionesPage() {
                 <div className="toul-card" style={{ textAlign: 'center', padding: '44px 20px' }}>
                     <Inbox size={32} strokeWidth={1.5} style={{ color: 'var(--toul-text-faint)', margin: '0 auto 12px' }} />
                     <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Nada pendiente</p>
-                    <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>Cuando un vendedor pida anular o fiar, aparece aquí.</p>
+                    <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>Cuando un vendedor pida anular, devolver o fiar, aparece aquí.</p>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <AnimatePresence initial={false}>
                         {data!.pending.map(req => {
                             const isVoid = req.type === 'void_sale'
+                            const isReturn = req.type === 'return_sale'
+                            const metodoDevolucion = isReturn ? methods.find(m => m.id === req.details.methodId)?.name : undefined
                             const sale = req.sale_id ? data!.sales.get(req.sale_id) : undefined
                             const busy = busyId === req.id
                             return (
@@ -103,17 +108,37 @@ export default function AprobacionesPage() {
                                     transition={{ duration: 0.22, ease: EASE_OUT_EMIL }}
                                     className="toul-card" style={{ padding: 18 }}>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                        <div style={{ width: 44, height: 44, borderRadius: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isVoid ? 'var(--toul-error-dim)' : 'var(--toul-info-dim)' }}>
-                                            {isVoid ? <Ban size={20} style={{ color: 'var(--toul-error)' }} /> : <CreditCard size={20} style={{ color: 'var(--toul-info)' }} />}
+                                        <div style={{ width: 44, height: 44, borderRadius: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isVoid ? 'var(--toul-error-dim)' : isReturn ? 'var(--toul-warning-dim)' : 'var(--toul-info-dim)' }}>
+                                            {isVoid ? <Ban size={20} style={{ color: 'var(--toul-error)' }} />
+                                                : isReturn ? <Undo2 size={20} style={{ color: 'var(--toul-warning)' }} />
+                                                    : <CreditCard size={20} style={{ color: 'var(--toul-info)' }} />}
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>
                                                 {req.requested_by_name ?? 'Vendedor'} · {ago(req.requested_at)}
                                             </p>
                                             <p style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '2px 0 6px' }}>
-                                                {isVoid ? `Anular venta de ${formatCOP(req.amount ?? 0)}` : `Fiar ${formatCOP(req.amount ?? 0)} a ${req.details.customerName ?? 'cliente'}`}
+                                                {isVoid ? `Anular venta de ${formatCOP(req.amount ?? 0)}`
+                                                    : isReturn ? `Devolver ${formatCOP(req.amount ?? 0)} de una venta`
+                                                        : `Fiar ${formatCOP(req.amount ?? 0)} a ${req.details.customerName ?? 'cliente'}`}
                                             </p>
-                                            {isVoid ? (
+                                            {isReturn ? (
+                                                <>
+                                                    <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: 0 }}>
+                                                        Devuelve: <span style={{ color: 'var(--toul-text)' }}>
+                                                            {(req.details.items ?? []).map(i => {
+                                                                const item = sale?.sale_items.find(si => si.id === i.saleItemId)
+                                                                return `${i.quantity}× ${item?.combos?.name ?? item?.products?.name ?? 'Producto'}`
+                                                            }).join(', ')}
+                                                        </span>
+                                                    </p>
+                                                    <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '2px 0 0' }}>Motivo: <span style={{ color: 'var(--toul-text)' }}>{req.reason}</span></p>
+                                                    <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '4px 0 0' }}>
+                                                        {metodoDevolucion ? `Sale por ${metodoDevolucion}` : 'Sale por el mismo medio de la venta'}
+                                                        {sale ? ` · venta de ${formatCOP(sale.total)} del ${new Date(sale.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}` : ''}
+                                                    </p>
+                                                </>
+                                            ) : isVoid ? (
                                                 <>
                                                     <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: 0 }}>Motivo: <span style={{ color: 'var(--toul-text)' }}>{req.reason}</span></p>
                                                     {sale && (
@@ -141,7 +166,7 @@ export default function AprobacionesPage() {
                                         <motion.button whileTap={{ scale: 0.97 }} transition={SPRING_PRESS} disabled={busy}
                                             onClick={() => resolve(req, true)}
                                             style={{ flex: 1, height: 50, borderRadius: 14, border: 'none', background: 'var(--toul-accent)', color: '#000', fontSize: 15, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 4px 20px var(--toul-accent-glow)', fontFamily: 'inherit', opacity: busy ? 0.6 : 1 }}>
-                                            <Check size={17} strokeWidth={2.6} /> {busy ? 'Procesando…' : isVoid ? 'Aprobar y anular' : 'Aprobar crédito'}
+                                            <Check size={17} strokeWidth={2.6} /> {busy ? 'Procesando…' : isVoid ? 'Aprobar y anular' : isReturn ? 'Aprobar devolución' : 'Aprobar crédito'}
                                         </motion.button>
                                     </div>
                                 </motion.div>
@@ -161,7 +186,7 @@ export default function AprobacionesPage() {
                                 <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--toul-divider)' : 'none' }}>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
-                                            {req.type === 'void_sale' ? 'Anulación' : `Crédito a ${req.details.customerName ?? 'cliente'}`} · {formatCOP(req.amount ?? 0)}
+                                            {req.type === 'void_sale' ? 'Anulación' : req.type === 'return_sale' ? 'Devolución' : `Crédito a ${req.details.customerName ?? 'cliente'}`} · {formatCOP(req.amount ?? 0)}
                                         </p>
                                         <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>
                                             {req.requested_by_name} · {ago(req.requested_at)}{req.reason ? ` · ${req.reason}` : ''}{req.resolution_note ? ` · Nota: ${req.resolution_note}` : ''}

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, ChevronRight, Receipt, Sparkles, Truck, Undo2 } from 'lucide-react'
 import { Sheet } from '@/components/isla/Sheet'
+import { DevolucionSheet } from '@/components/ventas/DevolucionSheet'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 import { PANEL_CSS } from './panelStyles'
 import type { AIInsight } from '@/lib/types'
@@ -70,27 +71,6 @@ const CSS = PANEL_CSS + `
 }
 `
 
-/** Mientras no exista la devolución parcial: decir qué se puede hacer hoy */
-function DevolucionSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-    return (
-        <Sheet open={open} onClose={onClose} title="Devoluciones" width={420}
-            footer={
-                <div style={{ display: 'flex', gap: 10 }}>
-                    <button className="toul-btn-secondary" style={{ color: 'var(--toul-text)' }} onClick={onClose}>Cerrar</button>
-                    <Link href="/ventas" className="toul-btn-primary" style={{ textDecoration: 'none' }}>Ir a Ventas</Link>
-                </div>
-            }>
-            <p style={{ fontSize: 15, lineHeight: 1.55, color: 'var(--toul-text-muted)', margin: 0 }}>
-                Por ahora, cuando un cliente devuelve, se anula la venta completa: el producto vuelve al inventario y
-                la plata sale de la caja por el mismo medio en que entró.
-            </p>
-            <p style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--toul-text-dim)', margin: '10px 0 0' }}>
-                En Ventas, abre la venta y toca Anular. Devolver solo una parte de la venta llega pronto.
-            </p>
-        </Sheet>
-    )
-}
-
 export function AccionesRapidas({ variante }: { variante: 'movil' | 'pc' }) {
     const [devolucion, setDevolucion] = useState(false)
     const cerrarDevolucion = useCallback(() => setDevolucion(false), [])
@@ -138,7 +118,9 @@ export function AccionesRapidas({ variante }: { variante: 'movil' | 'pc' }) {
                     </div>
                 </div>
             )}
-            <DevolucionSheet open={devolucion} onClose={cerrarDevolucion} />
+            {/* El inicio es solo del administrador (los vendedores van a la
+                caja): la devolución se hace de una, sin pedir aprobación */}
+            <DevolucionSheet open={devolucion} onClose={cerrarDevolucion} isAdmin />
         </>
     )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
 import { ReceiptText, Clock, Ban } from 'lucide-react'
@@ -44,14 +44,19 @@ export default function CajaVentasPage() {
         const [sales, voids, pending] = await Promise.all([
             salesQuery,
             voidsQuery,
-            supabase.from('approval_requests').select('sale_id').eq('type', 'void_sale').eq('status', 'pending'),
+            supabase.from('approval_requests').select('sale_id, type').in('type', ['void_sale', 'return_sale']).eq('status', 'pending'),
         ])
+        const pendientes = (pending.data ?? []) as { sale_id: string; type: string }[]
         return {
             sales: (sales.data ?? []) as unknown as SaleListRow[],
             voids: (voids.data ?? []) as SaleVoid[],
-            pendingVoids: new Set((pending.data ?? []).map(p => p.sale_id as string)),
+            pendingVoids: new Set(pendientes.filter(p => p.type === 'void_sale').map(p => p.sale_id)),
+            pendingReturns: new Set(pendientes.filter(p => p.type === 'return_sale').map(p => p.sale_id)),
         }
     }, { refreshInterval: 10_000 })
+
+    const cerrarDetalle = useCallback(() => setSelected(null), [])
+    const refrescar = useCallback(() => { mutate() }, [mutate])
 
     const totals = useMemo(() => {
         const sales = data?.sales ?? []
@@ -99,6 +104,7 @@ export default function CajaVentasPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {data!.sales.map((sale, idx) => {
                             const pending = data!.pendingVoids.has(sale.id)
+                            const pendingReturn = data!.pendingReturns.has(sale.id)
                             const summary = sale.sale_items.map(i => `${i.quantity > 1 ? `${i.quantity}× ` : ''}${itemName(i)}`).join(', ')
                             const methods = sale.sale_payments.map(p => p.payment_methods?.name).filter(Boolean).join(' + ')
                             return (
@@ -117,6 +123,7 @@ export default function CajaVentasPage() {
                                             <span>{sale.is_credit ? `Crédito${sale.customer_name ? ` · ${sale.customer_name}` : ''}` : methods}</span>
                                             {sale.discount > 0 && <span style={{ color: 'var(--toul-warning)' }}>Descuento −{formatCOP(sale.discount)}</span>}
                                             {pending && <span style={{ color: 'var(--toul-warning)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> Anulación pendiente</span>}
+                                            {pendingReturn && <span style={{ color: 'var(--toul-warning)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> Devolución pendiente</span>}
                                         </span>
                                     </span>
                                     <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)' }}>{formatCOP(sale.total)}</span>
@@ -151,10 +158,11 @@ export default function CajaVentasPage() {
 
             <SaleDetail
                 sale={selected}
-                onClose={() => setSelected(null)}
+                onClose={cerrarDetalle}
                 isAdmin={ctx.role === 'admin'}
                 voidPending={!!selected && !!data?.pendingVoids.has(selected.id)}
-                onChanged={() => mutate()}
+                returnPending={!!selected && !!data?.pendingReturns.has(selected.id)}
+                onChanged={refrescar}
             />
         </div>
     )

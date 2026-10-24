@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
@@ -18,6 +18,7 @@ import useSWR from 'swr'
 import type { SaleDetailData as VentaData } from '@/lib/types'
 import { SALE_DETAIL_SELECT } from '@/lib/types'
 import { SaleDetail } from '@/components/ventas/SaleDetail'
+import { DevolucionSheet } from '@/components/ventas/DevolucionSheet'
 
 type Period = 'today' | 'week' | 'month' | 'total' | 'custom'
 
@@ -122,6 +123,8 @@ export default function VentasPage() {
     const [query, setQuery] = useState('')
     const [showFilters, setShowFilters] = useState(false)
     const [voidOpen, setVoidOpen] = useState(false)
+    const [devolverOpen, setDevolverOpen] = useState(false)
+    const cerrarDevolucion = useCallback(() => setDevolverOpen(false), [setDevolverOpen])
 
     // Using SWR for caching and consistency
     const { data: sales, isLoading, isValidating, mutate } = useSWR<VentaData[]>(
@@ -159,6 +162,8 @@ export default function VentasPage() {
         },
         { revalidateOnFocus: false, dedupingInterval: 30000 }
     )
+
+    const devolucionHecha = useCallback(() => { setSelectedSale(null); mutate() }, [mutate])
 
     // Nombres reales de los métodos de pago del negocio (Datáfono, Addi, etc.)
     const { data: methodNames } = useSWR(storeId ? ['method-names', storeId] : null, async () => {
@@ -232,30 +237,68 @@ export default function VentasPage() {
                 if (kind === 'descuento') q = q.gt('discount', 0)
                 return q
             }
-            let { data, error } = await run(true)
+            // Lo devuelto en el periodo resta el día en que se devuelve, con
+            // los mismos filtros de la venta a la que pertenece
+            const devoluciones = async () => {
+                let q = supabase.from('sale_returns')
+                    .select('total, cost_total, sales!inner(seller_name, is_credit, discount)')
+                    .eq('store_id', storeId)
+                    .gte('created_at', range.from || '1970-01-01')
+                    .lte('created_at', range.to || '9999-12-31')
+                if (seller !== 'todos') q = q.eq('sales.seller_name', seller)
+                if (kind === 'contado') q = q.eq('sales.is_credit', false)
+                if (kind === 'credito') q = q.eq('sales.is_credit', true)
+                if (kind === 'descuento') q = q.gt('sales.discount', 0)
+                const { data, error } = await q
+                // Antes de activar las devoluciones la tabla no existe: no hay nada que restar
+                return error ? [] : (data ?? []) as unknown as { total: number; cost_total: number }[]
+            }
+            const [primera, devueltas] = await Promise.all([run(true), devoluciones()])
+            let { data, error } = primera
             if (error) ({ data, error } = await run(false))
             if (error) throw error
             const list = (data ?? []) as unknown as { total: number; sale_items: { quantity: number; unit_price: number; unit_cost: number }[] }[]
+            const devuelto = devueltas.reduce((sum, d) => sum + Number(d.total), 0)
+            const gananciaDevuelta = devueltas.reduce((sum, d) => sum + Number(d.total) - Number(d.cost_total), 0)
             return {
-                revenue: Math.round(list.reduce((sum, v) => sum + Number(v.total), 0)),
-                profit: Math.round(list.reduce((sum, v) => sum + (v.sale_items ?? []).reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0)),
+                revenue: Math.round(list.reduce((sum, v) => sum + Number(v.total), 0) - devuelto),
+                profit: Math.round(list.reduce((sum, v) => sum + (v.sale_items ?? []).reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0) - gananciaDevuelta),
                 count: list.length,
             }
         },
         { revalidateOnFocus: false, dedupingInterval: 30000 },
     )
 
+    // Lo que se devolvió de cada venta de la lista, para marcarla
+    const saleIds = useMemo(() => (sales ?? []).map(v => v.id), [sales])
+    const { data: devueltoPorVenta } = useSWR(
+        saleIds.length ? ['devoluciones-lista', saleIds.join(',')] : null,
+        async () => {
+            const { data, error } = await supabase.from('sale_returns').select('sale_id, total, cost_total').in('sale_id', saleIds)
+            const map = new Map<string, { total: number; ganancia: number }>()
+            if (error) return map
+            for (const d of data ?? []) {
+                const prev = map.get(d.sale_id) ?? { total: 0, ganancia: 0 }
+                map.set(d.sale_id, { total: prev.total + Number(d.total), ganancia: prev.ganancia + Number(d.total) - Number(d.cost_total) })
+            }
+            return map
+        },
+        { revalidateOnFocus: false },
+    )
+
     // Si está buscando por texto, el resumen refleja lo que ve
     const totals = useMemo(() => {
         if (query.trim()) {
+            const devuelto = filtered.reduce((s, v) => s + (devueltoPorVenta?.get(v.id)?.total ?? 0), 0)
+            const gananciaDevuelta = filtered.reduce((s, v) => s + (devueltoPorVenta?.get(v.id)?.ganancia ?? 0), 0)
             return {
-                revenue: Math.round(filtered.reduce((s, v) => s + v.total, 0)),
-                profit: Math.round(filtered.reduce((s, v) => s + v.sale_items.reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0)),
+                revenue: Math.round(filtered.reduce((s, v) => s + v.total, 0) - devuelto),
+                profit: Math.round(filtered.reduce((s, v) => s + v.sale_items.reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0) - gananciaDevuelta),
                 count: filtered.length,
             }
         }
         return periodTotals ?? { revenue: 0, profit: 0, count: 0 }
-    }, [filtered, periodTotals, query])
+    }, [filtered, periodTotals, query, devueltoPorVenta])
 
     const PERIODS: { value: Period; label: string }[] = [
         { value: 'today', label: 'Hoy' },
@@ -506,7 +549,12 @@ export default function VentasPage() {
                                         <span className="vt-1" style={{ fontSize: 13.5, color: 'var(--toul-text-muted)' }}>{methodLabel(sale.payment_method)}</span>
                                         {sale.discount > 0 && <span className="vt-2" style={{ color: 'var(--toul-warning)' }}>Dto. {formatCOP(sale.discount)}</span>}
                                     </span>
-                                    <span className="vt-num vt-1" style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--toul-text)' }}>{formatCOP(sale.total)}</span>
+                                    <span className="vt-num">
+                                        <span className="vt-1" style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--toul-text)' }}>{formatCOP(sale.total)}</span>
+                                        {devueltoPorVenta?.get(sale.id) && (
+                                            <span className="vt-2" style={{ color: 'var(--toul-warning)' }}>Devolvió {formatCOP(devueltoPorVenta.get(sale.id)!.total)}</span>
+                                        )}
+                                    </span>
                                     <span className="vt-num vt-1" style={{ fontSize: 13.5, fontWeight: 600, color: profit >= 0 ? 'var(--toul-accent)' : 'var(--toul-error)' }}>
                                         {profit >= 0 ? '+' : '−'}{formatCOP(Math.abs(profit))}
                                     </span>
@@ -540,6 +588,7 @@ export default function VentasPage() {
                                             {sale.is_credit && <span style={{ color: 'var(--toul-accent)', fontWeight: 600 }}> · Crédito</span>}
                                             {sale.is_credit && sale.customer_name && <span style={{ color: 'var(--toul-text-muted)' }}> — {sale.customer_name}</span>}
                                             {sale.discount > 0 && <span style={{ color: 'var(--toul-warning)' }}> · Dto. {formatCOP(sale.discount)}</span>}
+                                            {devueltoPorVenta?.get(sale.id) && <span style={{ color: 'var(--toul-warning)' }}> · Devolvió {formatCOP(devueltoPorVenta.get(sale.id)!.total)}</span>}
                                         </p>
                                     </div>
                                     <div className="text-right flex-shrink-0">
@@ -568,6 +617,16 @@ export default function VentasPage() {
                 onClose={() => setSelectedSale(null)}
                 onChangeCustomer={setCustomerEdit}
                 onVoid={() => setVoidOpen(true)}
+                onDevolver={() => setDevolverOpen(true)}
+            />
+
+            {/* Devolver una parte: lo demás de la venta sigue igual */}
+            <DevolucionSheet
+                open={devolverOpen}
+                onClose={cerrarDevolucion}
+                saleId={selectedSale?.id ?? null}
+                isAdmin
+                onDone={devolucionHecha}
             />
 
             {/* Corregir a quién se le vendió */}

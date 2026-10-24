@@ -38,7 +38,7 @@ const OUT_TYPES = ['expense', 'purchase', 'provider_payment', 'transfer_out']
 const LABELS: Record<string, string> = {
     sale: 'Venta',
     sale_payment: 'Abono de cliente',
-    sale_refund: 'Devolución por anulación',
+    sale_refund: 'Devolución a un cliente',
     expense: 'Gasto',
     purchase: 'Compra de inventario',
     provider_payment: 'Pago a proveedor',

@@ -179,6 +179,7 @@ export function printCashClose(meta: { storeName: string; openedBy: string; open
   ${s.discountCount ? line(`Descuentos (${s.discountCount})`, '-' + formatCOP(s.discountTotal)) : ''}
   ${s.creditCount ? line('A crédito', String(s.creditCount)) : ''}
   ${s.voidCount ? line(`Anuladas (${s.voidCount})`, formatCOP(s.voidTotal)) : ''}
+  ${s.returnCount ? line(`Devoluciones (${s.returnCount})`, `-${formatCOP(s.returnTotal ?? 0)}`) : ''}
   <div class="sign">Firma responsable</div>
 </body></html>`
     const iframe = document.createElement('iframe')

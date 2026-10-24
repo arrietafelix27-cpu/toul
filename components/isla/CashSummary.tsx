@@ -55,6 +55,7 @@ export function CashSummary({ summary }: { summary: CashSessionSummary }) {
             {summary.discountCount > 0 && <Row label={`Con descuento (${summary.discountCount})`} value={`−${formatCOP(summary.discountTotal)}`} tone="warn" />}
             {summary.creditCount > 0 && <Row label="A crédito" value={String(summary.creditCount)} />}
             {summary.voidCount > 0 && <Row label={`Anuladas (${summary.voidCount})`} value={formatCOP(summary.voidTotal)} tone="error" />}
+            {(summary.returnCount ?? 0) > 0 && <Row label={`Devoluciones (${summary.returnCount})`} value={`−${formatCOP(summary.returnTotal ?? 0)}`} tone="warn" />}
         </div>
     )
 }

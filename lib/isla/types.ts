@@ -38,11 +38,14 @@ export interface CashSessionSummary {
     creditCount: number
     voidCount: number
     voidTotal: number
+    /** Desde deploy_devoluciones.sql: antes de correrlo no llegan */
+    returnCount?: number
+    returnTotal?: number
     countedCash?: number
     difference?: number
 }
 
-export type ApprovalType = 'void_sale' | 'credit_sale'
+export type ApprovalType = 'void_sale' | 'credit_sale' | 'return_sale'
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'used' | 'cancelled' | 'expired'
 
 export interface ApprovalRequest {
@@ -60,8 +63,11 @@ export interface ApprovalRequest {
         customerName?: string
         dueDate?: string
         initialPayment?: number
-        items?: { name: string; quantity: number }[]
+        /** Crédito: lo que se va a fiar. Devolución: qué productos de la venta y cuántos */
+        items?: { name?: string; saleItemId?: string; quantity: number }[]
         saleSummary?: string
+        /** Devolución: por dónde sale la plata */
+        methodId?: string | null
     }
     resolved_by_name: string | null
     resolved_at: string | null
