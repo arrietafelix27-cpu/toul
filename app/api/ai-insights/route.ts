@@ -4,6 +4,11 @@ import OpenAI from 'openai'
 
 // Cache duration: 1 hour (was 12h — too stale)
 const CACHE_TTL = 1 * 60 * 60 * 1000
+/** Sube cuando cambia la forma de las observaciones guardadas */
+const INSIGHT_VERSION = 2
+
+/** Las únicas acciones que puede elegir la IA. El botón sale de aquí. */
+const ACTION_TYPES = ['reponer', 'mover_inventario', 'revisar_precios', 'ver_producto', 'ver_reportes'] as const
 
 export async function POST(request: Request) {
     const supabase = await createClient()
@@ -23,7 +28,10 @@ export async function POST(request: Request) {
 
     if (cached) {
         const ageMs = Date.now() - new Date(cached.generated_at).getTime()
-        if (ageMs < CACHE_TTL) {
+        // Las guardadas antes de que la acción saliera de una lista cerrada
+        // (v2) se rehacen: traían el botón elegido por palabras sueltas
+        const vigente = Array.isArray(cached.insights) && cached.insights[0]?.v === INSIGHT_VERSION
+        if (ageMs < CACHE_TTL && vigente) {
             return NextResponse.json({ insights: cached.insights })
         }
     }
@@ -136,21 +144,51 @@ export async function POST(request: Request) {
         info: 'Apenas arrancando',
     }
 
-    /** La acción la decide el servidor: así el enlace siempre existe. */
+    /**
+     * El botón de la observación.
+     *
+     * Antes salía de buscar palabras: si el texto decía "inventario" y había
+     * algo agotado, el botón era "Comprar"… aunque la observación dijera que
+     * sobraba inventario. Ahora la IA elige el tipo de acción de una lista
+     * cerrada y el servidor arma el enlace. "Comprar" además exige que la
+     * observación hable de verdad de reponer o de algo agotado.
+     */
     function actionFor(insight: any) {
+        const texto = `${insight.interpretation ?? ''} ${insight.suggestion ?? ''}`.toLowerCase()
+        const hablaDeReponer = /repon|reabastec|agotad|se agot|sin stock|sin existencias|quiebre de stock|se est[aá] acabando|por acabarse/.test(texto)
         const secondBest = prodList.filter(p => p.id !== starProduct?.id).sort((a, b) => b.margin - a.margin)[0]
-        if (outOfStock.length > 0 || lowStockProds.length > 0) {
-            if (insight.category === 'alert' && /stock|inventario|agot/i.test(`${insight.interpretation} ${insight.suggestion}`)) {
-                return { label: 'Comprar', href: '/inventory/purchase' }
-            }
+        const producto = typeof insight.product_name === 'string'
+            ? prodList.find(p => p.name.toLowerCase() === insight.product_name.toLowerCase())
+            : undefined
+
+        const tipo = ACTION_TYPES.includes(insight.action_type) ? insight.action_type : null
+        switch (tipo) {
+            case 'reponer':
+                if (hablaDeReponer) return { label: 'Comprar', href: '/inventory/purchase' }
+                break
+            case 'mover_inventario':
+                return { label: 'Ver inventario', href: '/inventory' }
+            case 'revisar_precios':
+                return { label: 'Revisar precios', href: '/products' }
+            case 'ver_producto':
+                if (producto) return { label: `Ver ${producto.name}`, href: `/products/${producto.id}` }
+                break
+            case 'ver_reportes':
+                return { label: 'Ver reportes', href: '/reportes' }
         }
+
+        // Sin una elección válida (o la observación de respaldo sin IA): por
+        // lo que dice, nunca "Comprar" salvo que hable de reponer
+        if (hablaDeReponer && (outOfStock.length > 0 || lowStockProds.length > 0)) {
+            return { label: 'Comprar', href: '/inventory/purchase' }
+        }
+        if (/inventario|capital|rotaci|inmoviliz|quiet/.test(texto)) return { label: 'Ver inventario', href: '/inventory' }
+        if (/precio|margen/.test(texto)) return { label: 'Revisar precios', href: '/products' }
         switch (insight.category) {
             case 'dependency':
                 return secondBest ? { label: `Ver ${secondBest.name}`, href: `/products/${secondBest.id}` } : { label: 'Ver catálogo', href: '/products' }
             case 'opportunity':
                 return highMarginProduct ? { label: `Ver ${highMarginProduct.name}`, href: `/products/${highMarginProduct.id}` } : { label: 'Ver catálogo', href: '/products' }
-            case 'alert':
-                return { label: 'Revisar precios', href: '/products' }
             default:
                 return { label: 'Ver reportes', href: '/reportes' }
         }
@@ -163,6 +201,7 @@ export async function POST(request: Request) {
     function enrich(list: any[]) {
         return list.map(insight => ({
             ...insight,
+            v: INSIGHT_VERSION,
             verdict: VERDICT[insight.severity] ?? VERDICT.info,
             action: actionFor(insight),
             question: questionFor(insight),
@@ -224,8 +263,18 @@ Responde con un JSON array de objetos con este esquema:
   "interpretation": "string (frase estratégica)",
   "implication": "string (consecuencia)",
   "suggestion": "string (acción concreta)",
+  "action_type": "reponer" | "mover_inventario" | "revisar_precios" | "ver_producto" | "ver_reportes",
+  "product_name": "string (nombre exacto del producto, solo si action_type es ver_producto)",
   "icon": "emoji relevante"
 }
+
+CÓMO ELEGIR action_type (tiene que coincidir con lo que dice la sugerencia):
+- "reponer": SOLO si la sugerencia es comprar más porque algo se agotó o se está acabando.
+- "mover_inventario": si sobra inventario, hay capital quieto o productos sin rotación (descuentos, promociones, liquidar).
+- "revisar_precios": si el problema es el margen o los precios.
+- "ver_producto": si la sugerencia es sobre un producto concreto de la lista (pon su nombre exacto en product_name).
+- "ver_reportes": para todo lo demás.
+Nunca uses "reponer" cuando la sugerencia sea reducir o mover inventario.
 
 Prioriza temas de: rentabilidad, dependencia de productos, capital atrapado o alertas financieras.
 Cuando la sugerencia se refiera a un producto, NÓMBRALO con su nombre exacto de la lista. Nunca digas "un producto con buen margen": di cuál.

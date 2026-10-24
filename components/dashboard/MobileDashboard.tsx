@@ -2,8 +2,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PendingPanel, type PendingData } from './PendingPanel'
-import { AIAdvisor } from './AIAdvisor'
-import { FinancialSummary, type FinancialSummaryMetrics } from './FinancialSummary'
+import { type FinancialSummaryMetrics } from './FinancialSummary'
+import { ResumenHoy } from './ResumenHoy'
+import { AccionesRapidas, ObservacionAI } from './AccionesRapidas'
 import { PANEL_CSS } from './panelStyles'
 import { fadeUp } from '@/lib/motion'
 import { Calendar } from 'lucide-react'
@@ -39,7 +40,7 @@ const PERIODS: { value: Period; label: string }[] = [
 export default function MobileDashboard({
     storeName, currentDate, storeId, period, setPeriod,
     customRange, setCustomRange,
-    metrics, periodLabel, topProduct, pending, insight,
+    metrics, topProduct, pending, insight,
     loading, insightsLoading
 }: MobileDashboardProps) {
     const [showCalendar, setShowCalendar] = useState(false)
@@ -209,16 +210,21 @@ export default function MobileDashboard({
                 />
             </motion.div>
 
-            {/* 3️⃣ El mismo resumen financiero de computador. Antes aquí
-                había dos tarjetitas con gastos y utilidad, que no
-                coincidían con lo que el dueño veía en su pantalla grande. */}
+            {/* 3️⃣ Lo vendido en el periodo, con su ganancia y sus gastos */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.08 }}>
-                <FinancialSummary metrics={metrics} loading={loading} periodLabel={periodLabel} />
+                <ResumenHoy metrics={metrics} loading={loading} period={period} customRange={customRange} />
             </motion.div>
 
-            <hr className="md-sep" />
+            {/* Acciones rápidas, cerca del pulgar, y TOUL AI en una línea */}
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.1 }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <AccionesRapidas variante="movil" />
+                <ObservacionAI insight={insight} loading={insightsLoading || loading} />
+            </motion.div>
 
-            {/* 4️⃣ Lo que más salió */}
+            {/* 4️⃣ Lo que más salió (la línea solo va si hay algo debajo: sin
+                producto destacado quedaban dos líneas seguidas) */}
+            {!loading && topProduct && <hr className="md-sep" />}
             {!loading && topProduct && (
                 <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.12 }}
                     style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -241,12 +247,6 @@ export default function MobileDashboard({
                     <PendingPanel pending={pending} storeName={storeName} compact />
                 </motion.div>
             )}
-
-            {/* 6️⃣ TOUL AI */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.16 }}>
-                <hr className="md-sep" />
-                <AIAdvisor insight={insight} loading={insightsLoading || loading} />
-            </motion.div>
 
         </div>
     )

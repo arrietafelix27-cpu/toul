@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -93,6 +93,17 @@ export default function ExpensesPage() {
         setForm({ category: 'otros', description: '', amount: '' })
         setAdding(true)
     }
+
+    // Desde el inicio ("Gasto") se llega con ?nuevo=1: el formulario abre de una
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get('nuevo') !== '1') return
+        const t = setTimeout(() => {
+            window.history.replaceState(null, '', '/expenses')
+            abrirNuevo()
+        }, 0)
+        return () => clearTimeout(t)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     function abrirEdicion(expense: ExpenseRow) {
         setEditing(expense)

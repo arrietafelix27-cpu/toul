@@ -2,7 +2,7 @@
 
 import { ProductsPanel, type ProductsData } from './ProductsPanel'
 import { PendingPanel, type PendingData } from './PendingPanel'
-import { AIAdvisor } from './AIAdvisor'
+import { AccionesRapidas, ObservacionAI } from './AccionesRapidas'
 import type { AIInsight } from '@/lib/types'
 
 /* ══════════════════════════════════════════════════════════════
@@ -76,8 +76,13 @@ export function InsightsRow({ products, pending, insight, storeName, loading, in
                 <div className="ir-col">
                     <PendingPanel pending={pending} storeName={storeName} />
                 </div>
-                <div className="ir-col">
-                    <AIAdvisor insight={insight} loading={insightsLoading || loading} />
+                {/* Antes: la tarjeta grande de TOUL AI. Ahora lo que se hace a
+                    diario, y TOUL AI en una línea que solo sale si tiene algo */}
+                <div className="ir-col" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    <AccionesRapidas variante="pc" />
+                    <div style={{ marginTop: 'auto' }}>
+                        <ObservacionAI insight={insight} loading={insightsLoading || loading} />
+                    </div>
                 </div>
             </div>
         </div>

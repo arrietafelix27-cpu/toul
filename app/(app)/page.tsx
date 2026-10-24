@@ -267,7 +267,8 @@ export default function DashboardPage() {
     const { data: insights, isLoading: insightsLoading } = useSWR(
         storeId ? ['insights', storeId] : null,
         async () => {
-            const llave = `toul-ideas:${storeId}`
+            // v2: las guardadas antes traían el botón elegido por palabras sueltas
+            const llave = `toul-ideas-v2:${storeId}`
             let guardadas: { at: number; insights: AIInsight[] } | null = null
             try { guardadas = JSON.parse(localStorage.getItem(llave) || 'null') } catch { /* sin almacenamiento */ }
             if (guardadas && Date.now() - guardadas.at < IDEAS_VIGENCIA) return guardadas.insights
