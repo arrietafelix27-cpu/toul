@@ -8,7 +8,7 @@ import {
 import { usePendingApprovalsCount } from '@/lib/isla/useSession'
 import { useStore } from '@/lib/hooks/useData'
 import { FullscreenToggle } from './FullscreenToggle'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useSyncExternalStore } from 'react'
 import { motion, AnimatePresence, useDragControls, type PanInfo } from 'framer-motion'
 
 /* ══════════════════════════════════════════════════════════════
@@ -90,6 +90,30 @@ const NAV_SECTIONS = [
     },
 ]
 
+/* El plan llega con los datos del negocio, un momento después de que
+   se pinta el menú. Mientras tanto la sección "Punto físico" no salía
+   y luego aparecía de golpe, empujando todo hacia abajo. Ahora el equipo
+   recuerda el plan y el menú sale completo desde el primer momento.
+   Empieza por "toul": si entra otra cuenta, se borra con todo lo demás. */
+const PLAN_KEY = 'toul-plan'
+const sinCambios = () => () => {}
+const planRecordado = () => {
+    try { return localStorage.getItem(PLAN_KEY) ?? undefined } catch { return undefined }
+}
+
+function usePlan(): string | undefined {
+    const { data: store } = useStore()
+    const recordado = useSyncExternalStore(sinCambios, planRecordado, () => undefined)
+    useEffect(() => {
+        if (!store) return
+        try {
+            if (store.plan) localStorage.setItem(PLAN_KEY, store.plan)
+            else localStorage.removeItem(PLAN_KEY)
+        } catch { /* sin almacenamiento: solo se pierde el recuerdo */ }
+    }, [store])
+    return store ? store.plan : recordado
+}
+
 /** Una sección marcada 'pro' solo se ve con el plan Pro. */
 function seVe(seccion: object, plan: string | undefined): boolean {
     if (!('plan' in seccion)) return true
@@ -127,8 +151,7 @@ function SidebarRow({ href, Icon, label, badge, active }: {
 }
 
 export function Sidebar() {
-    const { data: store } = useStore()
-    const plan = store?.plan
+    const plan = usePlan()
     const pathname = usePathname()
     const router = useRouter()
     const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
@@ -256,8 +279,7 @@ const SIN_MENU = [
 ]
 
 export function BottomNav() {
-    const { data: store } = useStore()
-    const plan = store?.plan
+    const plan = usePlan()
     const pathname = usePathname()
     const router = useRouter()
     const [menuOpen, setMenuOpen] = useState(false)

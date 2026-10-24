@@ -124,6 +124,8 @@ export default function NewVariantProductPage() {
             setAttributes(draft.attributes?.length ? draft.attributes : [{ id: uid(), name: '', values: [] }])
             setVariantPrices(draft.variantPrices ?? {})
         },
+        // La categoría y el id de cada atributo los pone la app sola
+        { ignore: ['categoryId', 'id'] },
     )
 
     useEffect(() => {

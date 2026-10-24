@@ -66,6 +66,8 @@ export default function NewSimpleProductPage() {
             setCategoryId(draft.categoryId ?? ''); setSalePrice(draft.salePrice ?? '')
             setCostPrice(draft.costPrice ?? '')
         },
+        // La categoría la pone la app sola: no cuenta como algo escrito
+        { ignore: ['categoryId'] },
     )
 
     useEffect(() => {

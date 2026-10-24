@@ -74,6 +74,8 @@ export default function NewComboPage() {
             setName(draft.name ?? ''); setCategoryId(draft.categoryId ?? '')
             setComboPrice(draft.comboPrice ?? ''); setSelectedItems(draft.selectedItems ?? [])
         },
+        // La categoría la pone la app sola: no cuenta como algo escrito
+        { ignore: ['categoryId'] },
     )
 
     useEffect(() => {
