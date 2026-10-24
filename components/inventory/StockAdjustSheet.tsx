@@ -299,7 +299,7 @@ export function StockAdjustSheet({ open, storeId, onClose, onDone, preselect }: 
                                         background: active ? 'var(--toul-accent-dim)' : 'var(--toul-surface)',
                                         border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
                                         color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
-                                        transition: 'all 160ms cubic-bezier(0.23,1,0.32,1)',
+                                        transition: 'background-color 160ms var(--toul-ease-emil), color 160ms var(--toul-ease-emil), border-color 160ms var(--toul-ease-emil), box-shadow 160ms var(--toul-ease-emil), opacity 160ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil)',
                                     }}>
                                     {item.label}
                                 </button>

@@ -98,7 +98,7 @@ export function StockGauge({
         }
         const t = requestAnimationFrame(pintar)
         const cuenta = animate(0, dias, {
-            duration: 0.85,
+            duration: 0.5,
             ease: [0.23, 1, 0.32, 1],
             onUpdate: v => { if (numero.current) numero.current.textContent = String(Math.round(v)) },
         })

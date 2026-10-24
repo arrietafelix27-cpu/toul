@@ -23,6 +23,9 @@ import type { AIInsight } from '@/lib/types'
 
 type Period = 'today' | 'week' | 'month' | 'total' | 'custom'
 
+/** Cada cuánto se recalculan las ideas de TOUL AI */
+const IDEAS_VIGENCIA = 6 * 60 * 60 * 1000
+
 export default function DashboardPage() {
     const supabase = createClient()
     const { data: store, isLoading: storeLoading } = useStore()
@@ -257,12 +260,28 @@ export default function DashboardPage() {
         { revalidateOnFocus: false, dedupingInterval: 60000 }
     )
 
+    // Las ideas de TOUL AI tardan unos 8 segundos y cada cálculo cuesta.
+    // Se guardan en el equipo y se recalculan máximo cada 6 horas: al abrir
+    // la app salen al instante. Empiezan por "toul": si entra otra cuenta,
+    // se borran con todo lo demás.
     const { data: insights, isLoading: insightsLoading } = useSWR(
         storeId ? ['insights', storeId] : null,
         async () => {
-            const r = await fetch('/api/ai-insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storeId }) })
-            const d = await r.json()
-            return d.insights as AIInsight[]
+            const llave = `toul-ideas:${storeId}`
+            let guardadas: { at: number; insights: AIInsight[] } | null = null
+            try { guardadas = JSON.parse(localStorage.getItem(llave) || 'null') } catch { /* sin almacenamiento */ }
+            if (guardadas && Date.now() - guardadas.at < IDEAS_VIGENCIA) return guardadas.insights
+            try {
+                const r = await fetch('/api/ai-insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storeId }) })
+                const d = await r.json()
+                const nuevas = (d.insights ?? []) as AIInsight[]
+                try { localStorage.setItem(llave, JSON.stringify({ at: Date.now(), insights: nuevas })) } catch { /* sin espacio */ }
+                return nuevas
+            } catch (error) {
+                // Sin señal: mejor las ideas de antes que nada
+                if (guardadas) return guardadas.insights
+                throw error
+            }
         },
         { revalidateOnFocus: false, dedupingInterval: 300000 }
     )

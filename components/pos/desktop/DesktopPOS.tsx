@@ -879,7 +879,7 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                             borderRadius: 13, height: 50, fontFamily: 'inherit',
                                             fontSize: 15, fontWeight: 600,
                                             color: blocked ? 'var(--toul-pos-text-dim)' : active ? 'var(--toul-primary)' : 'var(--toul-pos-text-sec)',
-                                            cursor: blocked ? 'not-allowed' : 'pointer', transition: 'all 120ms ease',
+                                            cursor: blocked ? 'not-allowed' : 'pointer', transition: 'background-color 120ms var(--toul-ease-emil), color 120ms var(--toul-ease-emil), border-color 120ms var(--toul-ease-emil), box-shadow 120ms var(--toul-ease-emil), opacity 120ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil)',
                                             opacity: blocked ? 0.5 : 1,
                                         }}
                                     >

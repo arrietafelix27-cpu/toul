@@ -154,6 +154,8 @@ export function Sidebar() {
     const plan = usePlan()
     const pathname = usePathname()
     const router = useRouter()
+    // La caja se deja lista de antemano: "Nueva venta" abre de una
+    useEffect(() => { router.prefetch('/caja') }, [router])
     const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
 
     return (
@@ -242,9 +244,9 @@ const MOBILE_NAV = [
 const MENU_SECTIONS = [
     {
         label: 'Operaciones',
+        // Ventas no va aquí: ya está en la barra de abajo
         items: [
             { href: '/inventory', icon: Boxes, label: 'Inventario' },
-            { href: '/ventas', icon: Receipt, label: 'Ventas' },
             { href: '/expenses', icon: TrendingDown, label: 'Gastos' },
             { href: '/movimientos', icon: ArrowLeftRight, label: 'Movimientos' },
             { href: '/providers', icon: Truck, label: 'Proveedores' },
@@ -282,6 +284,8 @@ export function BottomNav() {
     const plan = usePlan()
     const pathname = usePathname()
     const router = useRouter()
+    // La caja se deja lista de antemano: el botón + abre de una
+    useEffect(() => { router.prefetch('/caja') }, [router])
     const [menuOpen, setMenuOpen] = useState(false)
     const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
     const dragControls = useDragControls()

@@ -282,7 +282,7 @@ export default function NewPurchaseFlow() {
                                     {(['A-Z', 'Stock', 'Recientes'] as const).map(opt => (
                                         <button key={opt}
                                             onClick={() => setSortBy(opt)}
-                                            className="px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all"
+                                            className="px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition"
                                             style={{
                                                 background: sortBy === opt ? 'var(--toul-accent-dim)' : 'var(--toul-surface-2)',
                                                 color: sortBy === opt ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
@@ -306,7 +306,7 @@ export default function NewPurchaseFlow() {
                                             {/* Product row */}
                                             <button
                                                 onClick={() => hasVariants ? toggleExpand(product.id) : (!added && addItem(product))}
-                                                className="w-full p-3 text-left flex items-center gap-3 transition-all active:scale-[0.99]">
+                                                className="w-full p-3 text-left flex items-center gap-3 transition active:scale-[0.99]">
                                                 <Thumb src={product.images?.[0] ?? product.image_url} name={product.name} size={40} />
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5 mb-0.5">
@@ -351,7 +351,7 @@ export default function NewPurchaseFlow() {
                                                                     <button key={v.id}
                                                                         onClick={() => !alreadyAdded && addItem(product, v.id, v.name)}
                                                                         disabled={alreadyAdded}
-                                                                        className="w-full px-4 py-2.5 flex items-center gap-3 transition-all active:scale-[0.99]"
+                                                                        className="w-full px-4 py-2.5 flex items-center gap-3 transition active:scale-[0.99]"
                                                                         style={{ opacity: alreadyAdded ? 0.6 : 1 }}>
                                                                         <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: 'var(--toul-text-muted)' }} />
                                                                         <div className="flex-1 min-w-0 text-left">
@@ -386,7 +386,7 @@ export default function NewPurchaseFlow() {
             {/* Header */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex items-center gap-3 mb-6" style={{ position: 'relative' }}>
                 <button onClick={() => step > 1 ? setStep(step - 1 as 1 | 2) : router.push('/inventory')}
-                    className="flex items-center justify-center transition-all active:scale-90"
+                    className="flex items-center justify-center transition active:scale-90"
                     style={{
                         width: 36, height: 36, borderRadius: 12,
                         background: 'rgba(255,255,255,0.07)',

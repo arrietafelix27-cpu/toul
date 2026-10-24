@@ -4,6 +4,8 @@ import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import { ErrorWatcher } from '@/components/ErrorWatcher'
 import { AccountWatcher } from '@/components/AccountWatcher'
+import { ActualizarVersion } from '@/components/ActualizarVersion'
+import { MotionConfig } from 'framer-motion'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -36,7 +38,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} bg-slate-950 text-white antialiased`}>
         <ErrorWatcher />
         <AccountWatcher />
-        {children}
+        <ActualizarVersion />
+        {/* Si el celular tiene activado "reducir movimiento", las animaciones
+            dejan de desplazar cosas y solo aparecen/desaparecen */}
+        <MotionConfig reducedMotion="user">
+          {children}
+        </MotionConfig>
         <Toaster
           position="top-center"
           toastOptions={{

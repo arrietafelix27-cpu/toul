@@ -92,7 +92,7 @@ export function DesktopPurchase({
             {/* Header */}
             <div className="flex items-center gap-3 mb-8">
                 <Link href="/inventory"
-                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+                    className="w-9 h-9 rounded-full flex items-center justify-center transition active:scale-90"
                     style={{ background: 'var(--toul-surface)', color: 'var(--toul-text-muted)', border: '1px solid var(--toul-border)' }}>
                     <ArrowLeft size={18} />
                 </Link>
@@ -128,7 +128,7 @@ export function DesktopPurchase({
                             {(['A-Z', 'Stock', 'Recientes'] as const).map(opt => (
                                 <button key={opt}
                                     onClick={() => setSortBy(opt)}
-                                    className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                                    className="px-3 py-1.5 rounded-full text-xs font-semibold transition"
                                     style={{
                                         background: sortBy === opt ? 'var(--toul-accent-dim)' : 'var(--toul-surface-2)',
                                         color: sortBy === opt ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
@@ -152,7 +152,7 @@ export function DesktopPurchase({
                                     style={{ borderColor: 'var(--toul-border)' }}>
                                     <button
                                         onClick={() => hasVariants ? toggleExpand(product.id) : (!added && addItem(product))}
-                                        className="w-full px-4 py-3 text-left flex items-center gap-3 transition-all active:scale-[0.99]">
+                                        className="w-full px-4 py-3 text-left flex items-center gap-3 transition active:scale-[0.99]">
                                         <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
                                             style={{ background: 'var(--toul-surface-2)' }}>
                                             {(product.images?.[0] || product.image_url)
@@ -202,7 +202,7 @@ export function DesktopPurchase({
                                                             <button key={v.id}
                                                                 onClick={() => !alreadyAdded && addItem(product, v.id, v.name)}
                                                                 disabled={alreadyAdded}
-                                                                className="w-full px-5 py-2 flex items-center gap-3 transition-all active:scale-[0.99]"
+                                                                className="w-full px-5 py-2 flex items-center gap-3 transition active:scale-[0.99]"
                                                                 style={{ opacity: alreadyAdded ? 0.6 : 1 }}>
                                                                 <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: 'var(--toul-text-muted)' }} />
                                                                 <div className="flex-1 min-w-0 text-left">

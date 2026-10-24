@@ -33,7 +33,8 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, width 
                 <div style={{ position: 'fixed', inset: 0, zIndex: 120, display: 'flex', justifyContent: 'center' }}
                     className="items-end md:items-center md:p-6">
                     <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                        exit={{ opacity: 0, transition: { duration: 0.14, ease: EASE_OUT_EMIL } }}
                         transition={{ duration: 0.18, ease: EASE_OUT_EMIL }}
                         onClick={onClose}
                         style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
@@ -42,7 +43,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, width 
                         role="dialog" aria-modal="true" aria-label={title}
                         initial={{ y: 24, opacity: 0, scale: 0.98 }}
                         animate={{ y: 0, opacity: 1, scale: 1 }}
-                        exit={{ y: 16, opacity: 0, scale: 0.98 }}
+                        exit={{ y: 16, opacity: 0, scale: 0.98, transition: { duration: 0.16, ease: EASE_OUT_EMIL } }}
                         transition={{ duration: 0.24, ease: EASE_OUT_EMIL }}
                         className="rounded-t-[28px] md:rounded-[24px]"
                         style={{

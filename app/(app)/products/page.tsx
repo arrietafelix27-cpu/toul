@@ -188,7 +188,7 @@ export default function ProductsPage() {
         <div className="px-4 md:px-8 pt-6 pb-24" style={{ position: 'relative' }}>
             <div className="toul-ambient" />
 
-            <style>{PANEL_CSS}{CATALOG_CARD_CSS}{MODULE_CSS}</style>
+            <style>{PANEL_CSS + CATALOG_CARD_CSS + MODULE_CSS}</style>
 
             {/* ── Encabezado ── */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible"

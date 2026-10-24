@@ -467,7 +467,7 @@ export default function EditProductPage() {
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.4, ease: EASE_OUT_EXPO }}
+                            transition={{ duration: 0.26, ease: EASE_OUT_EXPO }}
                             style={{
                                 background: 'rgba(255,255,255,0.04)',
                                 border: '1px solid rgba(255,255,255,0.07)',
@@ -542,7 +542,7 @@ export default function EditProductPage() {
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.4, delay: 0.05, ease: EASE_OUT_EXPO }}>
+                            transition={{ duration: 0.26, delay: 0.03, ease: EASE_OUT_EXPO }}>
                             <h2 style={{
                                 fontSize: 11,
                                 color: 'rgba(255,255,255,0.35)',
@@ -644,7 +644,7 @@ export default function EditProductPage() {
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.4, ease: EASE_OUT_EXPO }}
+                            transition={{ duration: 0.26, ease: EASE_OUT_EXPO }}
                             onClick={() => fileRef.current?.click()}
                             style={{
                                 width: '100%',
@@ -693,7 +693,7 @@ export default function EditProductPage() {
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.4, delay: 0.05, ease: EASE_OUT_EXPO }}
+                            transition={{ duration: 0.26, delay: 0.03, ease: EASE_OUT_EXPO }}
                             style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                             <Field
@@ -737,7 +737,7 @@ export default function EditProductPage() {
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.4, delay: 0.1, ease: EASE_OUT_EXPO }}>
+                            transition={{ duration: 0.26, delay: 0.06, ease: EASE_OUT_EXPO }}>
 
                             <div style={{ display: 'flex', gap: 8 }}>
                                 <PriceField
@@ -862,7 +862,7 @@ export default function EditProductPage() {
                                 justifyContent: 'center',
                                 gap: 8,
                                 boxShadow: isDirty && !saving ? '0 4px 24px var(--toul-accent-glow)' : 'none',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                transition: 'background-color 200ms var(--toul-ease-emil), color 200ms var(--toul-ease-emil), border-color 200ms var(--toul-ease-emil), box-shadow 200ms var(--toul-ease-emil), opacity 200ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil)',
                                 fontFamily: 'inherit',
                             }}>
                             {saving ? (
@@ -1062,7 +1062,7 @@ function GeneralEditSheet({
                                     gap: 5,
                                     cursor: !saving && name.trim() ? 'pointer' : 'not-allowed',
                                     boxShadow: !saving && name.trim() ? '0 4px 14px rgba(50,215,75,0.25)' : 'none',
-                                    transition: 'all 0.2s var(--toul-ease)',
+                                    transition: 'background-color 200ms var(--toul-ease-emil), color 200ms var(--toul-ease-emil), border-color 200ms var(--toul-ease-emil), box-shadow 200ms var(--toul-ease-emil), opacity 200ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil)',
                                     fontFamily: 'inherit',
                                     justifySelf: 'end',
                                 }}>

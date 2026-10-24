@@ -119,7 +119,7 @@ export function ClientPaymentModal({ storeId, clientId, clientName, totalDebt, o
                         <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>Método de Ingreso</label>
                         <div className="space-y-3">
                             <button onClick={() => setPaymentMethod('cash')}
-                                className={`w-full toul-card p-3 flex items-center justify-between transition-all ${paymentMethod === 'cash' ? 'ring-2' : ''}`}
+                                className={`w-full toul-card p-3 flex items-center justify-between transition ${paymentMethod === 'cash' ? 'ring-2' : ''}`}
                                 style={{ borderColor: paymentMethod === 'cash' ? 'var(--toul-accent)' : 'var(--toul-border)', '--tw-ring-color': 'var(--toul-accent)' } as any}>
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--toul-accent)' }}>

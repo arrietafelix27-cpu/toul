@@ -11,7 +11,7 @@ const DOT_COLORS = ['var(--toul-text-faint)']
 
 const SPRING_SOFT = { type: 'spring' as const, stiffness: 240, damping: 26 }
 const SPRING_PRESS = { type: 'spring' as const, stiffness: 420, damping: 26 }
-const EASE_OUT_EXPO: [number, number, number, number] = [0.4, 0, 0.2, 1]
+const EASE_OUT_EXPO: [number, number, number, number] = [0.23, 1, 0.32, 1]
 
 interface CategoriesModalProps {
     storeId: string

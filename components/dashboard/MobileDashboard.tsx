@@ -69,7 +69,7 @@ export default function MobileDashboard({
 
     return (
         <div className="px-4 pb-32 pt-5 flex flex-col gap-5" style={{ position: 'relative' }}>
-            <style>{PANEL_CSS}{`
+            <style>{PANEL_CSS + `
                 .md-sep { height: 1px; margin: 4px 0 18px; background: var(--toul-divider); border: none;
                     -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
                     mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent); }

@@ -268,7 +268,7 @@ export function Receivables() {
 
     return (
         <>
-            <style>{PANEL_CSS}{CSS}</style>
+            <style>{PANEL_CSS + CSS}</style>
 
             {/* ── Cuánta plata está afuera ── */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" className="cob-hero">

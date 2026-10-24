@@ -135,7 +135,7 @@ function BarList({ items, total, emptyText }: { items: { label: string; amount: 
                         <div style={{ height: 8, borderRadius: 999, background: 'var(--toul-surface-2)', overflow: 'hidden' }}>
                             <motion.div
                                 initial={{ width: 0 }} animate={{ width: `${Math.max(2, share)}%` }}
-                                transition={{ duration: 0.5, ease: EASE_OUT_EMIL, delay: Math.min(i, 6) * 0.05 }}
+                                transition={{ duration: 0.4, ease: EASE_OUT_EMIL, delay: Math.min(i, 6) * 0.04 }}
                                 style={{ height: '100%', borderRadius: 999, background: 'var(--toul-accent)', opacity: 1 - Math.min(i, 5) * 0.13 }}
                             />
                         </div>

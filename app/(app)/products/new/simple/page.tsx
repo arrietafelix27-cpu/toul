@@ -212,7 +212,7 @@ export default function NewSimpleProductPage() {
                 <motion.div
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, ease: EASE_OUT_EXPO }}
+                    transition={{ duration: 0.26, ease: EASE_OUT_EXPO }}
                     style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -263,7 +263,7 @@ export default function NewSimpleProductPage() {
                     <motion.section
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.05, ease: EASE_OUT_EXPO }}
+                        transition={{ duration: 0.26, delay: 0.03, ease: EASE_OUT_EXPO }}
                         style={{ marginBottom: 22 }}>
 
                         <h2 className="toul-section-label">Fotos del producto</h2>
@@ -337,7 +337,7 @@ export default function NewSimpleProductPage() {
                     <motion.section
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.1, ease: EASE_OUT_EXPO }}>
+                        transition={{ duration: 0.26, delay: 0.06, ease: EASE_OUT_EXPO }}>
 
                         <h2 className="toul-section-label">Información</h2>
 
@@ -377,7 +377,7 @@ export default function NewSimpleProductPage() {
                     <motion.section
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.15, ease: EASE_OUT_EXPO }}>
+                        transition={{ duration: 0.26, delay: 0.09, ease: EASE_OUT_EXPO }}>
 
                         <h2 className="toul-section-label">Precios</h2>
 
@@ -435,7 +435,7 @@ export default function NewSimpleProductPage() {
                         <motion.div
                             initial={{ opacity: 0, y: 16 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.4, delay: 0.2, ease: EASE_OUT_EXPO }}
+                            transition={{ duration: 0.26, delay: 0.12, ease: EASE_OUT_EXPO }}
                             style={{
                                 background: 'rgba(255,255,255,0.04)',
                                 border: '1px solid var(--toul-border)',
@@ -538,7 +538,7 @@ export default function NewSimpleProductPage() {
                             boxShadow: buttonState === 'ready'
                                 ? '0 4px 24px var(--toul-accent-glow)'
                                 : 'none',
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            transition: 'background-color 200ms var(--toul-ease-emil), color 200ms var(--toul-ease-emil), border-color 200ms var(--toul-ease-emil), box-shadow 200ms var(--toul-ease-emil), opacity 200ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil)',
                             fontFamily: 'inherit',
                         }}>
                         <AnimatePresence mode="wait" initial={false}>

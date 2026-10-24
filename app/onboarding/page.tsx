@@ -110,7 +110,7 @@ export default function OnboardingPage() {
                             { key: 'join' as const, icon: KeyRound, title: 'Soy vendedor', text: 'Tengo un código que me dio el administrador.' },
                         ].map(opt => (
                             <button key={String(opt.key)} onClick={() => elegirCamino(opt.key)} disabled={loading}
-                                className="flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-[0.98]"
+                                className="flex items-center gap-4 p-4 rounded-2xl text-left transition active:scale-[0.98]"
                                 style={{ background: 'var(--toul-surface)', border: '1px solid var(--toul-border)', color: 'var(--toul-text)' }}>
                                 <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
                                     style={{ background: 'var(--toul-accent-dim)', color: 'var(--toul-accent)' }}>
@@ -152,7 +152,7 @@ export default function OnboardingPage() {
             {/* Progress */}
             {(step === 1 || step === 2) && <div className="flex gap-2 mb-8">
                 {[1, 2].map(n => (
-                    <div key={n} className="h-1 flex-1 rounded-full transition-all"
+                    <div key={n} className="h-1 flex-1 rounded-full transition"
                         style={{ background: (step as number) >= n ? 'var(--toul-accent)' : 'var(--toul-border)' }} />
                 ))}
             </div>}
@@ -181,7 +181,7 @@ export default function OnboardingPage() {
                     <div className="grid grid-cols-2 gap-2 mb-6">
                         {CATEGORIES.map(cat => (
                             <button key={cat.value} onClick={() => setCategory(cat.value)}
-                                className="flex items-center gap-3 p-3 rounded-2xl text-left transition-all"
+                                className="flex items-center gap-3 p-3 rounded-2xl text-left transition"
                                 style={{
                                     background: category === cat.value ? 'var(--toul-accent-dim)' : 'var(--toul-surface)',
                                     border: `1px solid ${category === cat.value ? 'var(--toul-accent)' : 'var(--toul-border)'}`,

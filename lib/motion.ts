@@ -9,7 +9,8 @@ import type { Variants, Transition } from 'framer-motion'
    EASING CURVES
 ───────────────────────────────────────────────────────── */
 export const ease = {
-    out: [0.0, 0.0, 0.2, 1.0] as [number, number, number, number],
+    // Salida fuerte (Emil): arranca rápido, que es cuando más se mira
+    out: [0.23, 1, 0.32, 1] as [number, number, number, number],
     in: [0.4, 0.0, 1.0, 1.0] as [number, number, number, number],
     inOut: [0.4, 0.0, 0.2, 1.0] as [number, number, number, number],
     spring: { type: 'spring' as const, stiffness: 380, damping: 30, mass: 0.8 },

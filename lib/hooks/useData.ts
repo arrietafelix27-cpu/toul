@@ -50,9 +50,14 @@ export function useToulData<T>(table: string, storeId: string | null, options?: 
  */
 export function useStore() {
     return useSWR('current-store', async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return null
-        const { data } = await supabase.from('stores').select('id, name, appearance, plan').eq('owner_id', user.id).single()
+        // Quién es sale de la sesión guardada en el equipo, sin preguntarle a
+        // Supabase (getUser tardaba una espera completa al abrir la app). El
+        // servidor ya verificó la sesión en el middleware, y las reglas de la
+        // base de datos solo devuelven el negocio de quien de verdad es.
+        const { data: { session } } = await supabase.auth.getSession()
+        const userId = session?.user.id
+        if (!userId) return null
+        const { data } = await supabase.from('stores').select('id, name, appearance, plan').eq('owner_id', userId).single()
         return data
     // Antes se recordaba una hora sin volver a preguntar: si cambiabas de
     // cuenta dentro de esa hora, la app seguía creyendo que eras la tienda

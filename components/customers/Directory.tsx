@@ -231,7 +231,7 @@ export function Directory() {
 
     return (
         <>
-            <style>{PANEL_CSS}{CSS}</style>
+            <style>{PANEL_CSS + CSS}</style>
 
             {error && (
                 <Aviso onClick={() => mutate()}

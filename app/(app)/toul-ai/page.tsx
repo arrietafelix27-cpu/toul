@@ -210,7 +210,7 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
                     <button
                         onClick={() => setClearOpen(true)}
                         aria-label="Borrar conversación"
-                        className="p-2 rounded-full transition-all hover:opacity-70"
+                        className="p-2 rounded-full transition hover:opacity-70"
                         style={{ color: 'var(--toul-text-subtle)' }}
                     >
                         <Trash2 className="w-4 h-4" />
@@ -238,7 +238,7 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.9 }}
                                 animate={{ opacity: 1, scale: 1 }}
-                                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                                transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
                                 className="space-y-6 max-w-sm"
                             >
                                 {/* Logo */}
@@ -266,9 +266,9 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
                                             key={i}
                                             initial={{ opacity: 0, y: 8 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: 0.2 + i * 0.08, duration: 0.35 }}
+                                            transition={{ delay: 0.08 + i * 0.04, duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
                                             onClick={() => sendSuggestion(s.text)}
-                                            className="flex items-center gap-3 px-4 py-3 text-left text-xs font-medium rounded-xl transition-all active:scale-[0.98]"
+                                            className="flex items-center gap-3 px-4 py-3 text-left text-xs font-medium rounded-xl transition active:scale-[0.98]"
                                             style={{
                                                 background: 'var(--toul-surface)',
                                                 border: '1px solid var(--toul-border)',
@@ -392,7 +392,7 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
                                 onChange={(e) => setInput(e.target.value)}
                                 placeholder="Pregúntale a tu copiloto..."
                                 disabled={isLoading}
-                                className="w-full rounded-xl pl-11 pr-4 py-3 text-sm font-medium outline-none transition-all disabled:opacity-50"
+                                className="w-full rounded-xl pl-11 pr-4 py-3 text-sm font-medium outline-none transition disabled:opacity-50"
                                 style={{
                                     background: 'var(--toul-bg)',
                                     border: '1px solid var(--toul-border)',
@@ -414,7 +414,7 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
                         <button
                             type="submit"
                             disabled={!input.trim() || isLoading}
-                            className="p-3 rounded-xl transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="p-3 rounded-xl transition active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                             style={{
                                 background: input.trim() && !isLoading ? 'var(--toul-accent)' : 'var(--toul-border)',
                                 color: input.trim() && !isLoading ? '#fff' : 'var(--toul-text-subtle)',

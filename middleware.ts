@@ -30,7 +30,13 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    const { data: { user } } = await supabase.auth.getUser()
+    // Quién es se comprueba aquí mismo con la firma del token (las llaves
+    // públicas del proyecto quedan guardadas un rato), sin ir a Supabase en
+    // cada pantalla como hacía getUser. Si el token venció, getClaims lo
+    // renueva y las cookies nuevas salen por setAll.
+    const { data: claimsData } = await supabase.auth.getClaims()
+    const userId = typeof claimsData?.claims?.sub === 'string' ? claimsData.claims.sub : null
+    const user = userId ? { id: userId } : null
 
     const { pathname } = request.nextUrl
     const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')

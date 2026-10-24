@@ -1,24 +1,13 @@
 'use client'
 /**
- * PageWrapper — wraps each page with a fade+slide entrance animation.
- * Used inside app/(app) pages. Respects prefers-reduced-motion.
+ * PageWrapper — envuelve cada pantalla de la app.
+ *
+ * Antes le ponía una entrada con desvanecido. Como no se vuelve a montar
+ * al cambiar de pantalla, esa animación solo corría en la primera carga,
+ * y ahí hacía daño: la pantalla llegaba del servidor invisible (opacidad
+ * cero) y se quedaba en blanco hasta que cargaba todo el código. Ahora se
+ * muestra de una; cada pantalla ya anima sus propias partes.
  */
-import { motion, useReducedMotion } from 'framer-motion'
-import { pageVariants } from '@/lib/motion'
-
 export default function PageWrapper({ children }: { children: React.ReactNode }) {
-    const prefersReduced = useReducedMotion()
-
-    if (prefersReduced) return <>{children}</>
-
-    return (
-        <motion.div
-            variants={pageVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-        >
-            {children}
-        </motion.div>
-    )
+    return <>{children}</>
 }
