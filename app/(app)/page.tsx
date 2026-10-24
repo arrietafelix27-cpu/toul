@@ -73,13 +73,15 @@ export default function DashboardPage() {
             ])
 
             // Fetch previous data for variations
-            const [prevSales, prevExpenses, returns, prevReturns] = await Promise.all([
+            const [prevSales, prevExpenses, returns, prevReturns, returns7d] = await Promise.all([
                 supabase.from('sales').select('total, sale_items(unit_price, unit_cost, quantity)').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01'),
                 supabase.from('expenses').select('amount').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01'),
                 // Lo devuelto resta el día en que se devuelve. Antes de activar
                 // las devoluciones la tabla no existe y no llega nada
-                supabase.from('sale_returns').select('total, cost_total').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
+                supabase.from('sale_returns').select('total, cost_total, sale_return_items(quantity, unit_price, unit_cost, sale_items(product_id))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 supabase.from('sale_returns').select('total, cost_total').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01'),
+                // Para "ayer" y el promedio de 7 días de la gráfica
+                supabase.from('sale_returns').select('total, created_at').eq('store_id', storeId).gte('created_at', sevenDaysAgo.toISOString()),
             ])
             const devuelto = (rows: { total: number; cost_total: number }[] | null) => ({
                 total: (rows || []).reduce((s, d) => s + Number(d.total), 0),
@@ -122,12 +124,25 @@ export default function DashboardPage() {
 
             currentCost = Math.round(currentCost - returned.cost)
 
+            // Lo devuelto en el periodo también baja las unidades de cada producto
+            type ItemDevuelto = { quantity: number; unit_price: number; unit_cost: number; sale_items: { product_id: string | null } | null }
+            const itemsDevueltos = ((returns.data || []) as unknown as { sale_return_items?: ItemDevuelto[] }[]).flatMap(r => r.sale_return_items ?? [])
+            for (const item of itemsDevueltos) {
+                const pid = item.sale_items?.product_id
+                const producto = pid ? productUnitsMap[pid] : undefined
+                if (!producto) continue
+                producto.units -= Number(item.quantity)
+                producto.profit -= Math.round((Number(item.unit_price) - Number(item.unit_cost)) * Number(item.quantity))
+                producto.revenue -= Math.round(Number(item.unit_price) * Number(item.quantity))
+            }
+
             const currentNetProfit = Math.round(currentRevenue - currentCost - currentExpenses)
             const currentGrossProfit = Math.round(currentRevenue - currentCost)
 
             // Unidades que salieron del inventario en el periodo
             const unitsSold = (sales.data || []).reduce(
                 (sum, sale) => sum + ((sale.sale_items as any[]) || []).reduce((n, item) => n + Number(item.quantity), 0), 0)
+                - itemsDevueltos.reduce((n, item) => n + Number(item.quantity), 0)
 
             // Lo fiado: una venta es una venta, pero esa plata todavía no entró
             const creditAmount = Math.round((sales.data || [])
@@ -159,8 +174,9 @@ export default function DashboardPage() {
             const pGrossProfit = Math.round(pRev - pCost)
 
             // 2. OPERATIONAL DATA: PRODUCTS
-            const sortedByUnits = Object.entries(productUnitsMap).map(([id, p]) => ({ id, ...p, value: p.units, units: p.units, subValue: `${p.units} ${p.units === 1 ? 'vendido' : 'vendidos'} · ${formatCOP(p.revenue)}` })).sort((a, b) => b.value - a.value).slice(0, 5)
-            const sortedByProfit = Object.entries(productUnitsMap).map(([id, p]) => ({ id, ...p, value: p.profit, units: p.units, subValue: `te dejó ${formatCOP(p.profit)} en ${p.units} ${p.units === 1 ? 'venta' : 'ventas'}` })).sort((a, b) => b.value - a.value).slice(0, 5)
+            // Lo que se devolvió completo ya no cuenta como vendido
+            const sortedByUnits = Object.entries(productUnitsMap).filter(([, p]) => p.units > 0).map(([id, p]) => ({ id, ...p, value: p.units, units: p.units, subValue: `${p.units} ${p.units === 1 ? 'vendido' : 'vendidos'} · ${formatCOP(p.revenue)}` })).sort((a, b) => b.value - a.value).slice(0, 5)
+            const sortedByProfit = Object.entries(productUnitsMap).filter(([, p]) => p.units > 0).map(([id, p]) => ({ id, ...p, value: p.profit, units: p.units, subValue: `te dejó ${formatCOP(p.profit)} en ${p.units} ${p.units === 1 ? 'venta' : 'ventas'}` })).sort((a, b) => b.value - a.value).slice(0, 5)
             const lowStock = (products.data || []).filter(p => p.stock <= (p.low_stock_threshold || 5)).map(p => ({ id: p.id, name: p.name, image_url: p.image_url, value: p.stock, units: 0, subValue: p.stock === 0 ? 'se agotó' : `quedan ${p.stock} ${p.stock === 1 ? 'unidad' : 'unidades'}` })).sort((a, b) => a.value - b.value).slice(0, 5)
 
             // "Sin mover" sale de la base: días desde la última venta de
@@ -188,6 +204,11 @@ export default function DashboardPage() {
                 const d = new Date(s.created_at).toISOString().slice(0, 10)
                 dayTotals7d[d] = (dayTotals7d[d] || 0) + s.total
             }
+            // Cada devolución resta el día en que se hizo, igual que en la gráfica
+            for (const r of (returns7d.data || [])) {
+                const d = new Date(r.created_at).toISOString().slice(0, 10)
+                dayTotals7d[d] = (dayTotals7d[d] || 0) - Number(r.total)
+            }
             const dayValues7d = Object.values(dayTotals7d)
             const avg7d = dayValues7d.length >= 2 ? Math.round(dayValues7d.reduce((a, b) => a + b, 0) / dayValues7d.length) : null
 
@@ -208,7 +229,10 @@ export default function DashboardPage() {
             }
 
             // ── Mejora 1: Yesterday's total ──────────────────────────────────
-            const yesterdayTotal = Math.round((salesYesterday.data || []).reduce((s, r) => s + r.total, 0))
+            const devueltoAyer = (returns7d.data || [])
+                .filter(r => { const t = new Date(r.created_at).getTime(); return t >= yesterdayStart.getTime() && t < todayStart.getTime() })
+                .reduce((s, r) => s + Number(r.total), 0)
+            const yesterdayTotal = Math.round((salesYesterday.data || []).reduce((s, r) => s + r.total, 0) - devueltoAyer)
 
             // ── Plata pendiente ──────────────────────────────────────────────
             // Hace cuánto quedó debiendo cada uno: la fiada o la compra más

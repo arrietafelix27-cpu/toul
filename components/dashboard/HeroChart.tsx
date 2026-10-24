@@ -101,6 +101,20 @@ export default function HeroChart({ storeId, period, setPeriod, revenue, loading
 
     useEffect(() => { loadData() }, [storeId, period, customRange])
 
+    /** Ventas menos devoluciones, cada una en el momento en que pasó: así la
+     *  gráfica suma lo mismo que el número grande de arriba */
+    async function movimientos(from: string | null, to: string | null) {
+        let ventas = supabase.from('sales').select('total, created_at').eq('store_id', storeId)
+        let devoluciones = supabase.from('sale_returns').select('total, created_at').eq('store_id', storeId)
+        if (from) { ventas = ventas.gte('created_at', from); devoluciones = devoluciones.gte('created_at', from) }
+        if (to) { ventas = ventas.lte('created_at', to); devoluciones = devoluciones.lte('created_at', to) }
+        const [v, d] = await Promise.all([ventas, devoluciones])
+        return [
+            ...(v.data || []).map(s => ({ total: Number(s.total), created_at: s.created_at as string })),
+            ...(d.data || []).map(r => ({ total: -Number(r.total), created_at: r.created_at as string })),
+        ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    }
+
     async function loadData() {
         if (!storeId) return
         setChartLoading(true)
@@ -108,47 +122,26 @@ export default function HeroChart({ storeId, period, setPeriod, revenue, loading
         if (period === 'today') {
             const todayStart = new Date()
             todayStart.setHours(0, 0, 0, 0)
-            const { data: sales } = await supabase
-                .from('sales').select('total, created_at')
-                .eq('store_id', storeId)
-                .gte('created_at', todayStart.toISOString())
-                .order('created_at')
+            const rows = await movimientos(todayStart.toISOString(), null)
 
             const hourMap: number[] = new Array(24).fill(0)
-            for (const s of (sales || [])) {
+            for (const s of rows) {
                 const h = new Date(s.created_at).getHours()
                 hourMap[h] += s.total
             }
             setData(hourMap.map((total, h) => ({
                 label: h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`,
-                total,
+                total: Math.round(total),
             })))
-        } else if (period === 'custom' && customRange) {
-            const { data: sales } = await supabase
-                .from('sales').select('total, created_at')
-                .eq('store_id', storeId)
-                .gte('created_at', customRange.from)
-                .lte('created_at', customRange.to)
-                .order('created_at')
-
-            const grouped: Record<string, number> = {}
-            for (const s of (sales || [])) {
-                const d = formatDate(s.created_at)
-                grouped[d] = (grouped[d] || 0) + s.total
-            }
-            setData(Object.entries(grouped).map(([label, total]) => ({ label, total })))
         } else {
-            const { from, to } = getDateRange(period)
-            let q = supabase.from('sales').select('total, created_at').eq('store_id', storeId).order('created_at')
-            if (from) q = q.gte('created_at', from)
-            if (to) q = q.lte('created_at', to)
-            const { data: sales } = await q
+            const { from, to } = period === 'custom' && customRange ? customRange : getDateRange(period)
+            const rows = await movimientos(from, to)
             const grouped: Record<string, number> = {}
-            for (const s of (sales || [])) {
+            for (const s of rows) {
                 const d = formatDate(s.created_at)
                 grouped[d] = (grouped[d] || 0) + s.total
             }
-            setData(Object.entries(grouped).map(([label, total]) => ({ label, total })))
+            setData(Object.entries(grouped).map(([label, total]) => ({ label, total: Math.round(total) })))
         }
         setChartLoading(false)
     }
@@ -347,8 +340,9 @@ export default function HeroChart({ storeId, period, setPeriod, revenue, loading
                                 dy={4}
                             />
                             {/* Un día sin ventas igual tiene que dibujar la línea en cero:
-                                con el techo pegado al máximo real, en cero no se veía nada */}
-                            <YAxis hide domain={[0, (dataMax: number) => (dataMax > 0 ? dataMax * 1.12 : 1)]} />
+                                con el techo pegado al máximo real, en cero no se veía nada.
+                                Si se devolvió más de lo que se vendió, baja de cero */}
+                            <YAxis hide domain={[(dataMin: number) => (dataMin < 0 ? dataMin * 1.12 : 0), (dataMax: number) => (dataMax > 0 ? dataMax * 1.12 : 1)]} />
                             <Tooltip {...(tooltipStyle as any)} />
                             {period === 'today' && yesterdayTotal > 0 && (
                                 <ReferenceLine

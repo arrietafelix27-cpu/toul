@@ -58,7 +58,11 @@ interface SaleItemRow {
     products: { name: string } | null
 }
 interface SaleRow { total: number; sale_items: SaleItemRow[] }
-interface ReturnRow { total: number; cost_total: number }
+interface ReturnRow {
+    total: number
+    cost_total: number
+    sale_return_items?: { quantity: number; unit_price: number; unit_cost: number; sale_items: { product_id: string | null } | null }[]
+}
 
 function totalsFrom(sales: SaleRow[], expenses: { amount: number }[], purchases: { total: number }[], returns: ReturnRow[]): ReportTotals {
     let revenue = 0, cogs = 0, units = 0
@@ -69,10 +73,12 @@ function totalsFrom(sales: SaleRow[], expenses: { amount: number }[], purchases:
             cogs += (Number(item.unit_cost) || 0) * (Number(item.quantity) || 0)
         }
     }
-    // Lo devuelto resta el día en que se devuelve: de lo vendido y de lo que costó
+    // Lo devuelto resta el día en que se devuelve: de lo vendido, de lo que
+    // costó y de las unidades
     for (const ret of returns) {
         revenue -= Number(ret.total) || 0
         cogs -= Number(ret.cost_total) || 0
+        for (const item of ret.sale_return_items ?? []) units -= Number(item.quantity) || 0
     }
     const expenseTotal = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
     const grossProfit = revenue - cogs
@@ -91,7 +97,7 @@ function totalsFrom(sales: SaleRow[], expenses: { amount: number }[], purchases:
     }
 }
 
-function productLines(sales: SaleRow[]): ProductLine[] {
+function productLines(sales: SaleRow[], returns: ReturnRow[]): ProductLine[] {
     const map = new Map<string, Omit<ProductLine, 'margin'>>()
     for (const sale of sales) {
         for (const item of sale.sale_items ?? []) {
@@ -115,7 +121,18 @@ function productLines(sales: SaleRow[]): ProductLine[] {
             }
         }
     }
-    return [...map.values()].map(line => ({
+    // Lo devuelto en el período baja ese producto; si volvió todo, ya no cuenta como vendido
+    for (const ret of returns) {
+        for (const item of ret.sale_return_items ?? []) {
+            const line = item.sale_items?.product_id ? map.get(item.sale_items.product_id) : undefined
+            if (!line) continue
+            const quantity = Number(item.quantity) || 0
+            line.units -= quantity
+            line.revenue -= (Number(item.unit_price) || 0) * quantity
+            line.profit -= ((Number(item.unit_price) || 0) - (Number(item.unit_cost) || 0)) * quantity
+        }
+    }
+    return [...map.values()].filter(line => line.units > 0).map(line => ({
         ...line,
         revenue: Math.round(line.revenue),
         profit: Math.round(line.profit),
@@ -124,6 +141,7 @@ function productLines(sales: SaleRow[]): ProductLine[] {
 }
 
 const SALE_SELECT = 'total, sale_items(product_id, quantity, unit_price, unit_cost, products(name))'
+const RETURN_SELECT = 'total, cost_total, sale_return_items(quantity, unit_price, unit_cost, sale_items(product_id))'
 
 /* ── Pantalla ───────────────────────────────────────────── */
 
@@ -155,12 +173,13 @@ export default function ReportesPage() {
                 supabase.from('providers').select('id, name, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }),
                 supabase.from('products').select('id, name, stock, cpp, low_stock_threshold').eq('store_id', storeId).eq('is_active', true),
                 // Antes de activar las devoluciones la tabla no existe y no llega nada
-                inRange(supabase.from('sale_returns').select('total, cost_total').eq('store_id', storeId)),
-                inRange(supabase.from('sale_returns').select('total, cost_total').eq('store_id', storeId), 'created_at', prev),
+                inRange(supabase.from('sale_returns').select(RETURN_SELECT).eq('store_id', storeId)),
+                inRange(supabase.from('sale_returns').select(RETURN_SELECT).eq('store_id', storeId), 'created_at', prev),
             ])
 
             const currentSales = (sales.data ?? []) as unknown as SaleRow[]
-            const lines = productLines(currentSales)
+            const currentReturns = (returns.data ?? []) as unknown as ReturnRow[]
+            const lines = productLines(currentSales, currentReturns)
             const sold = new Set(lines.map(line => line.id))
 
             const expenseRows = (expenses.data ?? []) as { amount: number; category: string }[]
@@ -174,12 +193,12 @@ export default function ReportesPage() {
             const inventoryValue = productRows.reduce((sum, p) => sum + (Number(p.stock) || 0) * (Number(p.cpp) || 0), 0)
 
             return {
-                current: totalsFrom(currentSales, expenseRows, (purchases.data ?? []) as { total: number }[], (returns.data ?? []) as ReturnRow[]),
+                current: totalsFrom(currentSales, expenseRows, (purchases.data ?? []) as { total: number }[], currentReturns),
                 previous: totalsFrom(
                     (prevSales.data ?? []) as unknown as SaleRow[],
                     (prevExpenses.data ?? []) as { amount: number }[],
                     (prevPurchases.data ?? []) as { total: number }[],
-                    (prevReturns.data ?? []) as ReturnRow[],
+                    (prevReturns.data ?? []) as unknown as ReturnRow[],
                 ),
                 expensesByCategory: [...byCategory.entries()]
                     .map(([label, amount]) => ({ label, amount: Math.round(amount) }))
