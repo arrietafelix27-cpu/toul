@@ -194,8 +194,7 @@ export default function ProductsPage() {
             <motion.div variants={fadeUp} initial="hidden" animate="visible"
                 className="flex items-center justify-between gap-3 mb-4" style={{ position: 'relative' }}>
                 <div>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px' }}>Operaciones</p>
-                    <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Catálogo</h1>
+                    <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Catálogo</h1>
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={() => setShowCategories(true)} aria-label="Categorías" className="cat-icono">
@@ -207,9 +206,9 @@ export default function ProductsPage() {
                     <button onClick={() => setShowShare(true)} aria-label="Compartir catálogo" className="cat-icono">
                         <Share size={17} />
                     </button>
-                    <Link href="/products/new" className="hidden sm:flex"
+                    <Link href="/products/new" className="flex"
                         style={{
-                            alignItems: 'center', gap: 7, height: 42, padding: '0 16px', borderRadius: 12,
+                            alignItems: 'center', gap: 7, height: 42, padding: '0 15px', borderRadius: 12, flexShrink: 0,
                             background: 'var(--toul-accent)', color: '#000', fontSize: 14, fontWeight: 600,
                             textDecoration: 'none', boxShadow: '0 4px 20px var(--toul-accent-glow)',
                         }}>
@@ -276,17 +275,6 @@ export default function ProductsPage() {
                     ))}
                 </motion.div>
             )}
-
-            {/* ── Nuevo producto (celular) ── */}
-            <Link href="/products/new" className="flex sm:hidden"
-                style={{
-                    position: 'fixed', left: 16, right: 16, bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))', zIndex: 30,
-                    height: 52, borderRadius: 16, background: 'var(--toul-accent)', color: '#000',
-                    alignItems: 'center', justifyContent: 'center', gap: 8,
-                    fontSize: 15, fontWeight: 600, textDecoration: 'none', boxShadow: '0 8px 30px var(--toul-accent-glow)',
-                }}>
-                <Plus size={18} strokeWidth={2.6} /> Nuevo producto
-            </Link>
 
             <ShareCatalogSheet open={showShare} onClose={() => setShowShare(false)} />
             <AnimatePresence>

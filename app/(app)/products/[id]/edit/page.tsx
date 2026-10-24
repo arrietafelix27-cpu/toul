@@ -13,7 +13,8 @@ import { Field, PriceField, CategoryPicker, SPRING_PRESS, EASE_OUT_EXPO } from '
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
 
-const DOT_COLORS = ['#a78bfa', '#60a5fa', '#4ade80', '#fbbf24', '#f472b6', '#34d399']
+/** Un solo gris: los colores distintos por presentación no significaban nada */
+const DOT_COLORS = ['var(--toul-text-faint)']
 
 type Variant = { id: string; name: string; sale_price: number; cpp: number; cost_price: number }
 

@@ -8,7 +8,7 @@ import { entrarDeCero, limpiarDatosDeCuenta, marcarCuenta } from '@/lib/session/
 import { AceptarTerminos, datosDeAceptacion } from '@/components/auth/AceptarTerminos'
 import { CodigoCorreo } from '@/components/auth/CodigoCorreo'
 import { BotonGoogle } from '@/components/auth/BotonGoogle'
-import { Eye, EyeOff, Zap } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 
 /** Cuenta nueva en un equipo que pudo tener otra: se entra de cero */
 async function entrar(userId: string) {
@@ -81,11 +81,14 @@ export default function RegisterPage() {
         <div className="min-h-dvh flex flex-col items-center justify-center px-5 py-10"
             style={{ background: 'var(--toul-bg)' }}>
             <div className="flex flex-col items-center mb-8">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3 shadow-xl"
-                    style={{ background: 'var(--toul-accent)', boxShadow: '0 8px 32px var(--toul-accent-glow)' }}>
-                    <Zap size={26} fill="white" className="text-white" />
+                <div style={{
+                    width: 52, height: 52, borderRadius: 16, background: 'var(--toul-accent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 8px 32px var(--toul-accent-glow)',
+                }}>
+                    <span style={{ color: '#000', fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em' }}>T</span>
                 </div>
-                <h1 className="text-3xl font-bold gradient-text">TOUL</h1>
+                <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: '12px 0 0' }}>TOUL</h1>
                 <p className="text-sm mt-1" style={{ color: 'var(--toul-text-muted)' }}>Tu negocio, bajo control</p>
             </div>
 
@@ -102,8 +105,7 @@ export default function RegisterPage() {
                     </div>
                 ) : (
                 <>
-                <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--toul-text)' }}>Crear cuenta</h2>
-                <p className="text-sm mb-6" style={{ color: 'var(--toul-text-muted)' }}>Empieza a controlar tu negocio hoy</p>
+                <h2 className="text-xl font-bold mb-5" style={{ color: 'var(--toul-text)' }}>Crear cuenta</h2>
 
                 <form onSubmit={handleRegister} className="flex flex-col gap-4">
                     <div>

@@ -6,17 +6,17 @@ import toast from 'react-hot-toast'
 import { entrarDeCero } from '@/lib/session/limpiarCuenta'
 import { explainError } from '@/lib/errors'
 import { AceptarTerminos, datosDeAceptacion, yaAcepto } from '@/components/auth/AceptarTerminos'
-import { Zap, Check, KeyRound, Store } from 'lucide-react'
+import { Check, KeyRound, Store, Shirt, UtensilsCrossed, Sparkles, Smartphone, House, Dumbbell, Palette, Package } from 'lucide-react'
 
 const CATEGORIES = [
-    { value: 'ropa', emoji: '👗', label: 'Ropa y accesorios' },
-    { value: 'comida', emoji: '🍔', label: 'Comida y bebidas' },
-    { value: 'belleza', emoji: '💄', label: 'Belleza y cuidado' },
-    { value: 'tecnologia', emoji: '📱', label: 'Tecnología' },
-    { value: 'hogar', emoji: '🏠', label: 'Hogar y decoración' },
-    { value: 'deporte', emoji: '⚽', label: 'Deporte y fitness' },
-    { value: 'artesanias', emoji: '🎨', label: 'Artesanías' },
-    { value: 'otros', emoji: '📦', label: 'Otros productos' },
+    { value: 'ropa', icon: Shirt, label: 'Ropa y accesorios' },
+    { value: 'comida', icon: UtensilsCrossed, label: 'Comida y bebidas' },
+    { value: 'belleza', icon: Sparkles, label: 'Belleza y cuidado' },
+    { value: 'tecnologia', icon: Smartphone, label: 'Tecnología' },
+    { value: 'hogar', icon: House, label: 'Hogar y decoración' },
+    { value: 'deporte', icon: Dumbbell, label: 'Deporte y fitness' },
+    { value: 'artesanias', icon: Palette, label: 'Artesanías' },
+    { value: 'otros', icon: Package, label: 'Otros productos' },
 ]
 
 export default function OnboardingPage() {
@@ -94,9 +94,9 @@ export default function OnboardingPage() {
             <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
                     style={{ background: 'var(--toul-accent)', boxShadow: '0 4px 16px var(--toul-accent-glow)' }}>
-                    <Zap size={20} fill="white" className="text-white" />
+                    <span style={{ color: '#000', fontWeight: 800, fontSize: 17 }}>T</span>
                 </div>
-                <span className="text-xl font-bold gradient-text">TOUL</span>
+                <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)' }}>TOUL</span>
             </div>
 
             {/* Step 0 — ¿Dueño o vendedor? */}
@@ -187,7 +187,7 @@ export default function OnboardingPage() {
                                     border: `1px solid ${category === cat.value ? 'var(--toul-accent)' : 'var(--toul-border)'}`,
                                     color: category === cat.value ? 'var(--toul-accent)' : 'var(--toul-text)',
                                 }}>
-                                <span className="text-xl">{cat.emoji}</span>
+                                <cat.icon size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
                                 <span className="text-sm font-medium">{cat.label}</span>
                                 {category === cat.value && <Check size={14} className="ml-auto flex-shrink-0" />}
                             </button>

@@ -1,10 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
@@ -47,6 +46,9 @@ const LABELS: Record<string, string> = {
     transfer_out: 'Traslado enviado',
     capital: 'Capital propio',
 }
+
+/** "Compra #2cb1" y "Compra de inventario" empiezan igual: no se repite */
+const primeraPalabra = (texto: string) => texto.trim().split(/[\s:#]+/)[0]?.toLowerCase() ?? ''
 
 type Period = 'today' | 'week' | 'month' | 'total'
 type Flow = 'all' | 'in' | 'out'
@@ -122,12 +124,7 @@ export default function MovimientosPage() {
             <div className="toul-ambient" />
 
             <div className="flex items-center gap-3 mb-5" style={{ position: 'relative' }}>
-                <Link href="/" aria-label="Volver"
-                    style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <ArrowLeft size={17} color="rgba(255,255,255,0.7)" />
-                </Link>
                 <div>
-                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Operaciones</p>
                     <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Movimientos</h1>
                 </div>
             </div>
@@ -214,7 +211,9 @@ export default function MovimientosPage() {
                                         {m.notes || LABELS[m.type] || 'Movimiento'}
                                     </span>
                                     <span style={{ display: 'block', fontSize: 13, color: 'var(--toul-text-dim)' }}>
-                                        {LABELS[m.type] || 'Movimiento'} · {m.method} · {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        {/* "Venta #ba77…" y abajo otra vez "Venta": el tipo solo va si el título no lo dice ya */}
+                                        {LABELS[m.type] && primeraPalabra(m.notes || '') === primeraPalabra(LABELS[m.type]) ? '' : `${LABELS[m.type] || 'Movimiento'} · `}
+                                        {m.method} · {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                 </span>
                                 <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', flexShrink: 0, color: isOut ? 'var(--toul-error)' : 'var(--toul-accent)' }}>

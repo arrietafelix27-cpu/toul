@@ -5,7 +5,7 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import toast from 'react-hot-toast'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowUpRight, Ban, Printer, UserRound, X } from 'lucide-react'
+import { ArrowUpRight, Ban, Package, Printer, UserRound, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
@@ -123,7 +123,7 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, mostrarCli
                                         {item.products?.image_url ? (
                                             <img src={item.products.image_url} className="w-full h-full object-cover" alt="" />
                                         ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-lg">📦</div>
+                                            <div className="w-full h-full flex items-center justify-center"><Package size={17} style={{ color: 'var(--toul-text-faint)' }} /></div>
                                         )}
                                     </div>
                                     <div className="flex-1">
@@ -139,7 +139,7 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, mostrarCli
                             {sale.discount > 0 && (
                                 <div className="flex justify-between text-sm">
                                     <span style={{ color: 'var(--toul-text-muted)' }}>Descuento</span>
-                                    <span style={{ color: '#F59E0B' }}>−{formatCOP(sale.discount)}</span>
+                                    <span style={{ color: 'var(--toul-warning)' }}>−{formatCOP(sale.discount)}</span>
                                 </div>
                             )}
                             {(sale.sale_payments?.length ?? 0) > 0 ? (

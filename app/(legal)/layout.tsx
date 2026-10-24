@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { Zap } from 'lucide-react'
 
 /* ══════════════════════════════════════════════════════════════
    Marco de los documentos legales: términos y política de datos.
@@ -32,7 +31,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
                 <header className="flex items-center justify-between" style={{ padding: '22px 0' }}>
                     <Link href="/" className="flex items-center gap-2.5" style={{ textDecoration: 'none' }}>
                         <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'var(--toul-accent)' }}>
-                            <Zap size={16} fill="black" className="text-black" />
+                            <span style={{ color: '#000', fontWeight: 800, fontSize: 14 }}>T</span>
                         </span>
                         <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)' }}>TOUL</span>
                     </Link>

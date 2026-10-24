@@ -6,21 +6,21 @@ import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
-import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User, Download, Bug, CreditCard, Sparkles } from 'lucide-react'
+import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User, Download, CreditCard, Sparkles } from 'lucide-react'
 import { TeamSection } from '@/components/isla/TeamSection'
 import { ReceiptSettings } from '@/components/isla/ReceiptSettings'
 import { PushPrompt } from '@/components/isla/PushPrompt'
 import { SeguridadCuenta } from '@/components/settings/SeguridadCuenta'
 
 const CATEGORIES = [
-    { value: 'ropa', label: '👗 Ropa y accesorios' },
-    { value: 'comida', label: '🍔 Comida y bebidas' },
-    { value: 'belleza', label: '💄 Belleza y cuidado' },
-    { value: 'tecnologia', label: '📱 Tecnología' },
-    { value: 'hogar', label: '🏠 Hogar y decoración' },
-    { value: 'deporte', label: '⚽ Deporte y fitness' },
-    { value: 'artesanias', label: '🎨 Artesanías' },
-    { value: 'otros', label: '📦 Otros' },
+    { value: 'ropa', label: 'Ropa y accesorios' },
+    { value: 'comida', label: 'Comida y bebidas' },
+    { value: 'belleza', label: 'Belleza y cuidado' },
+    { value: 'tecnologia', label: 'Tecnología' },
+    { value: 'hogar', label: 'Hogar y decoración' },
+    { value: 'deporte', label: 'Deporte y fitness' },
+    { value: 'artesanias', label: 'Artesanías' },
+    { value: 'otros', label: 'Otros' },
 ]
 
 /* PC: en una sola columna las casillas iban de lado a lado de la
@@ -85,7 +85,6 @@ export default function SettingsPage() {
             <style>{ST_CSS}</style>
             <div className="toul-ambient" />
             <div className="mb-6" style={{ position: 'relative' }}>
-                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Sistema</p>
                 <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Mi negocio</h1>
             </div>
 
@@ -143,8 +142,7 @@ export default function SettingsPage() {
                             })}
                         </div>
                         <p className="text-xs mt-1.5" style={{ color: 'var(--toul-text-dim)', lineHeight: 1.5 }}>
-                            TOUL mira cuánto vendes de cada producto y te avisa cuando lo que queda no alcanza
-                            para ese tiempo. Si un producto necesita otro número, lo cambias en ese producto.
+                            Te avisamos cuando lo que queda no alcance para ese tiempo.
                         </p>
                     </div>
 
@@ -171,8 +169,7 @@ export default function SettingsPage() {
                             })}
                         </div>
                         <p className="text-xs mt-1.5" style={{ color: 'var(--toul-text-dim)', lineHeight: 1.5 }}>
-                            Cuando fías sin ponerle fecha, Cuentas por cobrar usa este plazo para saber
-                            qué está vencido. Si a una venta le pones plazo, manda el de la venta.
+                            Solo para los fiados que no tienen fecha propia.
                         </p>
                     </div>
 
@@ -233,7 +230,7 @@ export default function SettingsPage() {
                     Descargar tu información
                 </p>
                 <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                    Se baja un archivo que abre en Excel. Tus datos son tuyos: puedes llevártelos cuando quieras.
+                    Se descarga un archivo que abre en Excel.
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {[
@@ -256,17 +253,8 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            <Link href="/settings/errores" className="toul-card mb-4"
-                style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
-                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--toul-surface-2)', color: 'var(--toul-text-muted)' }}>
-                    <Bug size={17} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Fallas de la app</p>
-                    <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>Qué se ha roto y cuándo</p>
-                </div>
-                <ChevronRight size={16} style={{ color: 'var(--toul-text-faint)', flexShrink: 0 }} />
-            </Link>
+            {/* "Fallas de la app" ya no se muestra aquí: es una página técnica para
+                soporte. Sigue en /settings/errores para cuando haga falta revisar */}
 
             {/* Punto físico: solo con el plan Pro, igual que en el menú.
                 A quien vende por Instagram, vendedores y tirillas no le

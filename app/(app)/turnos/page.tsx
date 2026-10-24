@@ -130,7 +130,6 @@ export default function TurnosPage() {
                 <motion.div variants={fadeUp} initial="hidden" animate="visible"
                     className="flex items-start justify-between gap-3 mb-7">
                     <div>
-                        <p className="pnl-label" style={{ marginBottom: 3 }}>Punto físico</p>
                         <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>
                             Turnos de caja
                         </h1>

@@ -88,10 +88,6 @@ export default function MetodosPagoPage() {
                 </button>
             </div>
 
-            <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', lineHeight: 1.5, margin: '0 4px 16px' }}>
-                Son las formas en que te pagan. Aparecen en la caja al cobrar una venta.
-            </p>
-
             {isLoading ? (
                 <div className="flex flex-col gap-2">{[0, 1, 2].map(i => <div key={i} className="skeleton" style={{ height: 64, borderRadius: 16 }} />)}</div>
             ) : (

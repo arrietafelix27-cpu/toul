@@ -203,10 +203,7 @@ export default function CatalogoPublicoPage() {
 
             {/* ── El link ── */}
             <section style={{ marginTop: 22 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '0 0 2px' }}>Tu link</h2>
-                <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '0 0 10px' }}>
-                    Este es el que pegas en Instagram y WhatsApp.
-                </p>
+                <h2 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '0 0 10px' }}>Tu link</h2>
 
                 <div className="toul-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div style={{

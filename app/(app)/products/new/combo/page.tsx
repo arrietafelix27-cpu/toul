@@ -367,10 +367,6 @@ export default function NewComboPage() {
                                 </div>
                             )}
                         </motion.div>
-
-                        <p style={{ fontSize: 11, color: 'var(--toul-text-ghost)', margin: '8px 0 0' }}>
-                            20 MB máximo
-                        </p>
                     </motion.section>
 
                     <hr className="toul-divider" />

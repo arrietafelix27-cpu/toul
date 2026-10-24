@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { Eye, EyeOff, Zap, ArrowLeft } from 'lucide-react'
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { explainError } from '@/lib/errors'
 import { entrarDeCero, limpiarDatosDeCuenta, marcarCuenta } from '@/lib/session/limpiarCuenta'
@@ -118,11 +118,14 @@ export default function ResetPasswordPage() {
     return (
         <div className="min-h-dvh flex flex-col items-center justify-center px-5 py-10" style={{ background: 'var(--toul-bg)' }}>
             <div className="flex flex-col items-center mb-8">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3"
-                    style={{ background: 'var(--toul-accent)', boxShadow: '0 8px 32px var(--toul-accent-glow)' }}>
-                    <Zap size={26} fill="black" className="text-black" />
+                <div style={{
+                    width: 52, height: 52, borderRadius: 16, background: 'var(--toul-accent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 8px 32px var(--toul-accent-glow)',
+                }}>
+                    <span style={{ color: '#000', fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em' }}>T</span>
                 </div>
-                <h1 className="text-3xl font-bold gradient-text">TOUL</h1>
+                <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: '12px 0 0' }}>TOUL</h1>
             </div>
             <ResetPasswordForm />
         </div>

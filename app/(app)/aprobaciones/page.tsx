@@ -77,7 +77,6 @@ export default function AprobacionesPage() {
         <div className="px-4 md:px-8 pt-6 pb-8" style={{ position: 'relative', maxWidth: 860 }}>
             <div className="toul-ambient" />
             <div className="mb-5" style={{ position: 'relative' }}>
-                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Punto físico</p>
                 <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Aprobaciones</h1>
             </div>
 

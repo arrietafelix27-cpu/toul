@@ -286,7 +286,6 @@ export default function InventoryPage() {
                 transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
                 className="flex items-start justify-between gap-3 mb-7" style={{ position: 'relative' }}>
                 <div>
-                    <p className="pnl-label" style={{ marginBottom: 3 }}>Operaciones</p>
                     <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>
                         Inventario
                     </h1>

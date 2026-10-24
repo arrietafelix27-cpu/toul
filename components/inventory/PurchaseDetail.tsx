@@ -5,7 +5,7 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import toast from 'react-hot-toast'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Ban, Check, TrendingDown, TrendingUp, Truck, X } from 'lucide-react'
+import { Ban, Check, Package, TrendingDown, TrendingUp, Truck, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { Sheet } from '@/components/isla/Sheet'
@@ -186,7 +186,7 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
                                                 {item.imagen ? (
                                                     <img src={item.imagen} className="w-full h-full object-cover" alt="" />
                                                 ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-lg">📦</div>
+                                                    <div className="w-full h-full flex items-center justify-center"><Package size={17} style={{ color: 'var(--toul-text-faint)' }} /></div>
                                                 )}
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0 }}>

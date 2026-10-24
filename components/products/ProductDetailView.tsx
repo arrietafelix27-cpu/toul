@@ -269,10 +269,7 @@ export function ProductDetailView(props: ProductDetailProps) {
                     {/* ── Presentaciones ── */}
                     {presentations && presentations.length > 0 && (
                         <Section
-                            title={kind === 'presentacion' ? 'Otras presentaciones' : 'Presentaciones'}
-                            hint={kind === 'presentacion'
-                                ? 'El mismo producto en otras medidas.'
-                                : 'El mismo producto en distintas medidas. Cada una tiene su precio y su stock.'}>
+                            title={kind === 'presentacion' ? 'Otras presentaciones' : 'Presentaciones'}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 {presentations.map(item => {
                                     const body = (
@@ -305,7 +302,7 @@ export function ProductDetailView(props: ProductDetailProps) {
 
                     {/* ── Qué trae el combo ── */}
                     {components && components.length > 0 && (
-                        <Section title="Qué trae" hint="Al vender el combo se descuenta cada uno de estos productos.">
+                        <Section title="Qué trae">
                             <div className="pdv-caja" style={{ padding: '4px 16px' }}>
                                 {components.map((item, i) => (
                                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--toul-divider)' : 'none' }}>

@@ -308,8 +308,8 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
             </div>
 
             <p style={{ fontSize: 13, color: 'var(--toul-text-muted)', margin: '0 0 14px', lineHeight: 1.45 }}>
-                Cuenta los productos y escribe cuántos hay. Se guarda solo; puedes salir y volver.
-                {!showExpected && ' El stock del sistema está oculto para que el conteo sea real.'}
+                Escribe cuántos hay de cada uno. Se guarda solo.
+                {!showExpected && ' El stock del sistema no se ve, para que el conteo sea real.'}
             </p>
 
             <div style={{ position: 'relative', marginBottom: 12 }}>

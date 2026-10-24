@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { Clock, Ban, Search, SlidersHorizontal } from 'lucide-react'
+import { Clock, Ban, Search, SlidersHorizontal, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
 import { Sheet } from '@/components/isla/Sheet'
@@ -271,8 +271,7 @@ export default function VentasPage() {
             <div className="toul-ambient" />
             {/* Header */}
             <motion.div variants={fadeUp} initial="hidden" animate="visible" className="mb-5" style={{ position: 'relative' }}>
-                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px 0' }}>Operaciones</p>
-                <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Historial de ventas</h1>
+                <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Historial de ventas</h1>
             </motion.div>
 
             {/* Period tabs */}
@@ -447,7 +446,7 @@ export default function VentasPage() {
                     {[
                         { label: 'Ventas', value: String(totals.count), raw: true, color: 'var(--toul-text)' },
                         { label: 'Facturado', value: totals.revenue, color: 'var(--toul-accent)' },
-                        { label: 'Utilidad', value: totals.profit, color: '#10B981' },
+                        { label: 'Utilidad', value: totals.profit, color: 'var(--toul-accent)' },
                     ].map(chip => (
                         <motion.div key={chip.label} variants={staggerItem} className="toul-card py-2.5 px-3 text-center">
                             <p className="text-[10px] mb-1" style={{ color: 'var(--toul-text-subtle)' }}>{chip.label}</p>
@@ -501,7 +500,7 @@ export default function VentasPage() {
                                         <span className="vt-1" style={{ fontSize: 13.5, color: sale.customer_name ? 'var(--toul-text)' : 'var(--toul-text-faint)' }}>
                                             {sale.customer_name || 'Sin cliente'}
                                         </span>
-                                        {sale.is_credit && <span className="vt-2" style={{ color: 'var(--toul-warning)', fontWeight: 600 }}>A crédito</span>}
+                                        {sale.is_credit && <span className="vt-2" style={{ color: 'var(--toul-accent)', fontWeight: 600 }}>A crédito</span>}
                                     </span>
                                     <span>
                                         <span className="vt-1" style={{ fontSize: 13.5, color: 'var(--toul-text-muted)' }}>{methodLabel(sale.payment_method)}</span>
@@ -529,8 +528,8 @@ export default function VentasPage() {
                                     className="toul-card toul-card-interactive text-left flex items-center gap-3 py-3"
                                     whileTap={{ scale: 0.99 }}>
                                     <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                                        style={{ background: 'var(--toul-accent-dim)' }}>
-                                        <span style={{ color: 'var(--toul-accent)', fontSize: 18 }}>💰</span>
+                                        style={{ background: 'var(--toul-surface-2)' }}>
+                                        <Receipt size={17} style={{ color: 'var(--toul-text-muted)' }} />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-semibold text-sm truncate" style={{ color: 'var(--toul-text)' }}>{summary}{more}</p>
@@ -538,9 +537,9 @@ export default function VentasPage() {
                                             {formatDateTime(sale.created_at)} · {methodLabel(sale.payment_method)}
                                             <span style={{ color: 'var(--toul-text-faint)' }}> · #{sale.id.slice(0, 8).toUpperCase()}</span>
                                             {sale.seller_name && sale.seller_name !== 'Administrador' && <span> · {sale.seller_name}</span>}
-                                            {sale.is_credit && <span style={{ color: '#00E5A0', fontWeight: 600 }}> · Crédito</span>}
+                                            {sale.is_credit && <span style={{ color: 'var(--toul-accent)', fontWeight: 600 }}> · Crédito</span>}
                                             {sale.is_credit && sale.customer_name && <span style={{ color: 'var(--toul-text-muted)' }}> — {sale.customer_name}</span>}
-                                            {sale.discount > 0 && <span style={{ color: '#F59E0B' }}> · Dto. {formatCOP(sale.discount)}</span>}
+                                            {sale.discount > 0 && <span style={{ color: 'var(--toul-warning)' }}> · Dto. {formatCOP(sale.discount)}</span>}
                                         </p>
                                     </div>
                                     <div className="text-right flex-shrink-0">

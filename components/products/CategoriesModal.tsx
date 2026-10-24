@@ -6,7 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import type { ProductCategory } from '@/lib/types'
 
-const DOT_COLORS = ['#32d74b', '#bf5af2', '#0a84ff', '#ffd60a', '#ff9f0a', '#ff453a']
+/** Un solo gris: los colores distintos por categoría no significaban nada */
+const DOT_COLORS = ['var(--toul-text-faint)']
 
 const SPRING_SOFT = { type: 'spring' as const, stiffness: 240, damping: 26 }
 const SPRING_PRESS = { type: 'spring' as const, stiffness: 420, damping: 26 }

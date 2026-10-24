@@ -1,11 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Plus, Receipt, Megaphone, Truck, ShoppingBag, Zap, Package, Trash2 } from 'lucide-react'
+import { Plus, Receipt, Megaphone, Truck, ShoppingBag, Zap, Package, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
@@ -28,13 +27,17 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .gt-fila:active { transform: none; } }
 `
 
-/** Cada categoría con su cara, para reconocerla de un vistazo. */
+/** Cada categoría con su ícono, para reconocerla de un vistazo. Todas
+ *  en el mismo gris: el color se reserva para lo que significa algo
+ *  (el monto ya va en rojo porque es plata que sale). Antes cada una
+ *  tenía un color y "Otros" en rojo parecía un error. */
+const NEUTRO = { color: 'var(--toul-text-muted)', dim: 'var(--toul-surface-2)' }
 const CATEGORY_STYLE: Record<string, { Icon: typeof Receipt; color: string; dim: string }> = {
-    publicidad: { Icon: Megaphone, color: '#bf5af2', dim: 'rgba(191,90,242,0.12)' },
-    transporte: { Icon: Truck, color: '#0a84ff', dim: 'rgba(10,132,255,0.12)' },
-    compras: { Icon: ShoppingBag, color: '#ffd60a', dim: 'rgba(255,214,10,0.12)' },
-    servicios: { Icon: Zap, color: '#ff9f0a', dim: 'rgba(255,159,10,0.12)' },
-    otros: { Icon: Receipt, color: '#ff453a', dim: 'rgba(255,69,58,0.12)' },
+    publicidad: { Icon: Megaphone, ...NEUTRO },
+    transporte: { Icon: Truck, ...NEUTRO },
+    compras: { Icon: ShoppingBag, ...NEUTRO },
+    servicios: { Icon: Zap, ...NEUTRO },
+    otros: { Icon: Receipt, ...NEUTRO },
 }
 
 type Period = 'week' | 'month' | 'year' | 'all'
@@ -204,12 +207,7 @@ export default function ExpensesPage() {
 
             {/* Encabezado */}
             <div className="flex items-center gap-3 mb-5" style={{ position: 'relative' }}>
-                <Link href="/" aria-label="Volver"
-                    style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <ArrowLeft size={17} color="rgba(255,255,255,0.7)" />
-                </Link>
                 <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px' }}>Operaciones</p>
                     <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Gastos</h1>
                 </div>
                 <button onClick={abrirNuevo}

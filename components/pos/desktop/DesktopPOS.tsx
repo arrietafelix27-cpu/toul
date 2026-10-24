@@ -111,12 +111,13 @@ function ProductList() {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: narrow ? '14px 16px 0' : '20px 24px', position: 'relative' }}>
-            {/* Header with close button */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: narrow ? 10 : 14 }}>
+            {/* En la caja la pestaña "Vender" ya dice qué es esta pantalla: el
+                título solo quitaba espacio. Queda en el modo cajón, con su X */}
+            {mode === 'drawer' && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: narrow ? 10 : 14 }}>
                 <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--toul-pos-text-main)', margin: 0, letterSpacing: '-0.02em' }}>
                     Nueva venta
                 </h2>
-                {mode === 'drawer' && <button
+                <button
                     onClick={closePOS}
                     style={{
                         width: 32, height: 32, borderRadius: 8, border: 'none',
@@ -128,8 +129,8 @@ function ProductList() {
                     onMouseLeave={e => (e.currentTarget.style.color = 'var(--toul-pos-text-sec)')}
                 >
                     <X size={16} />
-                </button>}
-            </div>
+                </button>
+            </div>}
 
             {/* Toolbar — identical structure to mobile */}
             <div style={{ flexShrink: 0, marginBottom: 10 }}>
@@ -1009,8 +1010,8 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                 </div>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderRadius: 6, background: 'rgba(255,180,0,0.08)' }}>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: '#FFB400' }}>Pendiente</span>
-                                <span style={{ fontSize: 12, fontWeight: 800, color: '#FFB400' }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--toul-warning)' }}>Pendiente</span>
+                                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--toul-warning)' }}>
                                     {formatCOP(Math.max(0, payment.total - (Number(payment.initialPayment) || 0)))}
                                 </span>
                             </div>
@@ -1115,9 +1116,10 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                 />
                                 <button
                                     onClick={() => { setShowDiscount(false); handleDiscValue('') }}
-                                    style={{ background: 'none', border: 'none', color: 'var(--toul-pos-error)', fontSize: 14, cursor: 'pointer', padding: 0 }}
+                                    aria-label="Quitar descuento"
+                                    style={{ background: 'none', border: 'none', color: 'var(--toul-pos-error)', cursor: 'pointer', padding: 0, display: 'flex' }}
                                 >
-                                    ✕
+                                    <X size={15} />
                                 </button>
                             </div>
                         )}

@@ -253,7 +253,7 @@ export function ReportsView({ data, loading, period, periodLabel }: {
             </motion.div>
 
             {/* ── 2. La cadena completa ── */}
-            <Section title="De dónde sale ese número" hint="Se lee de arriba hacia abajo: cada línea le quita algo a la anterior.">
+            <Section title="De dónde sale ese número">
                 <div style={{ padding: '0 2px' }}>
                     <ChainRow
                         label="Vendiste"
