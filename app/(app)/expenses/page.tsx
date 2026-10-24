@@ -198,7 +198,7 @@ export default function ExpensesPage() {
     }
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-10 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+        <div className="px-4 md:px-8 pt-6 pb-10 max-w-2xl lg:max-w-[1040px] mx-auto" style={{ position: 'relative' }}>
             <style>{CSS}</style>
             <div className="toul-ambient" />
 
@@ -222,6 +222,9 @@ export default function ExpensesPage() {
                 </button>
             </div>
 
+            {/* PC: cuánto y en qué a la izquierda, el detalle día por día a la derecha */}
+            <div className="lg:grid lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-x-12 lg:items-start">
+            <div>
             {/* Período */}
             <div className="flex gap-1.5 flex-wrap mb-4">
                 {PERIODS.map(p => {
@@ -275,6 +278,8 @@ export default function ExpensesPage() {
                 </div>
             )}
 
+            </div>
+            <div>
             {/* Lista por día */}
             {isLoading ? (
                 <div className="flex flex-col gap-2">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 64, borderRadius: 16 }} />)}</div>
@@ -328,6 +333,9 @@ export default function ExpensesPage() {
                     ))}
                 </div>
             )}
+
+            </div>
+            </div>
 
             {/* Nuevo gasto */}
             <Sheet open={adding} onClose={() => !saving && (setAdding(false), setEditing(null))}

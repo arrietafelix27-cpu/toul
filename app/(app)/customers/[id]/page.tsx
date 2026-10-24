@@ -211,7 +211,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     }
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-24 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+        <div className="px-4 md:px-8 pt-6 pb-24 max-w-2xl lg:max-w-[1040px] mx-auto" style={{ position: 'relative' }}>
             <style>{PANEL_CSS}</style>
             <div className="toul-ambient" />
 
@@ -239,6 +239,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                 </button>
             </div>
 
+            {/* PC: quién es y cuánto debe a la izquierda; qué ha pasado a la derecha.
+                En una sola columna, en pantalla grande, quedaba media pantalla vacía */}
+            <div className="lg:grid lg:grid-cols-2 lg:gap-x-12 lg:items-start">
+            <div>
             {/* ── Lo que debe ── */}
             <div style={{ borderRadius: 20, padding: '20px 22px', background: 'var(--toul-surface)', border: '1px solid var(--toul-border)', textAlign: 'center' }}>
                 <p className="pnl-label" style={{ marginBottom: 6 }}>Saldo pendiente</p>
@@ -358,6 +362,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                 )}
             </section>
 
+            </div>
+            <div className="lg:[&>*:first-child]:mt-0!">
             {/* ── Qué le has dicho ── */}
             {perfil && perfil.contactos.length > 0 && (
                 <section style={{ marginTop: 22 }}>
@@ -461,6 +467,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                     </div>
                 </section>
             )}
+
+            </div>
+            </div>
 
             {/* ── Abono ── */}
             <Sheet open={payOpen} onClose={() => setPayOpen(false)}

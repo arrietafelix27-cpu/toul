@@ -16,6 +16,20 @@ const CSS = `
 .mv-fila { display: flex; align-items: center; gap: 13px; padding: 11px 10px; border-radius: 14px;
     transition: background-color 160ms cubic-bezier(0.23,1,0.32,1); }
 @media (hover: hover) and (pointer: fine) { .mv-fila:hover { background: rgba(255,255,255,0.035); } }
+
+/* PC: tabla, como Ventas y Compras. En una columna angosta en medio de
+   la pantalla quedaba mucho espacio sin usar */
+.mv-pc, .mv-cabeza { display: none; }
+@media (min-width: 1024px) {
+    .mv-movil { display: none !important; }
+    .mv-pc, .mv-cabeza { display: grid; grid-template-columns: 160px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 140px; gap: 16px; align-items: center; }
+    .mv-cabeza { padding: 0 10px 9px; border-bottom: 1px solid var(--toul-divider); margin-bottom: 4px;
+        font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--toul-text-faint); }
+    .mv-pc { padding: 11px 10px; border-radius: 12px; }
+    .mv-pc > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mv-num { text-align: right; font-variant-numeric: tabular-nums; }
+}
+@media (hover: hover) and (pointer: fine) { .mv-pc:hover { background: rgba(255,255,255,0.035); } }
 `
 
 /** Salidas de plata. Todo lo demás cuenta como entrada. */
@@ -103,7 +117,7 @@ export default function MovimientosPage() {
     }, [data, flow])
 
     return (
-        <div className="px-4 md:px-8 pt-6 pb-8 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+        <div className="px-4 md:px-8 pt-6 pb-8 max-w-2xl lg:max-w-[1040px] mx-auto" style={{ position: 'relative' }}>
             <style>{CSS}</style>
             <div className="toul-ambient" />
 
@@ -163,13 +177,29 @@ export default function MovimientosPage() {
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div className="mv-cabeza" aria-hidden>
+                        <span>Fecha</span><span>Concepto</span><span>Tipo</span><span>Método</span><span className="mv-num">Monto</span>
+                    </div>
                     {movements.map((m, idx) => {
                         const isOut = m.signed < 0
                         return (
-                            <motion.div key={m.id}
+                            <div key={m.id} style={{ display: 'contents' }}>
+                            {/* PC */}
+                            <div className="mv-pc">
+                                <span style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>
+                                    {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)' }}>{m.notes || LABELS[m.type] || 'Movimiento'}</span>
+                                <span style={{ fontSize: 13, color: 'var(--toul-text-dim)' }}>{LABELS[m.type] || 'Movimiento'}</span>
+                                <span style={{ fontSize: 13, color: 'var(--toul-text-dim)' }}>{m.method}</span>
+                                <span className="mv-num" style={{ fontSize: 14.5, fontWeight: 700, color: isOut ? 'var(--toul-error)' : 'var(--toul-accent)' }}>
+                                    {isOut ? '−' : '+'}{formatCOP(Math.abs(m.signed))}
+                                </span>
+                            </div>
+                            <motion.div
                                 initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.22, ease: EASE_OUT_EMIL, delay: Math.min(idx, 10) * 0.02 }}
-                                className="mv-fila">
+                                className="mv-fila mv-movil">
                                 <span style={{
                                     width: 38, height: 38, borderRadius: 12, flexShrink: 0,
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -191,6 +221,7 @@ export default function MovimientosPage() {
                                     {isOut ? '−' : '+'}{formatCOP(Math.abs(m.signed))}
                                 </span>
                             </motion.div>
+                            </div>
                         )
                     })}
 

@@ -91,11 +91,10 @@ const CSS = PANEL_CSS + ROW_CSS + `
 
 /* PC: en una sola columna el nombre quedaba a un lado de la pantalla y
    la cantidad al otro. Ahí se parte en dos: a la izquierda cuánto
-   aguantas y qué pedir (siempre a la vista), a la derecha la bodega */
+   aguantas y qué pedir, a la derecha la bodega */
 @media (min-width: 1100px) {
     .inv-wrap { max-width: 1180px; }
     .inv-cols { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 48px; align-items: start; }
-    .inv-izq { position: sticky; top: 24px; }
     .inv-sep-medio { display: none; }
 }
 
