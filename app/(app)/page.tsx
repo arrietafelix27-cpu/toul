@@ -461,8 +461,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="in-pc-cuerpo">
                             <div {...entrada(1, animar, 'in-pc-grafica')}>
-                                <HeroChart storeId={storeId} period={period} rango={customRange}
-                                    alto="clamp(220px, 34vh, 380px)" dibujar={dibujar} />
+                                <HeroChart storeId={storeId} period={period} rango={customRange} alto="100%" dibujar={dibujar} />
                             </div>
                             <div className="in-pc-resumen">
                                 <div {...entrada(2, animar)}>
@@ -502,15 +501,23 @@ export default function DashboardPage() {
    arriba a la izquierda, la gráfica que llega hasta el borde derecho y
    la pantalla que se llena de arriba abajo */
 const PC_CSS = ENTRADA_INICIO_CSS + `
+/* Las medidas que comparten el encabezado y la fila de abajo. La fila
+   mide lo que miden tus productos (título, píldora, foto y nombre); la
+   gráfica toma todo lo que sobra, para que la pantalla quede llena sin
+   franja vacía y sin desplazamiento de sobra */
+.in-pc {
+    position: relative;
+    --in-pc-foto: clamp(150px, 24vh, 260px);
+    --in-pc-fila: calc(134px + var(--in-pc-foto));
+    --in-pc-hueco: clamp(24px, 3.5vh, 40px);
+}
 /* Sin z-index ni isolation, como en el celular: los menús y las hojas
-   tienen que poder quedar por encima de todo */
-.in-pc { position: relative; }
-/* Llena el alto de la ventana. Los 2rem son el margen de abajo que ya
-   pone la app: así no aparece una barra de desplazamiento de sobra */
-.in-pc-contenido { position: relative; min-height: calc(100dvh - 2rem); display: flex; flex-direction: column;
-    padding: 24px 24px clamp(8px, 2vh, 24px); }
+   tienen que poder quedar por encima de todo. Los 2rem son el margen de
+   abajo que ya pone la app. En pantallas muy anchas no pasa de 1680 px */
+.in-pc-contenido { position: relative; width: 100%; max-width: 1680px; margin: 0 auto;
+    min-height: calc(100dvh - 2rem); display: flex; flex-direction: column; padding: 24px 24px 16px; }
 
-.in-pc-arriba { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.in-pc-arriba { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 40px; }
 .in-pc-saludo { min-width: 0; font-size: 14px; font-weight: 400; letter-spacing: -0.01em; color: var(--toul-text-subtle); margin: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .in-pc-ajustes { flex-shrink: 0; width: 40px; height: 40px; margin-right: -8px; border-radius: 12px;
@@ -521,15 +528,17 @@ const PC_CSS = ENTRADA_INICIO_CSS + `
 /* La gráfica ocupa cerca del 60% desde el borde izquierdo; el resumen,
    el resto. Abajo quedan alineados */
 .in-pc-cuerpo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); column-gap: clamp(32px, 4vw, 64px);
-    align-items: end; margin-top: 16px; }
-.in-pc-grafica { min-width: 0; }
+    align-items: end; margin-top: 6px; }
+/* Alto: la ventana menos todo lo demás (márgenes, saludo y la fila de abajo) */
+.in-pc-grafica { min-width: 0;
+    height: clamp(240px, calc(100dvh - 2rem - 24px - 16px - 40px - 6px - var(--in-pc-hueco) - var(--in-pc-fila)), 560px); }
 .in-pc-resumen { min-width: 0; }
-.in-pc-abajo { flex: 1; display: flex; flex-direction: column; margin-top: clamp(28px, 5vh, 52px); }
+.in-pc-abajo { flex: none; margin-top: var(--in-pc-hueco); }
 @media (hover: hover) and (pointer: fine) {
     .in-pc-ajustes:hover { color: var(--toul-text); background: var(--toul-surface); }
 }
 @media (min-width: 1280px) {
-    .in-pc-contenido { padding-left: 32px; padding-right: 32px; padding-top: 28px; }
+    .in-pc-contenido { padding-left: 32px; padding-right: 32px; }
 }
 `
 

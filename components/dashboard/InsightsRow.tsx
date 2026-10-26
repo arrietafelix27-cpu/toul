@@ -14,16 +14,19 @@ import type { AIInsight } from '@/lib/types'
    ══════════════════════════════════════════════════════════════ */
 
 const CSS = ENTRADA_INICIO_CSS + `
-/* Las columnas llegan hasta el final de la pantalla: la fila ocupa todo
-   el alto que le deja el encabezado */
-.ir-raiz { flex: 1; display: flex; flex-direction: column; container-type: inline-size; }
-.ir-fila { flex: 1; display: grid; }
+.ir-raiz { container-type: inline-size; }
+.ir-fila { display: grid; }
 .ir-col { position: relative; min-width: 0; display: flex; flex-direction: column; }
 
 /* Se mide el espacio disponible, no la pantalla: la barra lateral
    de la app se lleva 240 px que no se pueden usar */
+/* Las tres terminan a la misma altura: la fila mide lo que mide Tus
+   productos, y las otras dos se acomodan a ese alto (Plata pendiente
+   muestra los deudores que quepan; las acciones se reparten). Así las
+   líneas divisorias son tan altas como el contenido */
 @container (min-width: 900px) {
-    .ir-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); }
+    .ir-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); min-height: var(--in-pc-fila, auto); }
+    .ir-plata, .ir-acciones { contain: size; }
     .ir-col { padding: 0 clamp(20px, 2.2vw, 32px); }
     .ir-col:first-child { padding-left: 0; }
     .ir-col:last-child { padding-right: 0; }
@@ -66,8 +69,8 @@ export function InsightsRow({ products, pending, insight, storeName, loading, pr
                 </div>
                 <div {...columna('ir-acciones', 2)}>
                     <AccionesRapidas variante="pc" />
-                    {/* Justo debajo de Devolución, no pegada al fondo */}
-                    <div style={{ marginTop: 16 }}>
+                    {/* Al final de la columna, a la altura donde terminan las otras dos */}
+                    <div style={{ marginTop: 12 }}>
                         <ObservacionAI insight={insight} loading={insightsLoading || primeraCarga} />
                     </div>
                 </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useMemo, useState, type CSSProperties } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { ChevronRight, MessageCircle } from 'lucide-react'
 import AnimatedNumber from '@/components/ui/AnimatedNumber'
@@ -67,11 +67,13 @@ const CSS = `
 .pl-barra > span { min-width: 6px; border-radius: 999px; transition: opacity 200ms var(--toul-ease-emil); }
 
 .pl-lista { display: flex; flex-direction: column; margin-top: 8px; }
-/* En el computador: 3 deudores, y 5 en pantallas grandes */
-.pl-lista[data-variante="pc"] > .pl-item:nth-child(n+4) { display: none; }
-@media (min-width: 1440px) {
-    .pl-lista[data-variante="pc"] > .pl-item:nth-child(n+4) { display: flex; }
-}
+/* En el computador la lista ocupa el alto que le deja la columna, y se
+   muestran los deudores que quepan */
+.pl-seccion[data-variante="pc"] { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pl-seccion[data-variante="pc"] .pl-lugar { flex: 1; min-height: 0; overflow: hidden; }
+.pl-todos { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin-top: 6px; padding: 6px 0;
+    font-size: 13px; font-weight: 500; color: var(--toul-text-muted); text-decoration: none;
+    transition: color 160ms var(--toul-ease-emil); }
 .pl-item { display: flex; align-items: center; gap: 6px; }
 .pl-item[data-entra="true"] { animation: pl-entra 260ms cubic-bezier(0.23, 1, 0.32, 1) backwards; }
 @keyframes pl-entra { from { opacity: 0; transform: translateY(6px); } }
@@ -94,6 +96,7 @@ const CSS = `
 @media (hover: hover) and (pointer: fine) {
     .pl-titulo:hover svg { transform: translateX(2px); }
     .pl-fila:hover { opacity: 0.75; }
+    .pl-todos:hover { color: var(--toul-text); }
     .pl-wa:hover { background: var(--toul-surface-2); color: var(--toul-text); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -137,8 +140,25 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
         },
     ]
 
+    // En el computador: los que quepan en la columna, máximo 6
+    const lugar = useRef<HTMLDivElement>(null)
+    const [caben, setCaben] = useState(3)
+    useEffect(() => {
+        const node = lugar.current
+        if (variante !== 'pc' || !node) return
+        const observer = new ResizeObserver(() => {
+            const fila = node.querySelector('.pl-item, .pl-fila')?.getBoundingClientRect().height || 56
+            // 8 px: el margen de arriba de la lista
+            setCaben(Math.max(1, Math.min(6, Math.floor((node.clientHeight - 8) / fila))))
+        })
+        observer.observe(node)
+        return () => observer.disconnect()
+    }, [variante])
+
     const esCobrar = lado === 'cobrar'
-    const mostrados = (esCobrar ? pending.customerDebts : pending.providerDebts).slice(0, variante === 'movil' ? 3 : 5)
+    const lista = esCobrar ? pending.customerDebts : pending.providerDebts
+    const mostrados = lista.slice(0, variante === 'movil' ? 3 : caben)
+    const total = (esCobrar ? pending.customerCount : pending.providerCount) ?? lista.length
     // Si alguno tiene WhatsApp, todos reservan ese espacio: los montos
     // quedan alineados en vez de bailar de renglón en renglón
     const reservarWhatsApp = esCobrar && mostrados.some(p => p.phone)
@@ -151,7 +171,7 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
     }
 
     return (
-        <section style={{ minWidth: 0 }}>
+        <section className="pl-seccion" data-variante={variante} style={{ minWidth: 0 }}>
             <style>{CSS}</style>
             <Link href="/customers?ver=cobros" prefetch={false} className="pl-titulo" data-variante={variante}>
                 Plata pendiente <ChevronRight size={variante === 'movil' ? 20 : 18} strokeWidth={2.2} />
@@ -181,6 +201,7 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
                 ))}
             </div>
 
+            <div ref={lugar} className="pl-lugar">
             {loading ? (
                 <div className="pl-lista" aria-hidden>
                     {[0, 1, 2].map(i => (
@@ -222,6 +243,14 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
                         )
                     })}
                 </div>
+            )}
+            </div>
+
+            {/* Si no caben todos, el resto está a un toque */}
+            {variante === 'pc' && !loading && total > mostrados.length && (
+                <Link href={esCobrar ? '/customers?ver=cobros' : '/providers'} prefetch={false} className="pl-todos">
+                    Ver todos <ChevronRight size={14} strokeWidth={2.2} />
+                </Link>
             )}
         </section>
     )

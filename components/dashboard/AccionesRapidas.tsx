@@ -42,10 +42,12 @@ const CSS = PANEL_CSS + `
 .ar-circulo { width: 58px; height: 58px; border-radius: 50%; }
 .ar-etiqueta { font-size: 13px; font-weight: 500; color: var(--toul-text-muted); letter-spacing: -0.01em; }
 
-/* ── Computador ── */
+/* ── Computador ── las filas se reparten en el alto de la columna */
+.ar-pc { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ar-pc .ar-filas { flex: 1; justify-content: space-evenly; }
 .ar-titulo { font-size: 17px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; color: var(--toul-text); margin: 0 0 10px; }
 .ar-filas { display: flex; flex-direction: column; }
-.ar-fila { display: flex; align-items: center; gap: 14px; width: calc(100% + 16px); padding: 10px 8px; margin: 0 -8px;
+.ar-fila { display: flex; align-items: center; gap: 14px; width: calc(100% + 16px); padding: 12px 8px; margin: 0 -8px;
     border: none; background: none; border-radius: 14px; font: inherit; color: inherit; text-align: left;
     text-decoration: none; cursor: pointer;
     transition: background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
@@ -117,7 +119,7 @@ export function AccionesRapidas({ variante }: { variante: 'movil' | 'pc' }) {
                     })}
                 </div>
             ) : (
-                <div>
+                <div className="ar-pc">
                     <h2 className="ar-titulo">Acciones rápidas</h2>
                     <div className="ar-filas">
                         {ACCIONES.map(({ key, label, Icon, href }) => {
