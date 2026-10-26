@@ -34,6 +34,11 @@ export function getPeriodLabel(period: 'today' | 'week' | 'month' | 'total' | 'c
 }
 
 /** Get date range for a period */
+/** "$200.000": el Inicio lo muestra sin el espacio que deja el formato de Colombia */
+export function formatPrecio(amount: number | null | undefined): string {
+    return formatCOP(amount).replace(/\s/g, '')
+}
+
 export function getDateRange(period: 'today' | 'week' | 'month' | 'total' | 'custom'): { from: string | null; to: string | null } {
     const now = new Date()
     if (period === 'total') return { from: null, to: null }

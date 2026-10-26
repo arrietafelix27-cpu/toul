@@ -1,27 +1,25 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatCOP, getDateRange, getDaysDiff } from '@/lib/utils'
-import { Settings, Calendar, AlertTriangle, RefreshCw } from 'lucide-react'
+import { getDateRange, getDaysDiff } from '@/lib/utils'
+import { Settings, AlertTriangle, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import useSWR from 'swr'
 
 // Components
 import HeroChart from '@/components/dashboard/HeroChart'
-import { FinancialSummary } from '@/components/dashboard/FinancialSummary'
 import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { PrimerosPasos } from '@/components/dashboard/PrimerosPasos'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { Star } from 'lucide-react'
+import { SelectorPeriodo, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
+import { Vendiste, GananciaGastos, type MetricasInicio } from '@/components/dashboard/ResumenHoy'
 
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
-import { fadeUp, staggerContainer, t } from '@/lib/motion'
+import { ENTRADA_INICIO_CSS, entrada, useEntradaInicio } from '@/lib/motion'
 import type { AIInsight } from '@/lib/types'
 
-type Period = 'today' | 'week' | 'month' | 'total' | 'custom'
+type Period = Periodo
 
 /** Cada cuánto se recalculan las ideas de TOUL AI */
 const IDEAS_VIGENCIA = 6 * 60 * 60 * 1000
@@ -104,7 +102,10 @@ export default function DashboardPage() {
                     currentCost += Math.round((item.unit_cost || 0) * item.quantity)
                     const profitVal = Math.round((item.unit_price - (item.unit_cost || 0)) * item.quantity)
 
+                    // Los combos no tienen ficha de producto (se guardan sin product_id):
+                    // cuentan en los totales, no en las listas de productos
                     const pid = item.product_id
+                    if (!pid) continue
                     if (!productUnitsMap[pid]) {
                         productUnitsMap[pid] = {
                             name: item.products?.name || 'Producto',
@@ -174,10 +175,20 @@ export default function DashboardPage() {
             const pGrossProfit = Math.round(pRev - pCost)
 
             // 2. OPERATIONAL DATA: PRODUCTS
+            // Hasta 10 por lista: el celular los muestra en una fila que se
+            // desliza; el computador, los 3 primeros.
             // Lo que se devolvió completo ya no cuenta como vendido
-            const sortedByUnits = Object.entries(productUnitsMap).filter(([, p]) => p.units > 0).map(([id, p]) => ({ id, ...p, value: p.units, units: p.units, subValue: `${p.units} ${p.units === 1 ? 'vendido' : 'vendidos'} · ${formatCOP(p.revenue)}` })).sort((a, b) => b.value - a.value).slice(0, 5)
-            const sortedByProfit = Object.entries(productUnitsMap).filter(([, p]) => p.units > 0).map(([id, p]) => ({ id, ...p, value: p.profit, units: p.units, subValue: `te dejó ${formatCOP(p.profit)} en ${p.units} ${p.units === 1 ? 'venta' : 'ventas'}` })).sort((a, b) => b.value - a.value).slice(0, 5)
-            const lowStock = (products.data || []).filter(p => p.stock <= (p.low_stock_threshold || 5)).map(p => ({ id: p.id, name: p.name, image_url: p.image_url, value: p.stock, units: 0, subValue: p.stock === 0 ? 'se agotó' : `quedan ${p.stock} ${p.stock === 1 ? 'unidad' : 'unidades'}` })).sort((a, b) => a.value - b.value).slice(0, 5)
+            const vendidos = Object.entries(productUnitsMap).filter(([, p]) => p.units > 0)
+            const sortedByUnits = vendidos
+                .map(([id, p]) => ({ id, name: p.name, image_url: p.image_url, value: p.units }))
+                .sort((a, b) => b.value - a.value).slice(0, 10)
+            // Más rentables: el % que le queda de cada venta. Si dos empatan,
+            // primero el que dejó más plata
+            const sortedByProfit = vendidos
+                .filter(([, p]) => p.revenue > 0)
+                .map(([id, p]) => ({ id, name: p.name, image_url: p.image_url, value: Math.round((p.profit / p.revenue) * 100) }))
+                .sort((a, b) => b.value - a.value || productUnitsMap[b.id].profit - productUnitsMap[a.id].profit).slice(0, 10)
+            const lowStock = (products.data || []).filter(p => p.stock <= (p.low_stock_threshold || 5)).map(p => ({ id: p.id, name: p.name, image_url: p.image_url, value: p.stock })).sort((a, b) => a.value - b.value).slice(0, 10)
 
             // "Sin mover" sale de la base: días desde la última venta de
             // verdad. Antes se contaba desde que se creó la ficha y
@@ -189,13 +200,11 @@ export default function DashboardPage() {
                 variant_name: string | null; image_url: string | null
                 stock: number; idle_days: number; never_sold: boolean
             }[]
-            const slowMoving = dormant.slice(0, 5).map(row => ({
+            const slowMoving = dormant.slice(0, 10).map(row => ({
                 id: row.kind === 'presentacion' ? row.product_id : row.id,
                 name: row.variant_name ? `${row.product_name} · ${row.variant_name}` : row.product_name,
                 image_url: row.image_url,
                 value: row.idle_days,
-                units: 0,
-                subValue: `${row.never_sold ? 'nunca se ha vendido' : 'sin venderse'} hace ${row.idle_days} días · ${row.stock} en bodega`,
             }))
 
             // ── Mejora 1: Compute 7-day average ────────────────────────────
@@ -294,7 +303,10 @@ export default function DashboardPage() {
                 }
             }
         },
-        { revalidateOnFocus: false, dedupingInterval: 60000 }
+        // Al cambiar de periodo se siguen viendo los datos anteriores mientras
+        // llegan los nuevos: la plata pendiente no depende del periodo y no
+        // tiene por qué desaparecer y volver a contar
+        { revalidateOnFocus: false, dedupingInterval: 60000, keepPreviousData: true }
     )
 
     // Las ideas de TOUL AI tardan unos 8 segundos y cada cálculo cuesta.
@@ -325,33 +337,38 @@ export default function DashboardPage() {
     )
 
     const loading = metricsLoading || storeLoading
+    // Solo la primera vez no hay nada que mostrar (ver keepPreviousData arriba)
+    const primeraCarga = !dashboardData
 
-    const periodLabel = period === 'today' ? 'de hoy'
-        : period === 'week' ? 'de la semana'
-            : period === 'month' ? 'del mes'
-                : 'del periodo'
-
+    // Saludo según la hora. Sin fecha: el Inicio dice lo que importa hoy
     const greeting = useMemo(() => {
         const hour = new Date().getHours()
         if (hour < 12) return 'Buenos días'
-        if (hour < 18) return 'Buenas tardes'
+        if (hour < 19) return 'Buenas tardes'
         return 'Buenas noches'
     }, [])
 
-    const currentDate = useMemo(() => {
-        return new Intl.DateTimeFormat('es-CO', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long'
-        }).format(new Date())
-    }, [])
+    // La entrada completa (cascada, línea que se dibuja, montos que cuentan)
+    // pasa la primera vez que se abre la app. Al cambiar de periodo, la
+    // gráfica se vuelve a dibujar y los montos vuelven a contar.
+    const animar = useEntradaInicio()
+    const [periodoTocado, setPeriodoTocado] = useState(false)
+    const cambiarPeriodo = useCallback((p: Periodo) => { setPeriod(p); setPeriodoTocado(true) }, [])
+    const cambiarRango = useCallback((r: Rango) => { setCustomRange(r); setPeriodoTocado(true) }, [])
+    const dibujar = animar || periodoTocado
+    const conteo = useMemo(() => ({
+        cuenta: animar || periodoTocado,
+        clave: `${period}|${customRange?.from ?? ''}|${customRange?.to ?? ''}`,
+    }), [animar, periodoTocado, period, customRange])
 
-    // Top product for mobile
-    const topProduct = useMemo(() => {
-        const units = dashboardData?.operational.products.topUnits
-        if (!units || units.length === 0) return null
-        return { name: units[0].name, image_url: units[0].image_url, units: units[0].units }
-    }, [dashboardData])
+    const metrics: MetricasInicio = {
+        revenue: dashboardData?.metrics.revenue || 0,
+        grossProfit: dashboardData?.metrics.grossProfit || 0,
+        expenses: dashboardData?.metrics.expenses || 0,
+        salesCount: dashboardData?.metrics.salesCount || 0,
+    }
+    const products = dashboardData?.operational.products || { topUnits: [], topProfit: [], lowStock: [], slowMoving: [] }
+    const pending = dashboardData?.pending || { customerDebts: [], providerDebts: [] }
 
     return (
         <>
@@ -386,7 +403,7 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* ── MOBILE DASHBOARD ──────────────────────────────────────────── */}
+            {/* ── CELULAR ───────────────────────────────────────────────────── */}
             <div className="lg:hidden">
                 {/* Desaparece solo apenas hace su primera venta */}
                 <div style={{ padding: '18px 16px 0' }}>
@@ -394,112 +411,103 @@ export default function DashboardPage() {
                 </div>
                 <MobileDashboard
                     storeName={storeName}
-                    currentDate={currentDate}
+                    saludo={greeting}
                     storeId={storeId}
                     period={period}
-                    setPeriod={setPeriod}
-                    customRange={customRange}
-                    setCustomRange={setCustomRange}
-                    metrics={{
-                        salesCount: dashboardData?.metrics.salesCount || 0,
-                        unitsSold: dashboardData?.metrics.unitsSold || 0,
-                        creditAmount: dashboardData?.metrics.creditAmount || 0,
-                        expenses: dashboardData?.metrics.expenses || 0,
-                        expensesTopCategory: dashboardData?.metrics.expensesTopCategory ?? null,
-                        grossProfit: dashboardData?.metrics.grossProfit || 0,
-                        netProfit: dashboardData?.metrics.netProfit || 0,
-                        revenue: dashboardData?.metrics.revenue || 0,
-                        prevGrossProfit: dashboardData?.metrics.prevGrossProfit || 0,
-                        prevNetProfit: dashboardData?.metrics.prevNetProfit || 0,
-                    }}
-                    periodLabel={periodLabel}
-                    topProduct={topProduct}
-                    pending={dashboardData?.pending || { customerDebts: [], providerDebts: [] }}
+                    setPeriod={cambiarPeriodo}
+                    rango={customRange}
+                    setRango={cambiarRango}
+                    metrics={metrics}
+                    products={products}
+                    pending={pending}
                     insight={insights?.[0] || null}
                     loading={loading}
+                    primeraCarga={primeraCarga}
                     insightsLoading={insightsLoading || false}
+                    animar={animar}
+                    dibujar={dibujar}
+                    conteo={conteo}
                 />
             </div>
 
-            {/* ── DESKTOP DASHBOARD ─────────────────────────────────────────── */}
-            <motion.div
-                variants={staggerContainer}
-                initial="hidden"
-                animate="visible"
-                className="hidden lg:flex w-full max-w-none px-6 xl:px-8 py-6 min-h-screen flex-col gap-6"
-            >
-                <PrimerosPasos storeId={storeId} />
+            {/* ── COMPUTADOR ────────────────────────────────────────────────
+                Arriba el encabezado: lo vendido a la izquierda y la gráfica a
+                la derecha, hasta el borde. Abajo, tres columnas sin cajas. */}
+            <div className="hidden lg:block in-pc">
+                <style>{PC_CSS}</style>
+                <div className="in-pc-resplandor" aria-hidden />
+                <div className="in-pc-contenido">
+                    <PrimerosPasos storeId={storeId} />
 
-                {/* Identity Header — Calm, minimal */}
-                <motion.div variants={fadeUp} className="flex items-end justify-between mb-1">
-                    <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--toul-text-subtle)]">
-                                {greeting}
-                            </span>
-                            <div className="w-1 h-1 rounded-full" style={{ background: 'var(--toul-border-2)' }} />
-                            <span className="text-[10px] font-bold text-[var(--toul-text-subtle)] uppercase tracking-widest">
-                                {currentDate}
-                            </span>
+                    <header className="in-pc-cabeza">
+                        <div className="in-pc-izquierda">
+                            <div {...entrada(0, animar)}>
+                                <p className="in-pc-saludo" suppressHydrationWarning>{greeting}</p>
+                                <h1 className="in-pc-nombre">{storeName || 'Mi negocio'}</h1>
+                            </div>
+                            <div {...entrada(1, animar, undefined, { marginTop: 26 })}>
+                                <SelectorPeriodo variante="pc" period={period} setPeriod={cambiarPeriodo} rango={customRange} setRango={cambiarRango} />
+                            </div>
+                            <div {...entrada(2, animar, undefined, { marginTop: 14 })}>
+                                <Vendiste metrics={metrics} loading={loading} period={period} variante="pc" conteo={conteo} />
+                            </div>
+                            <div {...entrada(4, animar, undefined, { marginTop: 24 })}>
+                                <GananciaGastos metrics={metrics} loading={loading} variante="pc" conteo={conteo} />
+                            </div>
                         </div>
-                        <h1 className="text-2xl font-black tracking-tighter uppercase text-white">
-                            {storeName || 'Mi Negocio'}
-                        </h1>
-                    </div>
-                    <Link href="/settings" className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--toul-surface)] border border-[var(--toul-border)] text-[var(--toul-text-subtle)] hover:text-white hover:border-[var(--toul-border-2)]" style={{ transition: 'var(--toul-transition)' }}>
-                        <Settings size={16} />
-                    </Link>
-                </motion.div>
+                        <div {...entrada(3, animar, 'in-pc-grafica')}>
+                            <HeroChart storeId={storeId} period={period} rango={customRange} alto={190} dibujar={dibujar} />
+                        </div>
+                        <Link href="/settings" className="in-pc-ajustes" aria-label="Ajustes">
+                            <Settings size={20} strokeWidth={1.9} />
+                        </Link>
+                    </header>
 
-                {/* Row 1: Chart Protagonist (8) + Vital Signs (4) */}
-                <div className="grid grid-cols-12 gap-6 items-stretch">
-                    <div className="col-span-8">
-                        <HeroChart
-                            storeId={storeId!}
-                            period={period}
-                            setPeriod={setPeriod}
-                            revenue={dashboardData?.metrics.revenue || 0}
+                    <div style={{ marginTop: 52 }}>
+                        <InsightsRow
+                            products={products}
+                            pending={pending}
+                            insight={insights?.[0] || null}
+                            storeName={storeName}
                             loading={loading}
-                            customRange={customRange}
-                            setCustomRange={setCustomRange}
-                            avg7d={dashboardData?.chart.avg7d ?? null}
-                            streak={dashboardData?.chart.streak ?? 0}
-                            yesterdayTotal={dashboardData?.chart.yesterdayTotal ?? 0}
-                        />
-                    </div>
-                    <div className="col-span-4">
-                        <FinancialSummary
-                            metrics={{
-                                salesCount: dashboardData?.metrics.salesCount || 0,
-                                unitsSold: dashboardData?.metrics.unitsSold || 0,
-                                creditAmount: dashboardData?.metrics.creditAmount || 0,
-                                expenses: dashboardData?.metrics.expenses || 0,
-                                expensesTopCategory: dashboardData?.metrics.expensesTopCategory ?? null,
-                                grossProfit: dashboardData?.metrics.grossProfit || 0,
-                                netProfit: dashboardData?.metrics.netProfit || 0,
-                                revenue: dashboardData?.metrics.revenue || 0,
-                                prevGrossProfit: dashboardData?.metrics.prevGrossProfit || 0,
-                                prevNetProfit: dashboardData?.metrics.prevNetProfit || 0,
-                            }}
-                            loading={loading}
-                            periodLabel={periodLabel}
+                            primeraCarga={primeraCarga}
+                            insightsLoading={!!insightsLoading}
+                            animar={animar}
+                            turno={5}
                         />
                     </div>
                 </div>
-
-                {/* Fila 2: productos, plata pendiente y TOUL AI */}
-                <InsightsRow
-                    products={dashboardData?.operational.products || { topUnits: [], topProfit: [], lowStock: [], slowMoving: [] }}
-                    pending={dashboardData?.pending || { customerDebts: [], providerDebts: [] }}
-                    insight={insights?.[0] || null}
-                    storeName={storeName}
-                    loading={loading}
-                    insightsLoading={!!insightsLoading}
-                />
-            </motion.div>
+            </div>
         </>
     )
 }
+
+/* Lo del computador que no cabe en clases de Tailwind: la luz verde de
+   arriba a la izquierda y la gráfica que llega hasta el borde derecho */
+const PC_CSS = ENTRADA_INICIO_CSS + `
+/* Sin z-index ni isolation, como en el celular: los menús y las hojas
+   tienen que poder quedar por encima de todo */
+.in-pc { position: relative; padding: 28px 24px 56px; }
+.in-pc-contenido { position: relative; }
+.in-pc-resplandor { position: absolute; top: 0; left: 0; right: 0; height: 560px; pointer-events: none;
+    background: radial-gradient(70% 100% at 18% 0%, color-mix(in srgb, var(--toul-accent) 20%, transparent), transparent 60%); }
+.in-pc-cabeza { position: relative; display: grid; grid-template-columns: minmax(330px, 0.8fr) minmax(0, 1.2fr);
+    column-gap: 32px; align-items: end; }
+.in-pc-saludo { font-size: 13px; letter-spacing: -0.01em; color: var(--toul-text-subtle); margin: 0; }
+.in-pc-nombre { font-size: 26px; font-weight: 700; letter-spacing: -0.8px; line-height: 1.15; color: var(--toul-text); margin: 4px 0 0; }
+.in-pc-grafica { margin-right: -24px; min-width: 0; }
+.in-pc-ajustes { position: absolute; top: 0; right: 0; width: 40px; height: 40px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; color: var(--toul-text-subtle);
+    transition: color 160ms var(--toul-ease-emil), background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
+.in-pc-ajustes:active { transform: scale(0.94); }
+@media (hover: hover) and (pointer: fine) {
+    .in-pc-ajustes:hover { color: var(--toul-text); background: var(--toul-surface); }
+}
+@media (min-width: 1280px) {
+    .in-pc { padding: 32px 32px 64px; }
+    .in-pc-grafica { margin-right: -32px; }
+}
+`
 
 function getPrevRange(period: Period, current: { from: string | null; to: string | null }) {
     if (!current.from || !current.to) return { from: null, to: null }

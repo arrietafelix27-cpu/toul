@@ -34,40 +34,61 @@ const CSS = PANEL_CSS + `
 .ar-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .ar-item { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%;
     padding: 2px 0; border: none; background: none; font: inherit; color: inherit;
-    text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.ar-circulo { width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: var(--toul-surface-2); color: var(--toul-accent);
-    transition: background-color 160ms var(--toul-ease-emil); }
-.ar-etiqueta { font-size: 12px; font-weight: 500; color: var(--toul-text-muted); letter-spacing: -0.01em; }
+    text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+/* El verde entra por arriba a la izquierda, como la luz del encabezado */
+.ar-circulo, .ar-cuadro { display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--toul-accent);
+    background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--toul-accent) 22%, transparent), var(--toul-surface) 70%); }
+.ar-circulo { width: 58px; height: 58px; border-radius: 50%; }
+.ar-etiqueta { font-size: 13px; font-weight: 500; color: var(--toul-text-muted); letter-spacing: -0.01em; }
 
 /* ── Computador ── */
+.ar-titulo { font-size: 17px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; color: var(--toul-text); margin: 0 0 10px; }
 .ar-filas { display: flex; flex-direction: column; }
-.ar-fila { display: flex; align-items: center; gap: 12px; width: calc(100% + 16px); padding: 10px 8px; margin: 0 -8px;
-    border: none; background: none; border-radius: 12px; font: inherit; color: inherit; text-align: left;
+.ar-fila { display: flex; align-items: center; gap: 14px; width: calc(100% + 16px); padding: 10px 8px; margin: 0 -8px;
+    border: none; background: none; border-radius: 14px; font: inherit; color: inherit; text-align: left;
     text-decoration: none; cursor: pointer;
     transition: background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
 .ar-fila:active { transform: scale(0.98); }
 .ar-fila + .ar-fila { margin-top: 2px; }
-.ar-cuadro { width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-    background: var(--toul-surface-2); color: var(--toul-accent); }
+.ar-cuadro { width: 44px; height: 44px; border-radius: 13px; }
 .ar-flecha { color: var(--toul-text-faint); flex-shrink: 0;
     transition: color 160ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil); }
 
-/* ── TOUL AI en una línea ── */
-.oa-linea { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; border-radius: 16px;
-    background: var(--toul-surface-focused); border: 1px solid var(--toul-accent-dim);
+/* ── TOUL AI en una línea ──
+   El borde es un degradado más grande que la línea que gira detrás de
+   ella; el fondo de adentro lo tapa todo menos 1 px. Girar es solo
+   transform: no le cuesta nada al celular. */
+.oa-linea { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; gap: 11px;
+    width: 100%; padding: 14px 16px; border: none; border-radius: 16px; background: none;
     font: inherit; color: inherit; text-align: left; cursor: pointer;
-    transition: background-color 160ms var(--toul-ease-emil), border-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    transition: transform 140ms var(--toul-ease-emil); }
+.oa-linea::before { content: ''; position: absolute; z-index: -2; left: 50%; top: 50%; width: 200%; aspect-ratio: 1;
+    transform: translate(-50%, -50%) rotate(0turn);
+    background: conic-gradient(
+        color-mix(in srgb, var(--toul-accent) 10%, transparent) 0turn,
+        color-mix(in srgb, var(--toul-accent) 70%, transparent) 0.5turn,
+        color-mix(in srgb, var(--toul-accent) 10%, transparent) 1turn);
+    animation: oa-vuelta 3.2s linear infinite; }
+.oa-linea::after { content: ''; position: absolute; z-index: -1; inset: 1px; border-radius: 15px;
+    background: color-mix(in srgb, var(--toul-accent) 7%, var(--toul-bg));
+    transition: background-color 160ms var(--toul-ease-emil); }
+@keyframes oa-vuelta { to { transform: translate(-50%, -50%) rotate(1turn); } }
 .oa-linea:active { transform: scale(0.98); }
 
+.oa-rotulo { font-size: 13px; font-weight: 600; color: var(--toul-text-muted); margin: 0 0 6px; }
+
 @media (hover: hover) and (pointer: fine) {
-    .ar-item:hover .ar-circulo { background: var(--toul-border-2); }
+    .ar-item:hover .ar-circulo, .ar-fila:hover .ar-cuadro {
+        background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--toul-accent) 30%, transparent), var(--toul-surface-2) 70%); }
     .ar-fila:hover { background: var(--toul-surface-3); }
     .ar-fila:hover .ar-flecha { color: var(--toul-text-muted); transform: translateX(2px); }
-    .oa-linea:hover { border-color: var(--toul-border-focused); }
+    .oa-linea:hover::after { background: color-mix(in srgb, var(--toul-accent) 10%, var(--toul-bg)); }
 }
 @media (prefers-reduced-motion: reduce) {
     .ar-fila:active, .oa-linea:active { transform: none; }
+    .oa-linea::before { animation: none; background: color-mix(in srgb, var(--toul-accent) 35%, transparent); }
 }
 `
 
@@ -98,17 +119,17 @@ export function AccionesRapidas({ variante }: { variante: 'movil' | 'pc' }) {
                 </div>
             ) : (
                 <div>
-                    <p className="pnl-label" style={{ marginBottom: 10 }}>Acciones rápidas</p>
+                    <h2 className="ar-titulo">Acciones rápidas</h2>
                     <div className="ar-filas">
                         {ACCIONES.map(({ key, label, hint, Icon, href }) => {
                             const cuerpo = (
                                 <>
-                                    <span className="ar-cuadro"><Icon size={18} strokeWidth={2} /></span>
+                                    <span className="ar-cuadro"><Icon size={20} strokeWidth={2} /></span>
                                     <span style={{ flex: 1, minWidth: 0 }}>
-                                        <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--toul-text)' }}>{label}</span>
-                                        <span style={{ display: 'block', fontSize: 12.5, color: 'var(--toul-text-dim)' }}>{hint}</span>
+                                        <span style={{ display: 'block', fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--toul-text)' }}>{label}</span>
+                                        <span style={{ display: 'block', fontSize: 14, color: 'var(--toul-text-subtle)', marginTop: 1 }}>{hint}</span>
                                     </span>
-                                    <ChevronRight size={16} className="ar-flecha" />
+                                    <ChevronRight size={18} className="ar-flecha" />
                                 </>
                             )
                             return href
@@ -148,9 +169,11 @@ export function ObservacionAI({ insight, loading }: { insight: AIInsight | null;
                     <motion.button type="button" className="oa-linea" onClick={() => setAbierta(true)}
                         initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.12 } }}
                         transition={{ duration: 0.22, ease: EASE_OUT_EMIL }}>
-                        <Sparkles size={16} style={{ color: 'var(--toul-accent)', flexShrink: 0 }} />
-                        <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--toul-text)' }}>TOUL AI tiene 1 observación</span>
-                        <ChevronRight size={16} style={{ color: 'var(--toul-text-subtle)', flexShrink: 0 }} />
+                        <Sparkles size={18} style={{ color: 'var(--toul-accent)', flexShrink: 0 }} />
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 500, letterSpacing: '-0.01em', color: 'var(--toul-text)' }}>
+                            TOUL AI tiene 1 observación
+                        </span>
+                        <ChevronRight size={18} style={{ color: 'var(--toul-text-subtle)', flexShrink: 0 }} />
                     </motion.button>
                 )}
             </AnimatePresence>
@@ -177,7 +200,7 @@ export function ObservacionAI({ insight, loading }: { insight: AIInsight | null;
                         )}
                         {insight.suggestion && (
                             <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--toul-divider)' }}>
-                                <p className="pnl-label" style={{ marginBottom: 6 }}>Qué hacer</p>
+                                <p className="oa-rotulo">Qué hacer</p>
                                 <p style={{ fontSize: 14.5, color: 'var(--toul-text-muted)', margin: 0, lineHeight: 1.5 }}>
                                     {insight.suggestion}
                                 </p>

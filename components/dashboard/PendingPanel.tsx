@@ -1,17 +1,21 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
-import { ArrowRight, MessageCircle } from 'lucide-react'
-import { formatCOP } from '@/lib/utils'
-import { PANEL_CSS } from './panelStyles'
+import { ChevronRight, MessageCircle } from 'lucide-react'
+import AnimatedNumber from '@/components/ui/AnimatedNumber'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { formatPrecio } from '@/lib/utils'
+import type { Variante } from './Desplegable'
 
 /* ══════════════════════════════════════════════════════════════
    Plata pendiente.
-   Antes solo informaba un total. Ahora cada renglón se puede
-   resolver sin salir del inicio: cobrar por WhatsApp o abrir al
-   cliente para registrar el abono.
+
+   Arriba lo que te deben y lo que debes, y una barra que dice cuál
+   pesa más. Debajo, un repaso rápido: los primeros tres. Tocar
+   "Debes" cambia la lista a tus proveedores, sin salir del Inicio;
+   a un cliente con número se le puede recordar por WhatsApp desde
+   aquí mismo.
    ══════════════════════════════════════════════════════════════ */
 
 export interface PendingParty {
@@ -31,30 +35,69 @@ export interface PendingData {
     providerCount?: number
 }
 
-type Side = 'cobrar' | 'pagar'
+type Lado = 'cobrar' | 'pagar'
 
-const CSS = PANEL_CSS + `
-.pp-tab { position: relative; flex: 1; min-width: 0; text-align: left; cursor: pointer; font-family: inherit;
-    padding: 10px 12px; border-radius: 14px; border: 1px solid transparent; background: transparent;
-    transition: transform 160ms cubic-bezier(0.23,1,0.32,1), border-color 160ms cubic-bezier(0.23,1,0.32,1); }
-.pp-tab > * { position: relative; z-index: 1; }
-.pp-tab:active { transform: scale(0.98); }
+const CSS = `
+.pl-titulo { display: inline-flex; align-items: center; gap: 4px; margin: 0 0 14px; text-decoration: none;
+    font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; color: var(--toul-text);
+    -webkit-tap-highlight-color: transparent; transition: opacity 160ms var(--toul-ease-emil); }
+.pl-titulo[data-variante="movil"] { font-size: 20px; }
+.pl-titulo[data-variante="pc"] { font-size: 17px; }
+.pl-titulo svg { color: var(--toul-text-subtle); transition: transform 160ms var(--toul-ease-emil); }
+.pl-titulo:active { opacity: 0.7; }
 
-.pp-wa { width: 30px; height: 30px; border-radius: 10px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.055); color: var(--toul-text-dim); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: background-color 160ms cubic-bezier(0.23,1,0.32,1), color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1); }
-.pp-wa:active { transform: scale(0.94); }
+.pl-totales { display: flex; align-items: stretch; gap: 18px; }
+.pl-linea { width: 1px; flex-shrink: 0; background: var(--toul-border); }
+.pl-total { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: 0; border: none;
+    background: none; font: inherit; text-align: left; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation;
+    transition: transform 160ms var(--toul-ease-emil); }
+.pl-total:active { transform: scale(0.98); }
+.pl-rotulo { font-size: 13px; color: var(--toul-text-subtle); transition: color 160ms var(--toul-ease-emil); }
+.pl-total[aria-pressed="true"] .pl-rotulo { color: var(--toul-text-muted); }
+.pl-monto { margin-top: 4px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.15; font-variant-numeric: tabular-nums;
+    white-space: nowrap; }
+.pl-totales[data-variante="movil"] .pl-monto { font-size: 24px; }
+.pl-totales[data-variante="pc"] .pl-monto { font-size: 21px; }
+.pl-cuantos { margin-top: 3px; font-size: 12.5px; color: var(--toul-text-subtle); white-space: nowrap; }
 
-.pp-item { opacity: 0; transform: translateY(6px); animation: pp-in 260ms cubic-bezier(0.23,1,0.32,1) forwards; }
-@keyframes pp-in { to { opacity: 1; transform: translateY(0); } }
+/* La barra: cuánto pesa cada lado. El que estás viendo va entero, el otro tenue */
+.pl-barra { display: flex; gap: 3px; height: 6px; margin: 16px 0 6px; border-radius: 999px; overflow: hidden;
+    background: var(--toul-surface-2); }
+.pl-barra > span { min-width: 6px; border-radius: 999px; transition: opacity 200ms var(--toul-ease-emil); }
+
+.pl-lista { display: flex; flex-direction: column; margin-top: 8px; }
+.pl-item { display: flex; align-items: center; gap: 6px; }
+.pl-item[data-entra="true"] { animation: pl-entra 260ms cubic-bezier(0.23, 1, 0.32, 1) backwards; }
+@keyframes pl-entra { from { opacity: 0; transform: translateY(6px); } }
+.pl-fila { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 9px 0; text-decoration: none;
+    color: inherit; -webkit-tap-highlight-color: transparent; transition: opacity 160ms var(--toul-ease-emil); }
+.pl-fila:active { opacity: 0.7; }
+.pl-avatar { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
+.pl-avatar[data-lado="cobrar"] { color: var(--toul-accent);
+    background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--toul-accent) 34%, transparent), color-mix(in srgb, var(--toul-accent) 8%, transparent) 75%); }
+.pl-avatar[data-lado="pagar"] { color: var(--toul-warning);
+    background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--toul-warning) 30%, transparent), color-mix(in srgb, var(--toul-warning) 7%, transparent) 75%); }
+.pl-quien { flex: 1; min-width: 0; }
+.pl-nombre { display: block; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--toul-text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-cuando { display: block; margin-top: 1px; font-size: 12.5px; color: var(--toul-text-subtle); white-space: nowrap; }
+.pl-valor { flex-shrink: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; }
+.pl-wa { width: 36px; height: 36px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    background: var(--toul-surface); color: var(--toul-text-subtle); -webkit-tap-highlight-color: transparent;
+    transition: background-color 160ms var(--toul-ease-emil), color 160ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil); }
+.pl-wa:active { transform: scale(0.94); }
+.pl-vacia { margin: 14px 0 0; font-size: 13px; color: var(--toul-text-subtle); }
 
 @media (hover: hover) and (pointer: fine) {
-    .pp-wa:hover { background: var(--toul-accent-dim); color: var(--toul-accent); border-color: var(--toul-accent-dim); }
+    .pl-titulo:hover svg { transform: translateX(2px); }
+    .pl-fila:hover .pl-nombre { color: var(--toul-accent); }
+    .pl-wa:hover { background: var(--toul-accent-dim); color: var(--toul-accent); }
 }
 @media (prefers-reduced-motion: reduce) {
-    .pp-item { animation: none; opacity: 1; transform: none; }
-    .pp-tab:active, .pp-wa:active { transform: none; }
+    .pl-item[data-entra="true"] { animation: none; }
+    .pl-total:active, .pl-wa:active { transform: none; }
 }
 `
 
@@ -77,136 +120,117 @@ const sinceLabel = (days: number | null) => {
     return months === 1 ? 'hace 1 mes' : `hace ${months} meses`
 }
 
-export function PendingPanel({ pending, storeName, compact = false }: {
+export function PendingPanel({ pending, storeName, variante, loading, cuenta = false }: {
     pending: PendingData
     storeName?: string | null
-    compact?: boolean
+    variante: Variante
+    loading: boolean
+    /** Los totales cuentan desde cero al aparecer (la primera vez que se abre la app) */
+    cuenta?: boolean
 }) {
-    const [side, setSide] = useState<Side>('cobrar')
+    const [lado, setLado] = useState<Lado>('cobrar')
+    const [cambiado, setCambiado] = useState(false)
 
-    const totals = useMemo(() => ({
+    const totales = useMemo(() => ({
         cobrar: pending.customerDebts.reduce((sum, row) => sum + row.amount, 0),
         pagar: pending.providerDebts.reduce((sum, row) => sum + row.amount, 0),
     }), [pending])
 
-    const list = side === 'cobrar' ? pending.customerDebts : pending.providerDebts
-    const total = (side === 'cobrar' ? pending.customerCount : pending.providerCount) ?? list.length
-    const shown = list.slice(0, compact ? 3 : 4)
-    const isCobrar = side === 'cobrar'
+    const lados = [
+        {
+            clave: 'cobrar' as Lado, rotulo: 'Te deben', valor: totales.cobrar, color: 'var(--toul-accent)',
+            cuantos: pending.customerCount ?? pending.customerDebts.length, uno: 'cliente', varios: 'clientes',
+        },
+        {
+            clave: 'pagar' as Lado, rotulo: 'Debes', valor: totales.pagar, color: 'var(--toul-warning)',
+            cuantos: pending.providerCount ?? pending.providerDebts.length, uno: 'proveedor', varios: 'proveedores',
+        },
+    ]
+
+    const esCobrar = lado === 'cobrar'
+    const mostrados = (esCobrar ? pending.customerDebts : pending.providerDebts).slice(0, 3)
+    const tono = esCobrar ? 'var(--toul-accent)' : 'var(--toul-warning)'
     // Si alguno tiene WhatsApp, todos reservan ese espacio: los montos
     // quedan alineados en vez de bailar de renglón en renglón
-    const reserveAction = isCobrar && shown.some(party => party.phone)
-    const tone = isCobrar ? 'var(--toul-accent)' : 'var(--toul-warning)'
+    const reservarWhatsApp = esCobrar && mostrados.some(p => p.phone)
+    const hayDeuda = totales.cobrar + totales.pagar > 0
+
+    function cambiar(nuevo: Lado) {
+        if (nuevo === lado) return
+        setLado(nuevo)
+        setCambiado(true)
+    }
 
     return (
-        <div className="pnl">
+        <section style={{ minWidth: 0 }}>
             <style>{CSS}</style>
+            <Link href="/customers?ver=cobros" prefetch={false} className="pl-titulo" data-variante={variante}>
+                Plata pendiente <ChevronRight size={variante === 'movil' ? 20 : 18} strokeWidth={2.2} />
+            </Link>
 
-            <p className="pnl-label" style={{ marginBottom: 10 }}>Plata pendiente</p>
-
-            {/* Los dos totales son el control: tocar uno cambia la lista */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                {([
-                    { key: 'cobrar' as Side, label: 'Te deben', value: totals.cobrar, count: pending.customerCount ?? pending.customerDebts.length, color: 'var(--toul-accent)' },
-                    { key: 'pagar' as Side, label: 'Debes', value: totals.pagar, count: pending.providerCount ?? pending.providerDebts.length, color: 'var(--toul-warning)' },
-                ]).map(tab => {
-                    const active = side === tab.key
-                    return (
-                        <button key={tab.key} className="pp-tab" onClick={() => setSide(tab.key)}
-                            aria-pressed={active}
-                            style={{ borderColor: active ? 'var(--toul-border)' : 'transparent' }}>
-                            {active && (
-                                <motion.span
-                                    layoutId="pending-active"
-                                    transition={{ type: 'spring', duration: 0.35, bounce: 0.12 }}
-                                    style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 14, background: 'rgba(255,255,255,0.045)' }}
-                                />
+            <div className="pl-totales" data-variante={variante}>
+                {lados.map((l, i) => (
+                    <Fragment key={l.clave}>
+                        {i > 0 && <span className="pl-linea" aria-hidden />}
+                        <button type="button" className="pl-total" aria-pressed={lado === l.clave} onClick={() => cambiar(l.clave)}>
+                            <span className="pl-rotulo">{l.rotulo}</span>
+                            {loading ? (
+                                <span className="skeleton" style={{ display: 'block', width: 110, height: 22, borderRadius: 8, marginTop: 8 }} />
+                            ) : (
+                                <AnimatedNumber value={l.valor} formatter={formatPrecio} cuenta={cuenta} className="pl-monto"
+                                    style={{ color: l.valor > 0 ? l.color : 'var(--toul-text-dim)' }} />
                             )}
-                            <span style={{
-                                display: 'block', fontSize: 11, fontWeight: 500,
-                                color: active ? 'var(--toul-text-muted)' : 'var(--toul-text-subtle)',
-                            }}>
-                                {tab.label}
-                            </span>
-                            <span style={{
-                                display: 'block', fontSize: 18, fontWeight: 700, letterSpacing: '-0.03em', marginTop: 1,
-                                color: tab.value > 0 ? tab.color : 'var(--toul-text-dim)',
-                            }}>
-                                {formatCOP(tab.value)}
-                            </span>
-                            <span style={{ display: 'block', fontSize: 11, color: 'var(--toul-text-subtle)', marginTop: 1 }}>
-                                {tab.count === 0
-                                    ? '—'
-                                    : `${tab.count} ${tab.key === 'cobrar'
-                                        ? (tab.count === 1 ? 'cliente' : 'clientes')
-                                        : (tab.count === 1 ? 'proveedor' : 'proveedores')}`}
+                            <span className="pl-cuantos">
+                                {loading ? '\u00a0' : l.cuantos === 0 ? 'Nadie' : `${l.cuantos} ${l.cuantos === 1 ? l.uno : l.varios}`}
                             </span>
                         </button>
-                    )
-                })}
+                    </Fragment>
+                ))}
             </div>
 
-            {/* La lista: cada renglón se puede resolver */}
-            {shown.length === 0 ? (
-                <div style={{ padding: '18px 10px', textAlign: 'center' }}>
-                    <p style={{ fontSize: 12.5, color: 'var(--toul-text-subtle)', margin: 0 }}>
-                        {isCobrar ? 'Nadie te debe nada.' : 'No le debes nada a nadie.'}
-                    </p>
+            <div className="pl-barra" aria-hidden>
+                {hayDeuda && lados.filter(l => l.valor > 0).map(l => (
+                    <span key={l.clave} style={{ flexGrow: l.valor, background: l.color, opacity: lado === l.clave ? 1 : 0.45 }} />
+                ))}
+            </div>
+
+            {loading ? (
+                <div className="pl-lista" aria-hidden>
+                    {[0, 1, 2].map(i => (
+                        <div key={i} className="pl-fila">
+                            <span className="pl-avatar skeleton" />
+                            <span className="pl-quien"><Skeleton width="60%" height="0.9rem" /></span>
+                        </div>
+                    ))}
                 </div>
+            ) : mostrados.length === 0 ? (
+                <p className="pl-vacia">{esCobrar ? 'Nadie te debe nada.' : 'No le debes nada a nadie.'}</p>
             ) : (
-                <div key={side} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    {shown.map((party, index) => {
-                        const since = sinceLabel(party.days)
-                        const href = isCobrar ? `/customers/${party.id}` : `/providers/${party.id}`
-                        const message = isCobrar
-                            ? `Hola ${party.name.split(' ')[0]}, ¿cómo vas? Te escribo${storeName ? ` de ${storeName}` : ''} para recordarte el saldo pendiente de ${formatCOP(party.amount)}. ¿Cuándo podemos cuadrar?`
-                            : ''
-
+                <div key={lado} className="pl-lista">
+                    {mostrados.map((persona, i) => {
+                        const cuando = sinceLabel(persona.days)
+                        const href = esCobrar ? `/customers/${persona.id}` : `/providers/${persona.id}`
+                        const mensaje = `Hola ${persona.name.split(' ')[0]}, ¿cómo vas? Te escribo${storeName ? ` de ${storeName}` : ''} para recordarte el saldo pendiente de ${formatPrecio(persona.amount)}. ¿Cuándo podemos cuadrar?`
                         return (
-                            <div key={party.id} className="pp-item"
-                                style={{ display: 'flex', alignItems: 'center', gap: 6, animationDelay: `${index * 45}ms` }}>
-                                <Link href={href} className="pnl-row" style={{ flex: 1, minWidth: 0 }}>
-                                    <span style={{
-                                        width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: 10.5, fontWeight: 700, color: tone,
-                                        background: isCobrar ? 'var(--toul-accent-dim)' : 'var(--toul-warning-dim)',
-                                    }}>
-                                        {initialsOf(party.name)}
+                            <div key={persona.id} className="pl-item" data-entra={cambiado}
+                                style={cambiado ? ({ animationDelay: `${i * 45}ms` } as CSSProperties) : undefined}>
+                                <Link href={href} prefetch={false} className="pl-fila">
+                                    <span className="pl-avatar" data-lado={lado} aria-hidden>{initialsOf(persona.name)}</span>
+                                    <span className="pl-quien">
+                                        <span className="pl-nombre">{persona.name}</span>
+                                        {cuando && <span className="pl-cuando">{cuando}</span>}
                                     </span>
-
-                                    <span style={{ flex: 1, minWidth: 0 }}>
-                                        <span style={{
-                                            display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--toul-text)',
-                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                        }}>
-                                            {party.name}
-                                        </span>
-                                        {since && (
-                                            <span style={{
-                                                display: 'block', fontSize: 11,
-                                                color: (party.days ?? 0) >= 30 ? 'var(--toul-error)' : 'var(--toul-text-subtle)',
-                                            }}>
-                                                {since}
-                                            </span>
-                                        )}
-                                    </span>
-
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: tone, flexShrink: 0 }}>
-                                        {formatCOP(party.amount)}
-                                    </span>
+                                    <span className="pl-valor" style={{ color: tono }}>{formatPrecio(persona.amount)}</span>
                                 </Link>
-
-                                {reserveAction && (
-                                    party.phone ? (
-                                        <a className="pp-wa" href={whatsappLink(party.phone, message)}
+                                {reservarWhatsApp && (
+                                    persona.phone ? (
+                                        <a className="pl-wa" href={whatsappLink(persona.phone, mensaje)}
                                             target="_blank" rel="noopener noreferrer"
-                                            aria-label={`Recordarle a ${party.name} por WhatsApp`}
-                                            title="Recordar por WhatsApp">
-                                            <MessageCircle size={15} />
+                                            aria-label={`Recordarle a ${persona.name} por WhatsApp`} title="Recordar por WhatsApp">
+                                            <MessageCircle size={16} />
                                         </a>
                                     ) : (
-                                        <span aria-hidden style={{ width: 32, flexShrink: 0 }} />
+                                        <span aria-hidden style={{ width: 36, flexShrink: 0 }} />
                                     )
                                 )}
                             </div>
@@ -214,14 +238,6 @@ export function PendingPanel({ pending, storeName, compact = false }: {
                     })}
                 </div>
             )}
-
-            {total > shown.length && (
-                <Link href={isCobrar ? '/customers?ver=cobros' : '/providers'}
-                    className="pnl-row"
-                    style={{ justifyContent: 'center', gap: 6, marginTop: 4, fontSize: 12, fontWeight: 500, color: 'var(--toul-text-dim)' }}>
-                    Ver los {total} <ArrowRight size={13} />
-                </Link>
-            )}
-        </div>
+        </section>
     )
 }

@@ -3,6 +3,7 @@
  * Central source of truth for all animation config.
  * Import from here — never hardcode durations/easings in components.
  */
+import { useEffect, useState, type CSSProperties } from 'react'
 import type { Variants, Transition } from 'framer-motion'
 
 /* ─────────────────────────────────────────────────────────
@@ -112,6 +113,57 @@ export const shakeVariants: Variants = {
         x: [0, -8, 8, -6, 6, -3, 3, 0],
         transition: { duration: 0.4, ease: ease.out },
     },
+}
+
+/* ─────────────────────────────────────────────────────────
+   INICIO
+   Las secciones entran en cascada, la línea de la gráfica se
+   dibuja y los montos cuentan desde cero. Pasa completo la
+   primera vez que se abre la app; al volver al Inicio aparece de
+   una, porque se entra muchas veces al día y repetirlo cada vez
+   lo haría sentir lento.
+───────────────────────────────────────────────────────── */
+export const inicio = {
+    /** Cada sección sube 12 px hasta su lugar; 70 ms entre una y otra */
+    entrada: { duracion: 0.7, distancia: 12, escalon: 0.07 },
+    /** La línea se traza de izquierda a derecha; el relleno sale al final */
+    grafica: { trazo: 1.5, relleno: 0.5 },
+    /** Lo que tardan los montos en contar */
+    cuenta: 1.1,
+}
+
+/* CSS y no JavaScript: el Inicio carga muchas cosas a la vez y una
+   animación de CSS no se traba mientras el navegador está ocupado.
+   "backwards" y no "both": al terminar no queda nada aplicado. Si el
+   movimiento quedara puesto, las hojas que se abren desde la sección
+   aparecerían pegadas a ella y no a la pantalla. */
+export const ENTRADA_INICIO_CSS = `
+.in-entra { animation: in-entra ${inicio.entrada.duracion}s cubic-bezier(0.23, 1, 0.32, 1) backwards;
+    animation-delay: calc(var(--in-i, 0) * ${Math.round(inicio.entrada.escalon * 1000)}ms); }
+@keyframes in-entra { from { opacity: 0; transform: translateY(${inicio.entrada.distancia}px); } }
+@keyframes in-aparece { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .in-entra { animation-name: in-aparece; animation-duration: 0.2s; }
+}
+`
+
+/** Lo que necesita una sección para entrar en su turno de la cascada,
+ *  sumado a la clase y el estilo que ya tenga */
+export function entrada(turno: number, animar: boolean, clase?: string, estilo?: CSSProperties): { className?: string; style?: CSSProperties } {
+    if (!animar) return { className: clase, style: estilo }
+    return {
+        className: clase ? `${clase} in-entra` : 'in-entra',
+        style: { ...estilo, '--in-i': turno } as CSSProperties,
+    }
+}
+
+let inicioYaEntro = false
+
+/** true solo la primera vez que aparece el Inicio desde que se abrió la app */
+export function useEntradaInicio(): boolean {
+    const [animar] = useState(() => !inicioYaEntro)
+    useEffect(() => { inicioYaEntro = true }, [])
+    return animar
 }
 
 /* ─────────────────────────────────────────────────────────

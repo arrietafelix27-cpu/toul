@@ -3,85 +3,68 @@
 import { ProductsPanel, type ProductsData } from './ProductsPanel'
 import { PendingPanel, type PendingData } from './PendingPanel'
 import { AccionesRapidas, ObservacionAI } from './AccionesRapidas'
+import { ENTRADA_INICIO_CSS, entrada } from '@/lib/motion'
 import type { AIInsight } from '@/lib/types'
 
 /* ══════════════════════════════════════════════════════════════
-   La fila de abajo del inicio: tres paneles, un trabajo cada uno.
-   Sin cajas — lo que los separa son líneas que se desvanecen,
-   igual que arriba entre el gráfico y el resumen.
+   La parte de abajo del Inicio en el computador: tres columnas,
+   sin cajas. Plata pendiente a la izquierda, tus productos en el
+   centro (la más ancha) y las acciones a la derecha. Lo que las
+   separa es una línea de 1 px.
    ══════════════════════════════════════════════════════════════ */
 
-const CSS = `
-/* Una sola superficie para los tres, como el resumen de arriba:
-   lo que separa por dentro son líneas que se desvanecen */
-.ir-row { position: relative; display: grid; gap: 30px; align-items: stretch;
-    padding: 20px 24px; border-radius: 20px; isolation: isolate; }
-
-/* Entra desde la zona del gráfico: arriba a la izquierda no hay
-   superficie, y se va volviendo sólida hacia abajo y a la derecha */
-.ir-row::before {
-    content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
-    background: linear-gradient(142deg,
-        rgba(255,255,255,0) 0%,
-        rgba(255,255,255,0.008) 20%,
-        rgba(255,255,255,0.028) 38%,
-        var(--toul-surface) 62%,
-        var(--toul-surface) 100%);
-}
-/* El borde también aparece: no arranca hasta pasada esa esquina */
-.ir-row::after {
-    content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
-    border: 1px solid var(--toul-border);
-    -webkit-mask-image: linear-gradient(142deg, transparent 8%, #000 48%, #000 100%);
-    mask-image: linear-gradient(142deg, transparent 8%, #000 48%, #000 100%);
-}
-
-.ir-col { position: relative; min-width: 0; }
-
-.ir-col::before {
-    content: ''; position: absolute; left: -15px; top: 2%; bottom: 2%; width: 1px;
-    background: var(--toul-divider);
-    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
-    mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
-}
+const CSS = ENTRADA_INICIO_CSS + `
+.ir-fila { display: grid; }
+.ir-col { position: relative; min-width: 0; display: flex; flex-direction: column; }
 
 /* Se mide el espacio disponible, no la pantalla: la barra lateral
    de la app se lleva 240 px que no se pueden usar */
-@container (max-width: 959px) {
-    .ir-row { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 26px; }
-    .ir-products { grid-column: span 2; }
-    .ir-products::before, .ir-products + .ir-col::before { display: none; }
+@container (min-width: 1060px) {
+    .ir-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); }
+    .ir-col { padding: 0 32px; }
+    .ir-col:first-child { padding-left: 0; }
+    .ir-col:last-child { padding-right: 0; }
+    .ir-col + .ir-col { border-left: 1px solid var(--toul-border); }
 }
-@container (min-width: 960px) {
-    .ir-row { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); }
-    .ir-products::before { display: none; }
+/* Más angosto: los productos arriba a todo lo ancho y las otras dos debajo */
+@container (max-width: 1059px) {
+    .ir-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 40px; }
+    .ir-productos { grid-column: 1 / -1; grid-row: 1; }
+    .ir-plata { padding-right: 32px; }
+    .ir-acciones { padding-left: 32px; border-left: 1px solid var(--toul-border); }
 }
 `
 
-export function InsightsRow({ products, pending, insight, storeName, loading, insightsLoading }: {
+export function InsightsRow({ products, pending, insight, storeName, loading, primeraCarga, insightsLoading, animar, turno }: {
     products: ProductsData
     pending: PendingData
     insight: AIInsight | null
     storeName?: string | null
     loading: boolean
+    /** Todavía no ha llegado nada: lo que no depende del periodo espera solo esta vez */
+    primeraCarga: boolean
     insightsLoading: boolean
+    /** La primera vez que se abre la app, las columnas entran en cascada */
+    animar: boolean
+    /** En qué turno de la cascada del Inicio arranca esta fila */
+    turno: number
 }) {
+    const columna = (clase: string, n: number) => entrada(turno + n, animar, `ir-col ${clase}`)
+
     return (
         <div style={{ containerType: 'inline-size' }}>
             <style>{CSS}</style>
-            <div className="ir-row">
-                <div className="ir-col ir-products">
-                    <ProductsPanel products={products} loading={loading} />
+            <div className="ir-fila">
+                <div {...columna('ir-plata', 0)}>
+                    <PendingPanel pending={pending} storeName={storeName} variante="pc" loading={primeraCarga} cuenta={animar} />
                 </div>
-                <div className="ir-col">
-                    <PendingPanel pending={pending} storeName={storeName} />
+                <div {...columna('ir-productos', 1)}>
+                    <ProductsPanel products={products} loading={loading} variante="pc" animar={animar} />
                 </div>
-                {/* Antes: la tarjeta grande de TOUL AI. Ahora lo que se hace a
-                    diario, y TOUL AI en una línea que solo sale si tiene algo */}
-                <div className="ir-col" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div {...columna('ir-acciones', 2)}>
                     <AccionesRapidas variante="pc" />
-                    <div style={{ marginTop: 'auto' }}>
-                        <ObservacionAI insight={insight} loading={insightsLoading || loading} />
+                    <div style={{ marginTop: 'auto', paddingTop: 20 }}>
+                        <ObservacionAI insight={insight} loading={insightsLoading || primeraCarga} />
                     </div>
                 </div>
             </div>

@@ -1,26 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
-import { Package, ShoppingCart, ArrowRight } from 'lucide-react'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { PANEL_CSS } from './panelStyles'
+import { ChevronDown } from 'lucide-react'
+import { ENTRADA_INICIO_CSS } from '@/lib/motion'
+import { Desplegable, Opciones, type Opcion, type Variante } from './Desplegable'
 
 /* ══════════════════════════════════════════════════════════════
    Tus productos.
-   Dos de las vistas son información (qué vendes, qué te deja
-   plata) y dos son tareas (qué se acaba, qué no se mueve).
-   Las de tarea traen el botón que resuelve.
+
+   Cuatro listas en una píldora: lo que más se vende, lo que más
+   margen deja, lo que se está acabando y lo que no se mueve. Cada
+   producto es su foto con el puesto encima; debajo, el nombre y el
+   único dato que importa en esa lista.
+
+   En el celular se desliza de lado (hasta 10); en el computador son
+   los 3 primeros.
    ══════════════════════════════════════════════════════════════ */
 
 export interface ProductRow {
     id: string
     name: string
     image_url: string | null
+    /** Lo que mide la lista: unidades, % de margen, stock o días sin venderse */
     value: number
-    subValue: string
-    units: number
 }
 
 export interface ProductsData {
@@ -30,153 +33,151 @@ export interface ProductsData {
     slowMoving: ProductRow[]
 }
 
-type Tab = 'units' | 'profit' | 'low' | 'slow'
+type Lista = 'units' | 'profit' | 'low' | 'slow'
 
-const TABS: { value: Tab; label: string }[] = [
-    { value: 'units', label: 'Vendidos' },
-    { value: 'profit', label: 'Rentables' },
-    { value: 'low', label: 'Se acaban' },
-    { value: 'slow', label: 'Sin mover' },
+const LISTAS: Opcion<Lista>[] = [
+    { valor: 'units', etiqueta: 'Más vendidos' },
+    { valor: 'profit', etiqueta: 'Más rentables' },
+    { valor: 'low', etiqueta: 'Menos stock' },
+    { valor: 'slow', etiqueta: 'Menos vendidos' },
 ]
 
-const EMPTY: Record<Tab, string> = {
-    units: 'Todavía no has vendido nada en este periodo.',
-    profit: 'Cuando vendas, aquí verás qué te deja más plata.',
-    low: 'Ningún producto se está acabando. Todo con stock.',
-    slow: 'Todo tu inventario se está moviendo.',
+const VACIA: Record<Lista, string> = {
+    units: 'Sin ventas en este periodo',
+    profit: 'Sin ventas en este periodo',
+    low: 'Nada se está acabando',
+    slow: 'Todo se está vendiendo',
 }
 
-const CSS = PANEL_CSS + `
-.pp2-tab { position: relative; flex: 1; min-width: 0; padding: 7px 6px; border-radius: 10px; border: none;
-    background: transparent; font-family: inherit; font-size: 11.5px; letter-spacing: -0.01em;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
-    transition: color 160ms cubic-bezier(0.23,1,0.32,1); }
-.pp2-tab > span { position: relative; z-index: 1; }
+function metrica(lista: Lista, valor: number): { texto: string; color: string } {
+    switch (lista) {
+        case 'units': return { texto: `${valor} ${valor === 1 ? 'vendido' : 'vendidos'}`, color: 'var(--toul-accent)' }
+        case 'profit': return { texto: `${valor}%`, color: 'var(--toul-accent)' }
+        case 'low': return valor <= 0
+            ? { texto: 'Agotado', color: 'var(--toul-error)' }
+            : { texto: `Quedan ${valor}`, color: 'var(--toul-warning)' }
+        case 'slow': return { texto: `${valor} ${valor === 1 ? 'día' : 'días'} sin venderse`, color: 'var(--toul-text-subtle)' }
+    }
+}
 
-.pp2-item { opacity: 0; transform: translateY(6px); animation: pp2-in 240ms cubic-bezier(0.23,1,0.32,1) forwards; }
-@keyframes pp2-in { to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .pp2-item { animation: none; opacity: 1; transform: none; } }
+const CSS = ENTRADA_INICIO_CSS + `
+.tp-titulo { font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; color: var(--toul-text); margin: 0 0 12px; }
+.tp-titulo[data-variante="movil"] { font-size: 20px; }
+.tp-titulo[data-variante="pc"] { font-size: 17px; }
+
+/* Celular: una fila que se desliza de lado, de borde a borde */
+.tp-fila[data-variante="movil"] { display: flex; gap: 12px; margin: 16px -16px 0; padding: 0 16px 2px;
+    overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px;
+    overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.tp-fila[data-variante="movil"]::-webkit-scrollbar { display: none; }
+.tp-fila[data-variante="movil"] .tp-carta { flex: 0 0 128px; scroll-snap-align: start; }
+.tp-fila[data-variante="movil"] .tp-foto { height: 164px; }
+.tp-fila[data-variante="movil"] .tp-numero { font-size: 60px; left: 11px; }
+
+/* Computador: los 3 primeros */
+.tp-fila[data-variante="pc"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.tp-fila[data-variante="pc"] .tp-foto { height: 118px; }
+.tp-fila[data-variante="pc"] .tp-numero { font-size: 46px; left: 10px; }
+
+.tp-carta { display: flex; flex-direction: column; min-width: 0; text-decoration: none; color: inherit;
+    -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; touch-action: manipulation;
+    transition: transform 160ms var(--toul-ease-emil); }
+.tp-carta:active { transform: scale(0.97); }
+.tp-foto { position: relative; display: block; overflow: hidden; border-radius: 18px;
+    background: linear-gradient(155deg, var(--toul-surface-2), var(--toul-surface-3)); }
+.tp-foto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    transition: transform 400ms var(--toul-ease-emil); }
+/* Sin foto: la inicial, como en el resto de la app */
+.tp-inicial { position: absolute; inset: 0 0 30% 0; display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 600; letter-spacing: -0.02em; color: var(--toul-text-faint); }
+/* El puesto se lee sobre cualquier foto: el degradado oscurece solo la parte de abajo */
+.tp-velo { position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 40%, color-mix(in srgb, var(--toul-bg) 78%, transparent) 100%); }
+.tp-numero { position: absolute; bottom: 2px; font-weight: 800; line-height: 1; letter-spacing: -0.04em;
+    color: var(--toul-text); font-variant-numeric: tabular-nums; }
+.tp-nombre { margin-top: 9px; font-size: 14px; font-weight: 500; letter-spacing: -0.01em; color: var(--toul-text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-metrica { margin-top: 2px; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-vacia { margin: 16px 0 0; font-size: 13px; color: var(--toul-text-subtle); }
+
+@media (hover: hover) and (pointer: fine) {
+    .tp-carta:hover .tp-foto img { transform: scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tp-carta:active { transform: none; }
+    .tp-carta:hover .tp-foto img { transform: none; }
+}
 `
 
-export function ProductsPanel({ products, loading }: { products: ProductsData; loading: boolean }) {
-    const [tab, setTab] = useState<Tab>('units')
+export function ProductsPanel({ products, loading, variante, animar }: {
+    products: ProductsData
+    loading: boolean
+    variante: Variante
+    /** Las tarjetas entran en cascada al aparecer (la primera vez que se abre la app) */
+    animar: boolean
+}) {
+    const [lista, setLista] = useState<Lista>('units')
+    // Al cambiar de lista, las tarjetas vuelven a entrar en cascada
+    const [cambiada, setCambiada] = useState(false)
 
-    const rows: Record<Tab, ProductRow[]> = {
+    const filas: Record<Lista, ProductRow[]> = {
         units: products.topUnits,
         profit: products.topProfit,
         low: products.lowStock,
         slow: products.slowMoving,
     }
-    const current = rows[tab].slice(0, 5)
-    const needsAttention = products.lowStock.length > 0
-
-    const metricOf = (row: ProductRow) => {
-        switch (tab) {
-            case 'units': return `${row.value}`
-            case 'profit': return null
-            case 'low': return `${row.value}`
-            case 'slow': return null
-        }
-    }
+    const visibles = filas[lista].slice(0, variante === 'movil' ? 10 : 3)
+    const cascada = animar || cambiada
+    const etiqueta = LISTAS.find(l => l.valor === lista)?.etiqueta ?? ''
 
     return (
-        <div className="pnl">
+        <section style={{ minWidth: 0 }}>
             <style>{CSS}</style>
+            <h2 className="tp-titulo" data-variante={variante}>Tus productos</h2>
 
-            <h3 className="pnl-label" style={{ marginBottom: 12 }}>Tus productos</h3>
+            <Desplegable variante={variante} titulo="Tus productos" claseBoton="dz-pildora"
+                boton={<>{etiqueta}<ChevronDown size={14} strokeWidth={2.4} className="dz-flecha" /></>}
+                contenido={cerrar => (
+                    <Opciones variante={variante} opciones={LISTAS} activo={lista}
+                        onElegir={valor => {
+                            if (valor !== lista) { setLista(valor); setCambiada(true) }
+                            cerrar()
+                        }} />
+                )} />
 
-            {/* ── Qué estoy mirando ── */}
-            <div style={{ display: 'flex', gap: 2, marginBottom: 12 }}>
-                {TABS.map(item => {
-                    const active = tab === item.value
-                    const alert = item.value === 'low' && needsAttention
-                    return (
-                        <button key={item.value} className="pp2-tab" onClick={() => setTab(item.value)}
-                            style={{
-                                color: active ? 'var(--toul-text)' : alert ? 'var(--toul-error)' : 'var(--toul-text-dim)',
-                                fontWeight: active ? 600 : 500,
-                            }}>
-                            {active && (
-                                <motion.span
-                                    layoutId="products-tab"
-                                    transition={{ type: 'spring', duration: 0.35, bounce: 0.1 }}
-                                    style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 10, background: 'rgba(255,255,255,0.07)' }}
-                                />
-                            )}
-                            <span>
-                                {alert && !active && (
-                                    <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: 'var(--toul-error)', marginRight: 5, verticalAlign: 'middle' }} />
-                                )}
-                                {item.label}
-                            </span>
-                        </button>
-                    )
-                })}
-            </div>
-
-            {/* ── La lista ── */}
-            <div style={{ flex: 1, minHeight: 0 }}>
-                {loading ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {[1, 2, 3, 4].map(i => <Skeleton key={i} height="48px" className="rounded-xl opacity-10" />)}
-                    </div>
-                ) : current.length === 0 ? (
-                    <div style={{ padding: '28px 10px', textAlign: 'center' }}>
-                        <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0, lineHeight: 1.5 }}>{EMPTY[tab]}</p>
-                    </div>
-                ) : (
-                    <div key={tab} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        {current.map((row, index) => {
-                            const metric = metricOf(row)
-                            return (
-                                <div key={row.id} className="pp2-item"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 6, animationDelay: `${index * 40}ms` }}>
-                                    <Link href={`/products/${row.id}`} className="pnl-row" style={{ flex: 1, minWidth: 0 }}>
-                                        <span style={{
-                                            width: 34, height: 34, borderRadius: 10, flexShrink: 0, overflow: 'hidden', position: 'relative',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            background: 'linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))',
-                                        }}>
-                                            {row.image_url
-                                                ? <img src={row.image_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                : <Package size={14} style={{ color: 'var(--toul-text-faint)' }} />}
-                                        </span>
-
-                                        <span style={{ flex: 1, minWidth: 0 }}>
-                                            <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: 'var(--toul-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {row.name}
-                                            </span>
-                                            <span style={{
-                                                display: 'block', fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                color: tab === 'low' ? 'var(--toul-error)' : tab === 'slow' ? 'var(--toul-warning)' : 'var(--toul-text-dim)',
-                                            }}>
-                                                {row.subValue}
-                                            </span>
-                                        </span>
-
-                                        {metric && (
-                                            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--toul-text)', flexShrink: 0 }}>
-                                                {metric}
-                                            </span>
-                                        )}
-                                    </Link>
-
-                                    {tab === 'low' && (
-                                        <Link href={`/inventory/purchase?product=${row.id}`} className="pnl-pill">
-                                            <ShoppingCart size={13} /> Comprar
-                                        </Link>
-                                    )}
-                                    {tab === 'slow' && (
-                                        <Link href={`/products/${row.id}`} className="pnl-pill">
-                                            Ver <ArrowRight size={13} />
-                                        </Link>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </div>
-                )}
-            </div>
-        </div>
+            {loading ? (
+                <div className="tp-fila" data-variante={variante} aria-hidden>
+                    {Array.from({ length: 3 }, (_, i) => (
+                        <div key={i} className="tp-carta">
+                            <span className="tp-foto skeleton" />
+                            <span className="skeleton" style={{ height: 12, width: '70%', borderRadius: 6, marginTop: 11 }} />
+                        </div>
+                    ))}
+                </div>
+            ) : visibles.length === 0 ? (
+                <p className="tp-vacia">{VACIA[lista]}</p>
+            ) : (
+                <div key={lista} className="tp-fila" data-variante={variante}>
+                    {visibles.map((producto, i) => {
+                        const { texto, color } = metrica(lista, producto.value)
+                        return (
+                            <Link key={producto.id} href={`/products/${producto.id}`} prefetch={false}
+                                className={`tp-carta${cascada ? ' in-entra' : ''}`}
+                                style={cascada ? ({ '--in-i': i } as CSSProperties) : undefined}>
+                                <span className="tp-foto">
+                                    {producto.image_url
+                                        ? <img src={producto.image_url} alt="" loading="lazy" />
+                                        : <span className="tp-inicial" aria-hidden>{producto.name.trim().charAt(0).toUpperCase() || '·'}</span>}
+                                    <span className="tp-velo" aria-hidden />
+                                    <span className="tp-numero" aria-hidden>{i + 1}</span>
+                                </span>
+                                <span className="tp-nombre">{producto.name}</span>
+                                <span className="tp-metrica" style={{ color }}>{texto}</span>
+                            </Link>
+                        )
+                    })}
+                </div>
+            )}
+        </section>
     )
 }
