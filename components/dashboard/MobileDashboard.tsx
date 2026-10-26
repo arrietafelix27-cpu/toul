@@ -2,7 +2,7 @@
 
 import HeroChart from './HeroChart'
 import { SelectorPeriodo, type Periodo, type Rango } from './Desplegable'
-import { Vendiste, GananciaGastos, type MetricasInicio, type Conteo } from './ResumenHoy'
+import { Vendiste, GananciaGastos, type MetricasInicio, type Conteo, type Tendencia } from './ResumenHoy'
 import { AccionesRapidas, ObservacionAI } from './AccionesRapidas'
 import { ProductsPanel, type ProductsData } from './ProductsPanel'
 import { PendingPanel, type PendingData } from './PendingPanel'
@@ -20,13 +20,9 @@ import type { AIInsight } from '@/lib/types'
 
 const CSS = ENTRADA_INICIO_CSS + `
 /* Sin z-index ni isolation: las hojas que se abren desde aquí tienen que
-   quedar por encima del menú de abajo. La luz va primero y el contenido,
-   que también está posicionado, se pinta encima de ella. */
+   quedar por encima del menú de abajo */
 .md-raiz { position: relative; padding: 20px 16px 128px; }
 .md-contenido { position: relative; }
-/* La luz verde entra desde arriba a la izquierda y se apaga */
-.md-resplandor { position: absolute; top: 0; left: 0; right: 0; height: 560px; pointer-events: none;
-    background: radial-gradient(120% 75% at 25% 0%, color-mix(in srgb, var(--toul-accent) 24%, transparent), transparent 62%); }
 .md-saludo { font-size: 13px; letter-spacing: -0.01em; color: color-mix(in srgb, var(--toul-text) 50%, transparent); margin: 0 0 6px; }
 .md-grafica { margin: 18px -16px 20px; }
 `
@@ -34,7 +30,7 @@ const CSS = ENTRADA_INICIO_CSS + `
 export default function MobileDashboard({
     storeName, saludo, storeId, period, setPeriod, rango, setRango,
     metrics, products, pending, insight, loading, primeraCarga, insightsLoading,
-    animar, dibujar, conteo,
+    animar, dibujar, conteo, tendencia,
 }: {
     storeName: string
     saludo: string
@@ -55,11 +51,11 @@ export default function MobileDashboard({
     animar: boolean
     dibujar: boolean
     conteo: Conteo
+    tendencia: Tendencia
 }) {
     return (
         <div className="md-raiz">
             <style>{CSS}</style>
-            <div className="md-resplandor" aria-hidden />
 
             <div className="md-contenido">
                 <p {...entrada(0, animar, 'md-saludo')} suppressHydrationWarning>
@@ -69,13 +65,13 @@ export default function MobileDashboard({
                     <SelectorPeriodo variante="movil" period={period} setPeriod={setPeriod} rango={rango} setRango={setRango} />
                 </div>
                 <div {...entrada(2, animar, undefined, { marginTop: 18 })}>
-                    <Vendiste metrics={metrics} loading={loading} period={period} variante="movil" conteo={conteo} />
+                    <Vendiste metrics={metrics} loading={loading} period={period} variante="movil" conteo={conteo} tendencia={tendencia} />
                 </div>
                 <div {...entrada(3, animar, 'md-grafica')}>
                     <HeroChart storeId={storeId} period={period} rango={rango} alto={110} dibujar={dibujar} />
                 </div>
                 <div {...entrada(4, animar)}>
-                    <GananciaGastos metrics={metrics} loading={loading} variante="movil" conteo={conteo} />
+                    <GananciaGastos metrics={metrics} loading={loading} conteo={conteo} />
                 </div>
                 <div {...entrada(5, animar, undefined, { marginTop: 32 })}>
                     <AccionesRapidas variante="movil" />

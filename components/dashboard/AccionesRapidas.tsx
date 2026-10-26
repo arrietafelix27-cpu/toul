@@ -15,18 +15,17 @@ import type { AIInsight } from '@/lib/types'
    buscarlo al menú. Gasto, Compra y Devolución.
 
    En el celular son tres círculos parejos, para el pulgar. En el
-   computador son tres filas dentro de su panel, con una línea que
-   dice para qué es cada una: la misma acción, pensada para el mouse
-   y para el espacio que hay, no el celular estirado.
+   computador son tres filas con su ícono y su nombre: la misma
+   acción, pensada para el mouse y para el espacio que hay.
 
    Debajo va TOUL AI, reducido a una línea: solo aparece cuando hay
    algo que decir, y la observación completa se abre al tocarla.
    ══════════════════════════════════════════════════════════════ */
 
 const ACCIONES = [
-    { key: 'gasto', label: 'Gasto', hint: 'Registrar un gasto', Icon: Receipt, href: '/expenses?nuevo=1' },
-    { key: 'compra', label: 'Compra', hint: 'Entró mercancía', Icon: Truck, href: '/inventory/purchase' },
-    { key: 'devolucion', label: 'Devolución', hint: 'Un cliente devolvió algo', Icon: Undo2, href: null },
+    { key: 'gasto', label: 'Gasto', Icon: Receipt, href: '/expenses?nuevo=1' },
+    { key: 'compra', label: 'Compra', Icon: Truck, href: '/inventory/purchase' },
+    { key: 'devolucion', label: 'Devolución', Icon: Undo2, href: null },
 ] as const
 
 const CSS = PANEL_CSS + `
@@ -36,9 +35,10 @@ const CSS = PANEL_CSS + `
     padding: 2px 0; border: none; background: none; font: inherit; color: inherit;
     text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none; user-select: none; touch-action: manipulation; }
-/* El verde entra por arriba a la izquierda, como la luz del encabezado */
-.ar-circulo, .ar-cuadro { display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--toul-accent);
-    background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--toul-accent) 22%, transparent), var(--toul-surface) 70%); }
+/* Blanco sobre gris: el verde queda para lo que de verdad lo necesita */
+.ar-circulo, .ar-cuadro { display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--toul-text);
+    background: color-mix(in srgb, var(--toul-text) 6%, transparent);
+    transition: background-color 160ms var(--toul-ease-emil); }
 .ar-circulo { width: 58px; height: 58px; border-radius: 50%; }
 .ar-etiqueta { font-size: 13px; font-weight: 500; color: var(--toul-text-muted); letter-spacing: -0.01em; }
 
@@ -80,8 +80,7 @@ const CSS = PANEL_CSS + `
 .oa-rotulo { font-size: 13px; font-weight: 600; color: var(--toul-text-muted); margin: 0 0 6px; }
 
 @media (hover: hover) and (pointer: fine) {
-    .ar-item:hover .ar-circulo, .ar-fila:hover .ar-cuadro {
-        background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--toul-accent) 30%, transparent), var(--toul-surface-2) 70%); }
+    .ar-item:hover .ar-circulo, .ar-fila:hover .ar-cuadro { background: color-mix(in srgb, var(--toul-text) 10%, transparent); }
     .ar-fila:hover { background: var(--toul-surface-3); }
     .ar-fila:hover .ar-flecha { color: var(--toul-text-muted); transform: translateX(2px); }
     .oa-linea:hover::after { background: color-mix(in srgb, var(--toul-accent) 10%, var(--toul-bg)); }
@@ -121,13 +120,12 @@ export function AccionesRapidas({ variante }: { variante: 'movil' | 'pc' }) {
                 <div>
                     <h2 className="ar-titulo">Acciones rápidas</h2>
                     <div className="ar-filas">
-                        {ACCIONES.map(({ key, label, hint, Icon, href }) => {
+                        {ACCIONES.map(({ key, label, Icon, href }) => {
                             const cuerpo = (
                                 <>
                                     <span className="ar-cuadro"><Icon size={20} strokeWidth={2} /></span>
-                                    <span style={{ flex: 1, minWidth: 0 }}>
-                                        <span style={{ display: 'block', fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--toul-text)' }}>{label}</span>
-                                        <span style={{ display: 'block', fontSize: 14, color: 'var(--toul-text-subtle)', marginTop: 1 }}>{hint}</span>
+                                    <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--toul-text)' }}>
+                                        {label}
                                     </span>
                                     <ChevronRight size={18} className="ar-flecha" />
                                 </>

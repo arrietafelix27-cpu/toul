@@ -60,7 +60,6 @@ const CSS = `
 .pl-totales[data-variante="movil"] .pl-monto { font-size: 24px; }
 /* En PC la columna se angosta con la pantalla: el monto también, para que quepan los dos */
 .pl-totales[data-variante="pc"] .pl-monto { font-size: clamp(17px, 1.45vw, 21px); }
-.pl-cuantos { margin-top: 3px; font-size: 12.5px; color: var(--toul-text-subtle); white-space: nowrap; }
 
 /* La barra: cuánto pesa cada lado. El que estás viendo va entero, el otro tenue */
 .pl-barra { display: flex; gap: 3px; height: 6px; margin: 16px 0 6px; border-radius: 999px; overflow: hidden;
@@ -79,17 +78,13 @@ const CSS = `
 .pl-fila { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 9px 0; text-decoration: none;
     color: inherit; -webkit-tap-highlight-color: transparent; transition: opacity 160ms var(--toul-ease-emil); }
 .pl-fila:active { opacity: 0.7; }
+/* Sin color: el verde queda para el total de lo que te deben */
 .pl-avatar { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
-.pl-avatar[data-lado="cobrar"] { color: var(--toul-accent);
-    background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--toul-accent) 34%, transparent), color-mix(in srgb, var(--toul-accent) 8%, transparent) 75%); }
-.pl-avatar[data-lado="pagar"] { color: var(--toul-warning);
-    background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--toul-warning) 30%, transparent), color-mix(in srgb, var(--toul-warning) 7%, transparent) 75%); }
+    font-size: 12px; font-weight: 700; letter-spacing: 0.02em; color: var(--toul-text); background: var(--toul-surface-2); }
 .pl-quien { flex: 1; min-width: 0; }
 .pl-nombre { display: block; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--toul-text);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pl-cuando { display: block; margin-top: 1px; font-size: 12.5px; color: var(--toul-text-subtle); white-space: nowrap; }
-.pl-valor { flex-shrink: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; }
+.pl-valor { flex-shrink: 0; color: var(--toul-text); font-size: 15px; font-weight: 700; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; }
 .pl-wa { width: 36px; height: 36px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
     background: var(--toul-surface); color: var(--toul-text-subtle); -webkit-tap-highlight-color: transparent;
     transition: background-color 160ms var(--toul-ease-emil), color 160ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil); }
@@ -98,8 +93,8 @@ const CSS = `
 
 @media (hover: hover) and (pointer: fine) {
     .pl-titulo:hover svg { transform: translateX(2px); }
-    .pl-fila:hover .pl-nombre { color: var(--toul-accent); }
-    .pl-wa:hover { background: var(--toul-accent-dim); color: var(--toul-accent); }
+    .pl-fila:hover { opacity: 0.75; }
+    .pl-wa:hover { background: var(--toul-surface-2); color: var(--toul-text); }
 }
 @media (prefers-reduced-motion: reduce) {
     .pl-item[data-entra="true"] { animation: none; }
@@ -116,15 +111,6 @@ function whatsappLink(phone: string, message: string) {
 
 const initialsOf = (name: string) =>
     name.trim().split(/\s+/).map(word => word[0]).join('').toUpperCase().slice(0, 2)
-
-const sinceLabel = (days: number | null) => {
-    if (days === null) return null
-    if (days <= 0) return 'hoy'
-    if (days === 1) return 'hace 1 día'
-    if (days < 30) return `hace ${days} días`
-    const months = Math.floor(days / 30)
-    return months === 1 ? 'hace 1 mes' : `hace ${months} meses`
-}
 
 export function PendingPanel({ pending, storeName, variante, loading, cuenta = false }: {
     pending: PendingData
@@ -145,17 +131,14 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
     const lados = [
         {
             clave: 'cobrar' as Lado, rotulo: 'Te deben', valor: totales.cobrar, color: 'var(--toul-accent)',
-            cuantos: pending.customerCount ?? pending.customerDebts.length, uno: 'cliente', varios: 'clientes',
         },
         {
             clave: 'pagar' as Lado, rotulo: 'Debes', valor: totales.pagar, color: 'var(--toul-warning)',
-            cuantos: pending.providerCount ?? pending.providerDebts.length, uno: 'proveedor', varios: 'proveedores',
         },
     ]
 
     const esCobrar = lado === 'cobrar'
     const mostrados = (esCobrar ? pending.customerDebts : pending.providerDebts).slice(0, variante === 'movil' ? 3 : 5)
-    const tono = esCobrar ? 'var(--toul-accent)' : 'var(--toul-warning)'
     // Si alguno tiene WhatsApp, todos reservan ese espacio: los montos
     // quedan alineados en vez de bailar de renglón en renglón
     const reservarWhatsApp = esCobrar && mostrados.some(p => p.phone)
@@ -186,9 +169,6 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
                                 <AnimatedNumber value={l.valor} formatter={formatPrecio} cuenta={cuenta} className="pl-monto"
                                     style={{ color: l.valor > 0 ? l.color : 'var(--toul-text-dim)' }} />
                             )}
-                            <span className="pl-cuantos">
-                                {loading ? '\u00a0' : l.cuantos === 0 ? 'Nadie' : `${l.cuantos} ${l.cuantos === 1 ? l.uno : l.varios}`}
-                            </span>
                         </button>
                     </Fragment>
                 ))}
@@ -215,19 +195,17 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
             ) : (
                 <div key={lado} className="pl-lista" data-variante={variante}>
                     {mostrados.map((persona, i) => {
-                        const cuando = sinceLabel(persona.days)
                         const href = esCobrar ? `/customers/${persona.id}` : `/providers/${persona.id}`
                         const mensaje = `Hola ${persona.name.split(' ')[0]}, ¿cómo vas? Te escribo${storeName ? ` de ${storeName}` : ''} para recordarte el saldo pendiente de ${formatPrecio(persona.amount)}. ¿Cuándo podemos cuadrar?`
                         return (
                             <div key={persona.id} className="pl-item" data-entra={cambiado}
                                 style={cambiado ? ({ animationDelay: `${i * 45}ms` } as CSSProperties) : undefined}>
                                 <Link href={href} prefetch={false} className="pl-fila">
-                                    <span className="pl-avatar" data-lado={lado} aria-hidden>{initialsOf(persona.name)}</span>
+                                    <span className="pl-avatar" aria-hidden>{initialsOf(persona.name)}</span>
                                     <span className="pl-quien">
                                         <span className="pl-nombre">{persona.name}</span>
-                                        {cuando && <span className="pl-cuando">{cuando}</span>}
                                     </span>
-                                    <span className="pl-valor" style={{ color: tono }}>{formatPrecio(persona.amount)}</span>
+                                    <span className="pl-valor">{formatPrecio(persona.amount)}</span>
                                 </Link>
                                 {reservarWhatsApp && (
                                     persona.phone ? (

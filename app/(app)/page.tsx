@@ -11,8 +11,8 @@ import HeroChart from '@/components/dashboard/HeroChart'
 import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { PrimerosPasos } from '@/components/dashboard/PrimerosPasos'
-import { SelectorPeriodo, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
-import { Vendiste, GananciaGastos, type MetricasInicio } from '@/components/dashboard/ResumenHoy'
+import { SelectorPeriodo, textoRango, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
+import { Vendiste, GananciaGastos, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
 
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
@@ -367,6 +367,17 @@ export default function DashboardPage() {
         expenses: dashboardData?.metrics.expenses || 0,
         salesCount: dashboardData?.metrics.salesCount || 0,
     }
+    // Cómo va contra el mismo tramo del periodo anterior. Sin ventas antes,
+    // no hay con qué comparar
+    const tendencia: Tendencia = useMemo(() => {
+        const rango = period === 'custom' && customRange ? customRange : getDateRange(period)
+        const antes = dashboardData?.metrics.prevRevenue ?? 0
+        const ahora = dashboardData?.metrics.revenue ?? 0
+        return {
+            porcentaje: antes > 0 ? Math.round(((ahora - antes) / antes) * 100) : null,
+            contra: contraQue(period, rango),
+        }
+    }, [dashboardData, period, customRange])
     const products = dashboardData?.operational.products || { topUnits: [], topProfit: [], lowStock: [], slowMoving: [] }
     const pending = dashboardData?.pending || { customerDebts: [], providerDebts: [] }
 
@@ -427,44 +438,44 @@ export default function DashboardPage() {
                     animar={animar}
                     dibujar={dibujar}
                     conteo={conteo}
+                    tendencia={tendencia}
                 />
             </div>
 
             {/* ── COMPUTADOR ────────────────────────────────────────────────
-                Arriba el encabezado: lo vendido a la izquierda y la gráfica a
-                la derecha, hasta el borde. Abajo, tres columnas sin cajas. */}
+                Arriba el encabezado: la gráfica a la izquierda y lo vendido a
+                la derecha. Abajo, tres columnas sin cajas. */}
             <div className="hidden lg:block in-pc">
                 <style>{PC_CSS}</style>
-                <div className="in-pc-resplandor" aria-hidden />
                 <div className="in-pc-contenido">
                     <PrimerosPasos storeId={storeId} />
 
-                    {/* La gráfica empieza donde terminan los números y llega al borde:
-                        es el fondo del encabezado, no una pieza aparte */}
+                    {/* Arriba el saludo en una línea. Debajo, la gráfica a la izquierda
+                        y el resumen a la derecha */}
                     <header className="in-pc-cabeza">
-                        <div {...entrada(0, animar, 'in-pc-identidad')}>
-                            <p className="in-pc-saludo" suppressHydrationWarning>{greeting}</p>
-                            <h1 className="in-pc-nombre">{storeName || 'Mi negocio'}</h1>
+                        <div {...entrada(0, animar, 'in-pc-arriba')}>
+                            <h1 className="in-pc-saludo" suppressHydrationWarning>{greeting}, {storeName || 'Mi negocio'}</h1>
+                            <Link href="/settings" className="in-pc-ajustes" aria-label="Ajustes">
+                                <Settings size={20} strokeWidth={1.9} />
+                            </Link>
                         </div>
-                        <div className="in-pc-numeros">
-                            <div {...entrada(1, animar)}>
-                                <SelectorPeriodo variante="pc" period={period} setPeriod={cambiarPeriodo} rango={customRange} setRango={cambiarRango} />
+                        <div className="in-pc-cuerpo">
+                            <div {...entrada(1, animar, 'in-pc-grafica')}>
+                                <HeroChart storeId={storeId} period={period} rango={customRange}
+                                    alto="clamp(220px, 34vh, 380px)" dibujar={dibujar} />
                             </div>
-                            <div {...entrada(2, animar, undefined, { marginTop: 14 })}>
-                                <Vendiste metrics={metrics} loading={loading} period={period} variante="pc" conteo={conteo} />
-                            </div>
-                            <div {...entrada(4, animar, undefined, { marginTop: 24 })}>
-                                <GananciaGastos metrics={metrics} loading={loading} variante="pc" conteo={conteo} />
+                            <div className="in-pc-resumen">
+                                <div {...entrada(2, animar)}>
+                                    <Vendiste metrics={metrics} loading={loading} period={period} variante="pc" conteo={conteo}
+                                        tendencia={tendencia}
+                                        selector={<SelectorPeriodo variante="pc" forma="pildora" period={period} setPeriod={cambiarPeriodo}
+                                            rango={customRange} setRango={cambiarRango} />} />
+                                </div>
+                                <div {...entrada(3, animar, undefined, { marginTop: 20 })}>
+                                    <GananciaGastos metrics={metrics} loading={loading} conteo={conteo} />
+                                </div>
                             </div>
                         </div>
-                        <div {...entrada(3, animar, 'in-pc-grafica')}>
-                            {/* El espacio de arriba deja libre el botón de Ajustes */}
-                            <HeroChart storeId={storeId} period={period} rango={customRange}
-                                alto="clamp(220px, 34vh, 380px)" margenArriba={48} dibujar={dibujar} />
-                        </div>
-                        <Link href="/settings" className="in-pc-ajustes" aria-label="Ajustes">
-                            <Settings size={20} strokeWidth={1.9} />
-                        </Link>
                     </header>
 
                     {/* Llega hasta el final de la pantalla */}
@@ -478,7 +489,7 @@ export default function DashboardPage() {
                             primeraCarga={primeraCarga}
                             insightsLoading={!!insightsLoading}
                             animar={animar}
-                            turno={5}
+                            turno={4}
                         />
                     </div>
                 </div>
@@ -497,50 +508,53 @@ const PC_CSS = ENTRADA_INICIO_CSS + `
 /* Llena el alto de la ventana. Los 2rem son el margen de abajo que ya
    pone la app: así no aparece una barra de desplazamiento de sobra */
 .in-pc-contenido { position: relative; min-height: calc(100dvh - 2rem); display: flex; flex-direction: column;
-    padding: 28px 24px clamp(8px, 2vh, 24px); }
-.in-pc-resplandor { position: absolute; top: 0; left: 0; right: 0; height: 560px; pointer-events: none;
-    background: radial-gradient(70% 100% at 18% 0%, color-mix(in srgb, var(--toul-accent) 20%, transparent), transparent 60%); }
+    padding: 24px 24px clamp(8px, 2vh, 24px); }
 
-/* Izquierda: el nombre arriba y los números abajo. Derecha: la gráfica,
-   que puede subir hasta la altura del nombre */
-.in-pc-cabeza { position: relative; display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
-    grid-template-rows: auto 1fr; column-gap: 48px; }
-.in-pc-identidad { grid-column: 1; grid-row: 1; min-width: 0; }
-.in-pc-numeros { grid-column: 1; grid-row: 2; align-self: end; margin-top: 26px; }
-.in-pc-grafica { grid-column: 2; grid-row: 1 / 3; align-self: end; min-width: 0; margin-right: -24px; }
-/* Entra suave por la izquierda: se funde con los números en vez de cortarse */
-.in-pc-grafica .recharts-surface {
-    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 72px);
-    mask-image: linear-gradient(to right, transparent 0, #000 72px); }
-.in-pc-saludo { font-size: 13px; letter-spacing: -0.01em; color: var(--toul-text-subtle); margin: 0; }
-.in-pc-nombre { max-width: 420px; font-size: 26px; font-weight: 700; letter-spacing: -0.8px; line-height: 1.15;
-    color: var(--toul-text); margin: 4px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.in-pc-ajustes { position: absolute; z-index: 1; top: 0; right: 0; width: 40px; height: 40px; border-radius: 12px;
+.in-pc-arriba { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.in-pc-saludo { min-width: 0; font-size: 14px; font-weight: 400; letter-spacing: -0.01em; color: var(--toul-text-subtle); margin: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.in-pc-ajustes { flex-shrink: 0; width: 40px; height: 40px; margin-right: -8px; border-radius: 12px;
     display: flex; align-items: center; justify-content: center; color: var(--toul-text-subtle);
     transition: color 160ms var(--toul-ease-emil), background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
 .in-pc-ajustes:active { transform: scale(0.94); }
+
+/* La gráfica ocupa cerca del 60% desde el borde izquierdo; el resumen,
+   el resto. Abajo quedan alineados */
+.in-pc-cuerpo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); column-gap: clamp(32px, 4vw, 64px);
+    align-items: end; margin-top: 16px; }
+.in-pc-grafica { min-width: 0; }
+.in-pc-resumen { min-width: 0; }
 .in-pc-abajo { flex: 1; display: flex; flex-direction: column; margin-top: clamp(28px, 5vh, 52px); }
 @media (hover: hover) and (pointer: fine) {
     .in-pc-ajustes:hover { color: var(--toul-text); background: var(--toul-surface); }
 }
 @media (min-width: 1280px) {
-    .in-pc-contenido { padding-left: 32px; padding-right: 32px; padding-top: 32px; }
-    .in-pc-grafica { margin-right: -32px; }
+    .in-pc-contenido { padding-left: 32px; padding-right: 32px; padding-top: 28px; }
 }
 `
 
+/** El mismo tramo del periodo anterior, para que la comparación sea justa:
+ *  hoy contra ayer hasta esta hora, la semana contra la semana pasada hasta
+ *  este mismo día, el mes contra el mes pasado hasta este mismo día, y unas
+ *  fechas elegidas contra los mismos días justo antes. */
 function getPrevRange(period: Period, current: { from: string | null; to: string | null }) {
     if (!current.from || !current.to) return { from: null, to: null }
 
     const start = new Date(current.from)
     const end = new Date(current.to)
+    const atras = (d: Date, dias: number) => { const x = new Date(d); x.setDate(x.getDate() - dias); return x }
 
-    if (period === 'today') {
-        const yesterdayStart = new Date(start)
-        yesterdayStart.setDate(yesterdayStart.getDate() - 1)
-        const yesterdayEnd = new Date(end)
-        yesterdayEnd.setDate(yesterdayEnd.getDate() - 1)
-        return { from: yesterdayStart.toISOString(), to: yesterdayEnd.toISOString() }
+    if (period === 'today') return { from: atras(start, 1).toISOString(), to: atras(end, 1).toISOString() }
+    if (period === 'week') return { from: atras(start, 7).toISOString(), to: atras(end, 7).toISOString() }
+    if (period === 'month') {
+        const desde = new Date(start.getFullYear(), start.getMonth() - 1, 1)
+        // El mismo día del mes pasado; si no existe, el último (31 de marzo → 28 de febrero)
+        const ultimoDia = new Date(end.getFullYear(), end.getMonth(), 0).getDate()
+        const hasta = new Date(end)
+        hasta.setDate(1)
+        hasta.setMonth(hasta.getMonth() - 1)
+        hasta.setDate(Math.min(end.getDate(), ultimoDia))
+        return { from: desde.toISOString(), to: hasta.toISOString() }
     }
 
     const diff = end.getTime() - start.getTime()
@@ -548,4 +562,15 @@ function getPrevRange(period: Period, current: { from: string | null; to: string
         from: new Date(start.getTime() - diff).toISOString(),
         to: current.from
     }
+}
+
+/** Contra qué se compara la tendencia: "vs ayer", "vs semana pasada", "vs 1 – 26 sep" */
+function contraQue(period: Period, current: { from: string | null; to: string | null }) {
+    if (period === 'today') return 'vs ayer'
+    if (period === 'week') return 'vs semana pasada'
+    const prev = getPrevRange(period, current)
+    if (!prev.from || !prev.to) return ''
+    // Unas fechas elegidas terminan justo donde empiezan las de ahora
+    const hasta = period === 'custom' ? new Date(new Date(prev.to).getTime() - 1) : new Date(prev.to)
+    return `vs ${textoRango(new Date(prev.from), hasta)}`
 }

@@ -66,7 +66,8 @@ export function InsightsRow({ products, pending, insight, storeName, loading, pr
                 </div>
                 <div {...columna('ir-acciones', 2)}>
                     <AccionesRapidas variante="pc" />
-                    <div style={{ marginTop: 'auto', paddingTop: 20 }}>
+                    {/* Justo debajo de Devolución, no pegada al fondo */}
+                    <div style={{ marginTop: 16 }}>
                         <ObservacionAI insight={insight} loading={insightsLoading || primeraCarga} />
                     </div>
                 </div>

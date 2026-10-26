@@ -38,6 +38,15 @@ const CSS = `
 .dz-flecha { flex-shrink: 0; color: var(--toul-text-subtle); transition: transform 200ms var(--toul-ease-emil); }
 [aria-expanded="true"] > .dz-flecha { transform: rotate(180deg); }
 
+/* En PC el periodo va en una píldora pequeña al lado de "Vendiste" */
+.dz-periodo-pildora { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px 0 11px; border: none;
+    border-radius: 999px; background: var(--toul-surface-2); color: var(--toul-text);
+    font: inherit; font-size: 12px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation;
+    transition: background-color 160ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil); }
+.dz-periodo-pildora:active { transform: scale(0.96); }
+.dz-periodo-pildora .dz-flecha { color: var(--toul-text-muted); }
+
 .dz-pildora { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 14px; border: none;
     border-radius: 999px; background: var(--toul-surface-2); color: var(--toul-text);
     font: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; cursor: pointer;
@@ -58,7 +67,7 @@ const CSS = `
     transition: background-color 120ms var(--toul-ease-emil), color 120ms var(--toul-ease-emil); }
 .dz-opcion[aria-selected="true"] { color: var(--toul-text); font-weight: 600; }
 .dz-opcion:focus-visible { outline: none; background: var(--toul-surface-2); color: var(--toul-text); }
-.dz-check { flex-shrink: 0; color: var(--toul-accent); }
+.dz-check { flex-shrink: 0; color: var(--toul-text); }
 
 /* En la hoja del celular: renglones altos, para el pulgar */
 .dz-lista[data-variante="movil"] .dz-opcion { min-height: 56px; padding: 0 2px; border-radius: 0; font-size: 16px; }
@@ -74,13 +83,13 @@ const CSS = `
 .dz-campo input { color-scheme: dark; }
 
 @media (hover: hover) and (pointer: fine) {
-    .dz-pildora:hover { background: var(--toul-border-2); }
+    .dz-pildora:hover, .dz-periodo-pildora:hover { background: var(--toul-border-2); }
     .dz-periodo:hover .dz-flecha { color: var(--toul-text-muted); }
     .dz-opcion:hover { background: var(--toul-surface); color: var(--toul-text); }
     .dz-volver:hover { color: var(--toul-text); }
 }
 @media (prefers-reduced-motion: reduce) {
-    .dz-periodo:active, .dz-pildora:active { transform: none; }
+    .dz-periodo:active, .dz-pildora:active, .dz-periodo-pildora:active { transform: none; }
 }
 `
 
@@ -205,6 +214,14 @@ const PERIODOS: Opcion<Periodo>[] = [
 
 const mes = (d: Date) => d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '')
 
+/** "15 – 20 oct", "28 sep – 3 oct" o "26 oct" si es un solo día */
+export function textoRango(desde: Date, hasta: Date): string {
+    if (desde.toDateString() === hasta.toDateString()) return `${desde.getDate()} ${mes(desde)}`
+    return desde.getMonth() === hasta.getMonth() && desde.getFullYear() === hasta.getFullYear()
+        ? `${desde.getDate()} – ${hasta.getDate()} ${mes(hasta)}`
+        : `${desde.getDate()} ${mes(desde)} – ${hasta.getDate()} ${mes(hasta)}`
+}
+
 /** Lo que dice el título: "Hoy", "Esta semana"… o las fechas elegidas */
 export function tituloPeriodo(period: Periodo, rango: Rango): string {
     if (period === 'today') return 'Hoy'
@@ -212,20 +229,17 @@ export function tituloPeriodo(period: Periodo, rango: Rango): string {
     if (period === 'month') return 'Este mes'
     if (period === 'total') return 'Todo'
     if (!rango) return 'Estas fechas'
-    const desde = new Date(rango.from)
-    const hasta = new Date(rango.to)
-    if (desde.toDateString() === hasta.toDateString()) return `${desde.getDate()} ${mes(desde)}`
-    return desde.getMonth() === hasta.getMonth() && desde.getFullYear() === hasta.getFullYear()
-        ? `${desde.getDate()} – ${hasta.getDate()} ${mes(hasta)}`
-        : `${desde.getDate()} ${mes(desde)} – ${hasta.getDate()} ${mes(hasta)}`
+    return textoRango(new Date(rango.from), new Date(rango.to))
 }
 
 /** 2026-10-26, en la hora del equipo (toISOString daría la fecha de Londres) */
 const diaLocal = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-export function SelectorPeriodo({ variante, period, setPeriod, rango, setRango }: {
+export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod, rango, setRango }: {
     variante: Variante
+    /** El título grande del celular, o la píldora pequeña del computador */
+    forma?: 'titulo' | 'pildora'
     period: Periodo
     setPeriod: (p: Periodo) => void
     rango: Rango
@@ -258,8 +272,12 @@ export function SelectorPeriodo({ variante, period, setPeriod, rango, setRango }
     }
 
     return (
-        <Desplegable variante={variante} titulo={conFechas ? 'Elegir fechas' : 'Periodo'} claseBoton="dz-periodo" alAbrir={alAbrir}
-            boton={<>
+        <Desplegable variante={variante} titulo={conFechas ? 'Elegir fechas' : 'Periodo'} alAbrir={alAbrir}
+            claseBoton={forma === 'pildora' ? 'dz-periodo-pildora' : 'dz-periodo'}
+            boton={forma === 'pildora' ? <>
+                {tituloPeriodo(period, rango)}
+                <ChevronDown size={13} strokeWidth={2.4} className="dz-flecha" />
+            </> : <>
                 <span className="dz-periodo-texto">{tituloPeriodo(period, rango)}</span>
                 <ChevronDown size={variante === 'movil' ? 24 : 22} strokeWidth={2.2} className="dz-flecha" />
             </>}

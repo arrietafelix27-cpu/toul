@@ -51,8 +51,9 @@ const VACIA: Record<Lista, string> = {
 
 function metrica(lista: Lista, valor: number): { texto: string; color: string } {
     switch (lista) {
-        case 'units': return { texto: `${valor} ${valor === 1 ? 'vendido' : 'vendidos'}`, color: 'var(--toul-accent)' }
-        case 'profit': return { texto: `${valor}%`, color: 'var(--toul-accent)' }
+        // Gris claro: el verde queda para lo que de verdad lo necesita
+        case 'units': return { texto: `${valor} ${valor === 1 ? 'vendido' : 'vendidos'}`, color: 'var(--toul-text-muted)' }
+        case 'profit': return { texto: `${valor}%`, color: 'var(--toul-text-muted)' }
         case 'low': return valor <= 0
             ? { texto: 'Agotado', color: 'var(--toul-error)' }
             : { texto: `Quedan ${valor}`, color: 'var(--toul-warning)' }
@@ -83,7 +84,7 @@ const CSS = ENTRADA_INICIO_CSS + `
     .tp-fila[data-variante="pc"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .tp-fila[data-variante="pc"] > :nth-child(4) { display: flex; }
 }
-.tp-fila[data-variante="pc"] .tp-numero { font-size: 46px; left: 10px; }
+.tp-fila[data-variante="pc"] .tp-numero { font-size: 34px; left: 10px; bottom: 4px; }
 
 .tp-carta { display: flex; flex-direction: column; min-width: 0; text-decoration: none; color: inherit;
     -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; touch-action: manipulation;
@@ -96,11 +97,13 @@ const CSS = ENTRADA_INICIO_CSS + `
 /* Sin foto: la inicial, como en el resto de la app */
 .tp-inicial { position: absolute; inset: 0 0 30% 0; display: flex; align-items: center; justify-content: center;
     font-size: 30px; font-weight: 600; letter-spacing: -0.02em; color: var(--toul-text-faint); }
-/* El puesto se lee sobre cualquier foto: el degradado oscurece solo la parte de abajo */
+/* El puesto se lee sobre cualquier foto, incluso una blanca: el degradado
+   oscurece el 72% de abajo y el número lleva una sombra suave */
 .tp-velo { position: absolute; inset: 0;
-    background: linear-gradient(180deg, transparent 40%, color-mix(in srgb, var(--toul-bg) 78%, transparent) 100%); }
+    background: linear-gradient(180deg, transparent 28%, color-mix(in srgb, var(--toul-bg) 88%, transparent) 100%); }
 .tp-numero { position: absolute; bottom: 2px; font-weight: 800; line-height: 1; letter-spacing: -0.04em;
-    color: var(--toul-text); font-variant-numeric: tabular-nums; }
+    color: var(--toul-text); font-variant-numeric: tabular-nums;
+    text-shadow: 0 2px 12px color-mix(in srgb, var(--toul-bg) 55%, transparent); }
 .tp-nombre { margin-top: 9px; font-size: 14px; font-weight: 500; letter-spacing: -0.01em; color: var(--toul-text);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tp-metrica { margin-top: 2px; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
