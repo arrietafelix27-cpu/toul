@@ -205,8 +205,8 @@ export function Sidebar() {
                     <div key={section.label || `s${si}`} style={{ marginBottom: 14 }}>
                         {section.label && (
                             <p style={{
-                                fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
-                                color: 'var(--toul-text-faint)', margin: '0 0 4px 10px',
+                                fontSize: 12, fontWeight: 600,
+                                color: 'var(--toul-text-dim)', margin: '0 0 4px 10px',
                             }}>
                                 {section.label}
                             </p>

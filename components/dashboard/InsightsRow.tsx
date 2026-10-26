@@ -14,21 +14,24 @@ import type { AIInsight } from '@/lib/types'
    ══════════════════════════════════════════════════════════════ */
 
 const CSS = ENTRADA_INICIO_CSS + `
-.ir-fila { display: grid; }
+/* Las columnas llegan hasta el final de la pantalla: la fila ocupa todo
+   el alto que le deja el encabezado */
+.ir-raiz { flex: 1; display: flex; flex-direction: column; container-type: inline-size; }
+.ir-fila { flex: 1; display: grid; }
 .ir-col { position: relative; min-width: 0; display: flex; flex-direction: column; }
 
 /* Se mide el espacio disponible, no la pantalla: la barra lateral
    de la app se lleva 240 px que no se pueden usar */
-@container (min-width: 1060px) {
+@container (min-width: 900px) {
     .ir-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); }
-    .ir-col { padding: 0 32px; }
+    .ir-col { padding: 0 clamp(20px, 2.2vw, 32px); }
     .ir-col:first-child { padding-left: 0; }
     .ir-col:last-child { padding-right: 0; }
     .ir-col + .ir-col { border-left: 1px solid var(--toul-border); }
 }
 /* Más angosto: los productos arriba a todo lo ancho y las otras dos debajo */
-@container (max-width: 1059px) {
-    .ir-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 40px; }
+@container (max-width: 899px) {
+    .ir-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto 1fr; row-gap: 40px; }
     .ir-productos { grid-column: 1 / -1; grid-row: 1; }
     .ir-plata { padding-right: 32px; }
     .ir-acciones { padding-left: 32px; border-left: 1px solid var(--toul-border); }
@@ -52,7 +55,7 @@ export function InsightsRow({ products, pending, insight, storeName, loading, pr
     const columna = (clase: string, n: number) => entrada(turno + n, animar, `ir-col ${clase}`)
 
     return (
-        <div style={{ containerType: 'inline-size' }}>
+        <div className="ir-raiz">
             <style>{CSS}</style>
             <div className="ir-fila">
                 <div {...columna('ir-plata', 0)}>

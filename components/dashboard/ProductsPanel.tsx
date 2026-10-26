@@ -74,9 +74,15 @@ const CSS = ENTRADA_INICIO_CSS + `
 .tp-fila[data-variante="movil"] .tp-foto { height: 164px; }
 .tp-fila[data-variante="movil"] .tp-numero { font-size: 60px; left: 11px; }
 
-/* Computador: los 3 primeros */
+/* Computador: los 3 primeros, y 4 en pantallas grandes. Las fotos
+   crecen con el alto de la pantalla para no dejar hueco abajo */
 .tp-fila[data-variante="pc"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
-.tp-fila[data-variante="pc"] .tp-foto { height: 118px; }
+.tp-fila[data-variante="pc"] .tp-foto { height: clamp(118px, 15vh, 180px); }
+.tp-fila[data-variante="pc"] > :nth-child(4) { display: none; }
+@media (min-width: 1440px) {
+    .tp-fila[data-variante="pc"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .tp-fila[data-variante="pc"] > :nth-child(4) { display: flex; }
+}
 .tp-fila[data-variante="pc"] .tp-numero { font-size: 46px; left: 10px; }
 
 .tp-carta { display: flex; flex-direction: column; min-width: 0; text-decoration: none; color: inherit;
@@ -126,7 +132,7 @@ export function ProductsPanel({ products, loading, variante, animar }: {
         low: products.lowStock,
         slow: products.slowMoving,
     }
-    const visibles = filas[lista].slice(0, variante === 'movil' ? 10 : 3)
+    const visibles = filas[lista].slice(0, variante === 'movil' ? 10 : 4)
     const cascada = animar || cambiada
     const etiqueta = LISTAS.find(l => l.valor === lista)?.etiqueta ?? ''
 

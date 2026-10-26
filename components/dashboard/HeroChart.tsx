@@ -88,11 +88,14 @@ function Marca({ x, y, payload, index = 0, visibleTicksCount = 0 }: {
     )
 }
 
-export default function HeroChart({ storeId, period, rango, alto, dibujar }: {
+export default function HeroChart({ storeId, period, rango, alto, margenArriba = 6, dibujar }: {
     storeId: string | null
     period: Periodo
     rango: Rango
-    alto: number
+    /** En px, o una medida de CSS que crece con la pantalla */
+    alto: number | string
+    /** Aire arriba de la línea (en PC, para no pasar por debajo de Ajustes) */
+    margenArriba?: number
     /** Trazar la línea de izquierda a derecha (si no, aparece de una) */
     dibujar: boolean
 }) {
@@ -131,7 +134,7 @@ export default function HeroChart({ storeId, period, rango, alto, dibujar }: {
                 // Cambia de periodo → se monta de nuevo y se vuelve a dibujar
                 <div key={clave} className="hc-plot" data-dibuja={dibujar} style={{ height: '100%' }}>
                     <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={data} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
+                        <AreaChart data={data} margin={{ top: margenArriba, right: 0, left: 0, bottom: 0 }}>
                             <defs>
                                 <linearGradient id={idDegradado} x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="0%" stopColor="var(--toul-accent)" stopOpacity={0.45} />

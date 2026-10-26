@@ -439,13 +439,15 @@ export default function DashboardPage() {
                 <div className="in-pc-contenido">
                     <PrimerosPasos storeId={storeId} />
 
+                    {/* La gráfica empieza donde terminan los números y llega al borde:
+                        es el fondo del encabezado, no una pieza aparte */}
                     <header className="in-pc-cabeza">
-                        <div className="in-pc-izquierda">
-                            <div {...entrada(0, animar)}>
-                                <p className="in-pc-saludo" suppressHydrationWarning>{greeting}</p>
-                                <h1 className="in-pc-nombre">{storeName || 'Mi negocio'}</h1>
-                            </div>
-                            <div {...entrada(1, animar, undefined, { marginTop: 26 })}>
+                        <div {...entrada(0, animar, 'in-pc-identidad')}>
+                            <p className="in-pc-saludo" suppressHydrationWarning>{greeting}</p>
+                            <h1 className="in-pc-nombre">{storeName || 'Mi negocio'}</h1>
+                        </div>
+                        <div className="in-pc-numeros">
+                            <div {...entrada(1, animar)}>
                                 <SelectorPeriodo variante="pc" period={period} setPeriod={cambiarPeriodo} rango={customRange} setRango={cambiarRango} />
                             </div>
                             <div {...entrada(2, animar, undefined, { marginTop: 14 })}>
@@ -456,14 +458,17 @@ export default function DashboardPage() {
                             </div>
                         </div>
                         <div {...entrada(3, animar, 'in-pc-grafica')}>
-                            <HeroChart storeId={storeId} period={period} rango={customRange} alto={190} dibujar={dibujar} />
+                            {/* El espacio de arriba deja libre el botón de Ajustes */}
+                            <HeroChart storeId={storeId} period={period} rango={customRange}
+                                alto="clamp(220px, 34vh, 380px)" margenArriba={48} dibujar={dibujar} />
                         </div>
                         <Link href="/settings" className="in-pc-ajustes" aria-label="Ajustes">
                             <Settings size={20} strokeWidth={1.9} />
                         </Link>
                     </header>
 
-                    <div style={{ marginTop: 52 }}>
+                    {/* Llega hasta el final de la pantalla */}
+                    <div className="in-pc-abajo">
                         <InsightsRow
                             products={products}
                             pending={pending}
@@ -483,28 +488,43 @@ export default function DashboardPage() {
 }
 
 /* Lo del computador que no cabe en clases de Tailwind: la luz verde de
-   arriba a la izquierda y la gráfica que llega hasta el borde derecho */
+   arriba a la izquierda, la gráfica que llega hasta el borde derecho y
+   la pantalla que se llena de arriba abajo */
 const PC_CSS = ENTRADA_INICIO_CSS + `
 /* Sin z-index ni isolation, como en el celular: los menús y las hojas
    tienen que poder quedar por encima de todo */
-.in-pc { position: relative; padding: 28px 24px 56px; }
-.in-pc-contenido { position: relative; }
+.in-pc { position: relative; }
+/* Llena el alto de la ventana. Los 2rem son el margen de abajo que ya
+   pone la app: así no aparece una barra de desplazamiento de sobra */
+.in-pc-contenido { position: relative; min-height: calc(100dvh - 2rem); display: flex; flex-direction: column;
+    padding: 28px 24px clamp(8px, 2vh, 24px); }
 .in-pc-resplandor { position: absolute; top: 0; left: 0; right: 0; height: 560px; pointer-events: none;
     background: radial-gradient(70% 100% at 18% 0%, color-mix(in srgb, var(--toul-accent) 20%, transparent), transparent 60%); }
-.in-pc-cabeza { position: relative; display: grid; grid-template-columns: minmax(330px, 0.8fr) minmax(0, 1.2fr);
-    column-gap: 32px; align-items: end; }
+
+/* Izquierda: el nombre arriba y los números abajo. Derecha: la gráfica,
+   que puede subir hasta la altura del nombre */
+.in-pc-cabeza { position: relative; display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    grid-template-rows: auto 1fr; column-gap: 48px; }
+.in-pc-identidad { grid-column: 1; grid-row: 1; min-width: 0; }
+.in-pc-numeros { grid-column: 1; grid-row: 2; align-self: end; margin-top: 26px; }
+.in-pc-grafica { grid-column: 2; grid-row: 1 / 3; align-self: end; min-width: 0; margin-right: -24px; }
+/* Entra suave por la izquierda: se funde con los números en vez de cortarse */
+.in-pc-grafica .recharts-surface {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 72px);
+    mask-image: linear-gradient(to right, transparent 0, #000 72px); }
 .in-pc-saludo { font-size: 13px; letter-spacing: -0.01em; color: var(--toul-text-subtle); margin: 0; }
-.in-pc-nombre { font-size: 26px; font-weight: 700; letter-spacing: -0.8px; line-height: 1.15; color: var(--toul-text); margin: 4px 0 0; }
-.in-pc-grafica { margin-right: -24px; min-width: 0; }
-.in-pc-ajustes { position: absolute; top: 0; right: 0; width: 40px; height: 40px; border-radius: 12px;
+.in-pc-nombre { max-width: 420px; font-size: 26px; font-weight: 700; letter-spacing: -0.8px; line-height: 1.15;
+    color: var(--toul-text); margin: 4px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.in-pc-ajustes { position: absolute; z-index: 1; top: 0; right: 0; width: 40px; height: 40px; border-radius: 12px;
     display: flex; align-items: center; justify-content: center; color: var(--toul-text-subtle);
     transition: color 160ms var(--toul-ease-emil), background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
 .in-pc-ajustes:active { transform: scale(0.94); }
+.in-pc-abajo { flex: 1; display: flex; flex-direction: column; margin-top: clamp(28px, 5vh, 52px); }
 @media (hover: hover) and (pointer: fine) {
     .in-pc-ajustes:hover { color: var(--toul-text); background: var(--toul-surface); }
 }
 @media (min-width: 1280px) {
-    .in-pc { padding: 32px 32px 64px; }
+    .in-pc-contenido { padding-left: 32px; padding-right: 32px; padding-top: 32px; }
     .in-pc-grafica { margin-right: -32px; }
 }
 `

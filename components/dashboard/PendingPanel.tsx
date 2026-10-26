@@ -58,7 +58,8 @@ const CSS = `
 .pl-monto { margin-top: 4px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.15; font-variant-numeric: tabular-nums;
     white-space: nowrap; }
 .pl-totales[data-variante="movil"] .pl-monto { font-size: 24px; }
-.pl-totales[data-variante="pc"] .pl-monto { font-size: 21px; }
+/* En PC la columna se angosta con la pantalla: el monto también, para que quepan los dos */
+.pl-totales[data-variante="pc"] .pl-monto { font-size: clamp(17px, 1.45vw, 21px); }
 .pl-cuantos { margin-top: 3px; font-size: 12.5px; color: var(--toul-text-subtle); white-space: nowrap; }
 
 /* La barra: cuánto pesa cada lado. El que estás viendo va entero, el otro tenue */
@@ -67,6 +68,11 @@ const CSS = `
 .pl-barra > span { min-width: 6px; border-radius: 999px; transition: opacity 200ms var(--toul-ease-emil); }
 
 .pl-lista { display: flex; flex-direction: column; margin-top: 8px; }
+/* En el computador: 3 deudores, y 5 en pantallas grandes */
+.pl-lista[data-variante="pc"] > .pl-item:nth-child(n+4) { display: none; }
+@media (min-width: 1440px) {
+    .pl-lista[data-variante="pc"] > .pl-item:nth-child(n+4) { display: flex; }
+}
 .pl-item { display: flex; align-items: center; gap: 6px; }
 .pl-item[data-entra="true"] { animation: pl-entra 260ms cubic-bezier(0.23, 1, 0.32, 1) backwards; }
 @keyframes pl-entra { from { opacity: 0; transform: translateY(6px); } }
@@ -148,7 +154,7 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
     ]
 
     const esCobrar = lado === 'cobrar'
-    const mostrados = (esCobrar ? pending.customerDebts : pending.providerDebts).slice(0, 3)
+    const mostrados = (esCobrar ? pending.customerDebts : pending.providerDebts).slice(0, variante === 'movil' ? 3 : 5)
     const tono = esCobrar ? 'var(--toul-accent)' : 'var(--toul-warning)'
     // Si alguno tiene WhatsApp, todos reservan ese espacio: los montos
     // quedan alineados en vez de bailar de renglón en renglón
@@ -190,7 +196,8 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
 
             <div className="pl-barra" aria-hidden>
                 {hayDeuda && lados.filter(l => l.valor > 0).map(l => (
-                    <span key={l.clave} style={{ flexGrow: l.valor, background: l.color, opacity: lado === l.clave ? 1 : 0.45 }} />
+                    // En PC va siempre a todo color: el mismo amarillo del monto de "Debes"
+                    <span key={l.clave} style={{ flexGrow: l.valor, background: l.color, opacity: variante === 'pc' || lado === l.clave ? 1 : 0.45 }} />
                 ))}
             </div>
 
@@ -206,7 +213,7 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
             ) : mostrados.length === 0 ? (
                 <p className="pl-vacia">{esCobrar ? 'Nadie te debe nada.' : 'No le debes nada a nadie.'}</p>
             ) : (
-                <div key={lado} className="pl-lista">
+                <div key={lado} className="pl-lista" data-variante={variante}>
                     {mostrados.map((persona, i) => {
                         const cuando = sinceLabel(persona.days)
                         const href = esCobrar ? `/customers/${persona.id}` : `/providers/${persona.id}`
