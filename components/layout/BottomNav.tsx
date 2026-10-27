@@ -147,8 +147,13 @@ const GRUPOS: SeccionNav[] = [
 ]
 
 const nombrePlan = (plan: string | undefined) => plan === 'pro' ? 'Plan Pro' : plan === 'basico' ? 'Plan Básico' : ''
-const inicialesDe = (nombre: string) =>
-    nombre.trim().split(/\s+/).map(palabra => palabra[0]).join('').toUpperCase().slice(0, 2) || 'T'
+// "Tienda de perfumes" → TP: las palabras cortas de enlace no cuentan
+const ENLACES = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'e'])
+const inicialesDe = (nombre: string) => {
+    const palabras = nombre.trim().split(/\s+/).filter(Boolean)
+    const fuertes = palabras.filter(p => !ENLACES.has(p.toLowerCase()))
+    return (fuertes.length ? fuertes : palabras).map(p => p[0]).join('').toUpperCase().slice(0, 2) || 'T'
+}
 
 /* El plan llega con los datos del negocio, un momento después de que
    se pinta el menú. Mientras tanto la sección "Punto físico" no salía
@@ -316,10 +321,12 @@ export function Sidebar() {
                 </div>
 
                 {/* Inicio, y los grupos */}
-                <nav className="flex-1 px-3 overflow-y-auto" style={{ paddingBottom: 8 }}>
-                    <div style={{ marginBottom: 16 }}>{fila(INICIO)}</div>
+                {/* Espacios medidos para que todo quepa sin desplazarse, aun en
+                    un portátil de 768 px de alto */}
+                <nav className="flex-1 px-3 overflow-y-auto">
+                    <div style={{ marginBottom: 10 }}>{fila(INICIO)}</div>
                     {GRUPOS.filter(s => seVe(s, plan)).map(section => (
-                        <div key={section.label} style={{ marginBottom: 16 }}>
+                        <div key={section.label} style={{ marginBottom: 10 }}>
                             <p className="nav-grupo">{section.label}</p>
                             {section.items.map(fila)}
                         </div>
@@ -327,10 +334,10 @@ export function Sidebar() {
                 </nav>
 
                 {/* TOUL AI, aparte del resto */}
-                <div className="px-3 pb-3" style={{ flexShrink: 0 }}>{fila(TOUL_AI)}</div>
+                <div className="px-3 pb-2" style={{ flexShrink: 0 }}>{fila(TOUL_AI)}</div>
 
                 {/* La tienda: lo único con una línea encima */}
-                <div className="px-3 pb-4 pt-3" style={{ borderTop: '1px solid var(--toul-divider)', flexShrink: 0 }}>
+                <div className="px-3 pb-3 pt-2" style={{ borderTop: '1px solid var(--toul-divider)', flexShrink: 0 }}>
                     <TiendaMenu nombre={store?.name || 'Mi negocio'} plan={plan}
                         enAjustes={matchPath(pathname, '/settings')}
                         cerrando={cerrando} onCerrarSesion={cerrar} />
