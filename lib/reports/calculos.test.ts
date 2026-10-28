@@ -1,7 +1,7 @@
 // npm run test:calculos
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { conOtros, deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir } from './calculos.ts'
+import { conOtros, deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir, textoPorcentaje } from './calculos.ts'
 
 /** Una fecha y hora de Colombia (UTC−5), sin depender de la zona del equipo que corre la prueba */
 const co = (ano: number, mes: number, dia: number, hora = 0, minuto = 0) => new Date(Date.UTC(ano, mes, dia, hora, minuto) + 5 * 3_600_000)
@@ -110,12 +110,22 @@ test('El resumen: Ganaste, Plata que entró y Plata que salió', () => {
         devoluciones: { total: 100_000, costo: 60_000, reembolsado: 100_000 },
         abonos: 60_000, gastos: 80_000, mercanciaPagada: 300_000,
     })
-    assert.equal(r.contado + r.credito, r.vendiste)
+    assert.equal(r.contado + r.credito, r.ventasAntes)
+    // Vendiste siempre es después de devoluciones
+    assert.equal(r.vendiste, 400_000)
     assert.equal(r.entro, 360_000)
     assert.equal(r.salio, 480_000)
     assert.equal(r.gananciaVentas, 160_000)
     assert.equal(r.ganaste, 80_000)
     assert.equal(r.margen, 40)
-    assert.equal(r.ticket, 250_000)
+    assert.equal(r.ticket, 200_000)
     assert.equal(r.pctCredito, 40)
+})
+
+test('Los porcentajes de menos de 1% se dicen así, no 0% ni 1%', () => {
+    assert.equal(textoPorcentaje(450, 1_743_500), 'menos de 1%')
+    assert.equal(textoPorcentaje(9_000, 1_000_000), 'menos de 1%')
+    assert.equal(textoPorcentaje(10_000, 1_000_000), '1%')
+    assert.equal(textoPorcentaje(370_000, 520_000), '71%')
+    assert.equal(textoPorcentaje(0, 520_000), '0%')
 })

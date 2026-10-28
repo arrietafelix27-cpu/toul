@@ -158,8 +158,13 @@ BEGIN
         UNION ALL
         SELECT nombre, monto, 1 FROM resto WHERE monto > 0
         UNION ALL
-        SELECT COALESCE(NULLIF(trim(payment_method), ''), 'Abonos'), amount,
-               CASE WHEN NULLIF(trim(payment_method), '') IS NULL THEN 2 ELSE 0 END
+        -- Los abonos de antes no tenían método: del 29 sep al 14 oct de 2026
+        -- quedaron como "General" y después sin nada. Todos van como "Abonos"
+        SELECT CASE WHEN NULLIF(trim(payment_method), '') IS NULL OR lower(trim(payment_method)) = 'general'
+                    THEN 'Abonos' ELSE payment_method END,
+               amount,
+               CASE WHEN NULLIF(trim(payment_method), '') IS NULL OR lower(trim(payment_method)) = 'general'
+                    THEN 2 ELSE 0 END
           FROM credits
          WHERE store_id = v_store AND type = 'payment'
            AND created_at >= v_desde AND created_at <= v_hasta
@@ -485,7 +490,423 @@ $$;
 GRANT EXECUTE ON FUNCTION toul_undo_payment(UUID) TO authenticated;
 
 
--- ─── 5. Auditoría de números (solo lectura) ──────────────────────
+-- ─── 5. Abonos: desde ahora todos dicen por dónde te pagaron ─────
+-- Al guardar un abono nuevo sin método, la base lo rechaza, venga de
+-- donde venga. Es al guardar y no una regla de la tabla: los abonos de
+-- antes no tenían método y se tienen que poder seguir moviendo (por
+-- ejemplo, al unir dos clientes repetidos)
+ALTER TABLE credits DROP CONSTRAINT IF EXISTS credits_abono_con_metodo;
+
+CREATE OR REPLACE FUNCTION public.toul_abono_con_metodo()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NULLIF(trim(COALESCE(NEW.payment_method, '')), '') IS NULL THEN
+        RAISE EXCEPTION 'Elige por dónde te pagó';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_toul_abono_con_metodo ON credits;
+CREATE TRIGGER trg_toul_abono_con_metodo BEFORE INSERT ON credits
+    FOR EACH ROW WHEN (NEW.type = 'payment')
+    EXECUTE FUNCTION toul_abono_con_metodo();
+
+
+-- ─── 6. La hoja "Ventas" del Excel ───────────────────────────────
+-- Una fila por venta, con las mismas cuentas de toul_reporte (sale de
+-- toul_reporte_ventas): la hoja suma lo mismo que el resumen
+CREATE OR REPLACE FUNCTION public.toul_reporte_detalle(p_desde timestamptz, p_hasta timestamptz)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+    v_store uuid := toul_current_store_id();
+    v_rows  jsonb;
+BEGIN
+    IF v_store IS NULL OR toul_current_role() IS DISTINCT FROM 'admin' THEN
+        RAISE EXCEPTION 'Solo el administrador puede ver los reportes';
+    END IF;
+
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+               'fecha',     s.created_at,
+               'cliente',   COALESCE(s.customer_name, ''),
+               'vendedor',  COALESCE(s.seller_name, ''),
+               'productos', COALESCE((
+                   SELECT string_agg(i.quantity || '× ' || COALESCE(pr.name, co.name, 'Producto')
+                                     || COALESCE(' · ' || va.name, ''), ', ' ORDER BY i.id)
+                     FROM sale_items i
+                     LEFT JOIN products pr ON pr.id = i.product_id
+                     LEFT JOIN product_variants va ON va.id = i.variant_id
+                     LEFT JOIN combos co ON co.id = i.combo_id
+                    WHERE i.sale_id = s.id), ''),
+               'total',     v.total,
+               'costo',     v.costo,
+               'contado',   v.contado,
+               'credito',   v.total - v.contado,
+               'pagos',     COALESCE((
+                   SELECT jsonb_agg(jsonb_build_object('metodo', COALESCE(pm.name, 'Pago'), 'monto', sp.amount) ORDER BY sp.amount DESC)
+                     FROM sale_payments sp LEFT JOIN payment_methods pm ON pm.id = sp.method_id
+                    WHERE sp.sale_id = s.id AND sp.amount > 0), '[]'::jsonb)
+           ) ORDER BY s.created_at), '[]'::jsonb)
+      INTO v_rows
+      FROM toul_reporte_ventas(v_store, COALESCE(p_desde, '-infinity'::timestamptz), COALESCE(p_hasta, now())) v
+      JOIN sales s ON s.id = v.id;
+
+    RETURN v_rows;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.toul_reporte_detalle(timestamptz, timestamptz) TO authenticated;
+
+
+-- ─── 7. Debes: un solo cálculo ───────────────────────────────────
+-- Lo que falta por pagar de cada compra a crédito (provider_debts), por
+-- proveedor. Es lo mismo que muestra la pantalla Proveedores; el número
+-- guardado en cada proveedor es solo una copia.
+CREATE OR REPLACE FUNCTION public.toul_payables()
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+    v_store uuid := toul_current_store_id();
+    v_hoy   date := (now() AT TIME ZONE 'America/Bogota')::date;
+    v_rows  jsonb;
+BEGIN
+    IF v_store IS NULL OR toul_current_role() IS DISTINCT FROM 'admin' THEN
+        RAISE EXCEPTION 'Solo el administrador puede ver lo que debes';
+    END IF;
+
+    WITH abiertas AS (
+        SELECT d.provider_id, d.remaining_amount, d.created_at,
+               -- El plazo es un día del calendario: se guardó a la medianoche UTC
+               (d.due_date AT TIME ZONE 'UTC')::date AS vence
+          FROM provider_debts d
+         WHERE d.store_id = v_store AND d.status <> 'paid' AND d.remaining_amount > 0
+    ),
+    por_proveedor AS (
+        SELECT a.provider_id,
+               round(SUM(a.remaining_amount)) AS saldo,
+               MIN(a.vence) AS vence,
+               count(*) FILTER (WHERE a.vence < v_hoy)::integer AS vencidas,
+               MIN(a.created_at) AS desde
+          FROM abiertas a
+         GROUP BY a.provider_id
+    )
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+               'id',       pp.provider_id,
+               'nombre',   pr.name,
+               'telefono', pr.phone,
+               'saldo',    pp.saldo,
+               'vence',    pp.vence,
+               'vencidas', pp.vencidas,
+               'desde',    pp.desde
+           ) ORDER BY pp.saldo DESC, pr.name), '[]'::jsonb)
+      INTO v_rows
+      FROM por_proveedor pp
+      JOIN providers pr ON pr.id = pp.provider_id
+     WHERE pp.saldo > 0;
+
+    RETURN jsonb_build_object(
+        'total',       COALESCE((SELECT SUM((x->>'saldo')::numeric) FROM jsonb_array_elements(v_rows) x), 0),
+        'proveedores', v_rows
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.toul_payables() TO authenticated;
+
+
+-- ─── 8. Pagarle al proveedor ─────────────────────────────────────
+-- Todo o nada: baja lo que falta de sus compras, de la más vieja a la más
+-- nueva, anota la salida de caja y deja la copia del proveedor igual a lo
+-- que de verdad falta. Antes eran tres escrituras sueltas desde la app.
+CREATE OR REPLACE FUNCTION public.toul_pagar_proveedor(p_provider_id uuid, p_amount numeric, p_notes text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+    v_store  uuid := toul_current_store_id();
+    v_monto  numeric := round(COALESCE(p_amount, 0));
+    v_nombre text;
+    v_saldo  numeric;
+    v_falta  numeric;
+    v_d      record;
+    v_baja   numeric;
+BEGIN
+    IF v_store IS NULL OR toul_current_role() IS DISTINCT FROM 'admin' THEN
+        RAISE EXCEPTION 'Solo el administrador puede registrar pagos a proveedores';
+    END IF;
+
+    -- Bloquea al proveedor: dos pagos al mismo tiempo no pueden pasarse de la deuda
+    SELECT name INTO v_nombre FROM providers WHERE id = p_provider_id AND store_id = v_store FOR UPDATE;
+    IF v_nombre IS NULL THEN RAISE EXCEPTION 'Proveedor no encontrado'; END IF;
+    IF v_monto <= 0 THEN RAISE EXCEPTION 'Escribe cuánto le pagaste'; END IF;
+
+    SELECT round(COALESCE(SUM(remaining_amount), 0)) INTO v_saldo
+      FROM provider_debts
+     WHERE store_id = v_store AND provider_id = p_provider_id AND status <> 'paid' AND remaining_amount > 0;
+    IF v_saldo <= 0 THEN RAISE EXCEPTION 'A % no le debes nada', v_nombre; END IF;
+    IF v_monto > v_saldo THEN
+        RAISE EXCEPTION 'El pago no puede ser mayor a lo que le debes: $%', replace(to_char(v_saldo, 'FM999,999,999,999'), ',', '.');
+    END IF;
+
+    v_falta := v_monto;
+    FOR v_d IN
+        SELECT id, remaining_amount FROM provider_debts
+         WHERE store_id = v_store AND provider_id = p_provider_id AND status <> 'paid' AND remaining_amount > 0
+         ORDER BY created_at, id
+           FOR UPDATE
+    LOOP
+        EXIT WHEN v_falta <= 0;
+        v_baja := LEAST(v_falta, v_d.remaining_amount);
+        UPDATE provider_debts
+           SET remaining_amount = remaining_amount - v_baja,
+               status = CASE WHEN remaining_amount - v_baja <= 0 THEN 'paid' ELSE 'pending' END
+         WHERE id = v_d.id;
+        v_falta := v_falta - v_baja;
+    END LOOP;
+
+    INSERT INTO payments (store_id, type, method, amount, reference_id, notes)
+    VALUES (v_store, 'provider_payment', 'General', v_monto, p_provider_id,
+            COALESCE(NULLIF(trim(p_notes), ''), 'Abono a proveedor: ' || v_nombre));
+
+    UPDATE providers SET total_debt = v_saldo - v_monto WHERE id = p_provider_id;
+
+    RETURN jsonb_build_object('success', true, 'amount', v_monto, 'saldo', v_saldo - v_monto);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.toul_pagar_proveedor(uuid, numeric, text) TO authenticated;
+
+
+-- ─── 9. Una venta sin internet queda con su hora real ────────────
+-- process_sale guarda la venta con la hora en que se hizo (soldAt), pero
+-- la entrada de caja, el detalle de pagos y el fiado quedaban con la hora
+-- en que llegó la señal. Ahora toman la hora de la venta.
+CREATE OR REPLACE FUNCTION public.toul_hora_de_la_venta()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_cuando timestamptz;
+    v_venta  uuid;
+BEGIN
+    -- Qué filas entran lo deciden los WHEN de cada trigger
+    IF TG_TABLE_NAME = 'payments' THEN
+        v_venta := NEW.reference_id;
+    ELSE
+        v_venta := NEW.sale_id;
+    END IF;
+    IF v_venta IS NOT NULL THEN
+        SELECT created_at INTO v_cuando FROM sales WHERE id = v_venta;
+        IF v_cuando IS NOT NULL THEN NEW.created_at := v_cuando; END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_toul_hora_venta_payments ON payments;
+CREATE TRIGGER trg_toul_hora_venta_payments BEFORE INSERT ON payments
+    FOR EACH ROW WHEN (NEW.type = 'sale' AND NEW.reference_id IS NOT NULL)
+    EXECUTE FUNCTION toul_hora_de_la_venta();
+
+DROP TRIGGER IF EXISTS trg_toul_hora_venta_sale_payments ON sale_payments;
+CREATE TRIGGER trg_toul_hora_venta_sale_payments BEFORE INSERT ON sale_payments
+    FOR EACH ROW EXECUTE FUNCTION toul_hora_de_la_venta();
+
+DROP TRIGGER IF EXISTS trg_toul_hora_venta_credits ON credits;
+CREATE TRIGGER trg_toul_hora_venta_credits BEFORE INSERT ON credits
+    FOR EACH ROW WHEN (NEW.type = 'debt' AND NEW.sale_id IS NOT NULL)
+    EXECUTE FUNCTION toul_hora_de_la_venta();
+
+
+-- ─── 10. Plata en mercancía ──────────────────────────────────────
+-- Todo lo que tienes en bodega, al costo y a precio de venta, contando
+-- cada presentación y también lo escondido que todavía tiene stock.
+-- Un producto con presentaciones vale lo que valen sus presentaciones.
+CREATE OR REPLACE FUNCTION public.toul_plata_en_mercancia(p_store uuid)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+    WITH u AS (
+        SELECT v.stock, v.cpp AS costo, v.sale_price AS precio, (NOT v.is_active OR NOT p.is_active) AS escondido
+          FROM product_variants v JOIN products p ON p.id = v.product_id
+         WHERE v.store_id = p_store
+        UNION ALL
+        SELECT p.stock, p.cpp, p.sale_price, NOT p.is_active
+          FROM products p
+         WHERE p.store_id = p_store
+           AND NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id)
+    )
+    SELECT jsonb_build_object(
+        'costo',     COALESCE(SUM(GREATEST(stock, 0) * COALESCE(costo, 0)), 0),
+        'venta',     COALESCE(SUM(GREATEST(stock, 0) * COALESCE(precio, 0)), 0),
+        'escondido', COALESCE(SUM(GREATEST(stock, 0) * COALESCE(costo, 0)) FILTER (WHERE escondido), 0)
+    )
+      FROM u
+$$;
+
+-- toul_inventory_overview sin cambios, salvo de dónde sale el valor
+CREATE OR REPLACE FUNCTION toul_inventory_overview(
+    p_limit INTEGER DEFAULT 60,
+    p_idle_days INTEGER DEFAULT 60
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+    v_store    UUID;
+    v_days     INTEGER;
+    v_since    TIMESTAMPTZ;
+    v_result   JSONB;
+BEGIN
+    SELECT id, GREATEST(stock_coverage_days, 1) INTO v_store, v_days
+    FROM stores WHERE owner_id = auth.uid() LIMIT 1;
+
+    IF v_store IS NULL THEN RETURN NULL; END IF;
+
+    v_since := now() - INTERVAL '30 days';
+
+    WITH vendido AS (
+        SELECT si.product_id, si.variant_id, SUM(si.quantity) AS units
+        FROM sale_items si
+        JOIN sales s ON s.id = si.sale_id
+        WHERE s.store_id = v_store AND s.created_at >= v_since
+        GROUP BY si.product_id, si.variant_id
+    ),
+    -- La última vez que se vendió cada cosa, sin límite de tiempo
+    ultima_venta AS (
+        SELECT si.product_id, si.variant_id, MAX(s.created_at) AS last_sale
+        FROM sale_items si
+        JOIN sales s ON s.id = si.sale_id
+        WHERE s.store_id = v_store
+        GROUP BY si.product_id, si.variant_id
+    ),
+    -- Desde cuándo está la mercancía en la bodega: la primera entrada
+    desde AS (
+        SELECT product_id, variant_id, MIN(created_at) AS owned_since
+        FROM inventory_adjustments
+        WHERE store_id = v_store AND quantity > 0
+        GROUP BY product_id, variant_id
+    ),
+    unidades AS (
+        SELECT
+            v.id                   AS id,
+            'presentacion'::TEXT   AS kind,
+            p.id                   AS product_id,
+            p.name                 AS product_name,
+            v.name                 AS variant_name,
+            p.image_url,
+            v.stock                AS stock,
+            v.cpp                  AS cost,
+            v.sale_price           AS price,
+            v.low_stock_threshold  AS manual_min,
+            COALESCE((SELECT units FROM vendido WHERE variant_id = v.id), 0) AS sold_30d,
+            (SELECT last_sale FROM ultima_venta WHERE variant_id = v.id) AS last_sale,
+            COALESCE((SELECT owned_since FROM desde WHERE variant_id = v.id), p.created_at) AS owned_since
+        FROM product_variants v
+        JOIN products p ON p.id = v.product_id
+        WHERE v.store_id = v_store AND v.is_active AND p.is_active
+
+        UNION ALL
+
+        SELECT
+            p.id, 'producto'::TEXT, p.id, p.name, NULL, p.image_url,
+            p.stock, p.cpp, p.sale_price, p.low_stock_threshold,
+            COALESCE((SELECT units FROM vendido WHERE product_id = p.id AND variant_id IS NULL), 0),
+            (SELECT last_sale FROM ultima_venta WHERE product_id = p.id AND variant_id IS NULL),
+            COALESCE((SELECT owned_since FROM desde WHERE product_id = p.id AND variant_id IS NULL), p.created_at)
+        FROM products p
+        WHERE p.store_id = v_store AND p.is_active
+          AND NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id AND v.is_active)
+    ),
+    calculado AS (
+        SELECT *,
+            COALESCE(
+                manual_min,
+                GREATEST(CEIL((sold_30d::NUMERIC / 30) * v_days)::INTEGER, 1)
+            ) AS min_stock,
+            -- Días quieto: desde la última venta; si nunca se vendió,
+            -- desde que la mercancía llegó. Nunca desde que se creó la ficha.
+            GREATEST(
+                FLOOR(EXTRACT(EPOCH FROM (now() - COALESCE(last_sale, owned_since))) / 86400)::INTEGER,
+                0
+            ) AS idle_days
+        FROM unidades
+    )
+    SELECT jsonb_build_object(
+        'coverageDays', v_days,
+        'idleDays',  p_idle_days,
+        -- Plata en mercancía: también lo escondido que todavía tiene stock
+        -- (toul_plata_en_mercancia). El resto de esta función sigue siendo
+        -- solo lo que está a la venta
+        'value',     (toul_plata_en_mercancia(v_store)->>'costo')::numeric,
+        -- Lo mismo pero a lo que lo vendes, no a lo que te costó
+        'retailValue', (toul_plata_en_mercancia(v_store)->>'venta')::numeric,
+        'hiddenValue', (toul_plata_en_mercancia(v_store)->>'escondido')::numeric,
+        'units',     COALESCE(SUM(GREATEST(stock, 0)), 0),
+        -- Cuánto sale al día, para saber cuánto dura la bodega
+        'soldUnits30', COALESCE(SUM(sold_30d), 0),
+        'items',     COUNT(*),
+        'references', COUNT(DISTINCT product_id),
+        'outOfStock', COUNT(*) FILTER (WHERE stock <= 0),
+        'lowStock',   COUNT(*) FILTER (WHERE stock > 0 AND stock <= min_stock),
+        'alerts', COALESCE((
+            SELECT jsonb_agg(row_to_json(a) ORDER BY a.stock, a.sold_30d DESC)
+            FROM (
+                SELECT id, kind, product_id, product_name, variant_name, image_url,
+                       stock, cost, min_stock, sold_30d, idle_days
+                FROM calculado
+                WHERE stock <= min_stock
+                ORDER BY stock, sold_30d DESC
+                LIMIT p_limit
+            ) a
+        ), '[]'::JSONB),
+        -- Plata dormida: con existencias y de verdad sin moverse
+        'dormantValue', COALESCE(SUM(GREATEST(stock, 0) * cost)
+                                 FILTER (WHERE stock > 0 AND idle_days >= p_idle_days), 0),
+        'dormantCount', COUNT(*) FILTER (WHERE stock > 0 AND idle_days >= p_idle_days),
+        'dormant', COALESCE((
+            SELECT jsonb_agg(row_to_json(d) ORDER BY d.idle_days DESC)
+            FROM (
+                SELECT id, kind, product_id, product_name, variant_name, image_url,
+                       stock, cost, idle_days, (last_sale IS NULL) AS never_sold
+                FROM calculado
+                WHERE stock > 0 AND idle_days >= p_idle_days
+                ORDER BY idle_days DESC
+                LIMIT p_limit
+            ) d
+        ), '[]'::JSONB)
+    )
+    INTO v_result
+    FROM calculado;
+
+    RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION toul_inventory_overview(INTEGER, INTEGER) TO authenticated;
+
+
+-- ─── 11. Auditoría de números (solo lectura) ─────────────────────
 -- Revisa, mes por mes desde la primera venta, que los números de
 -- Reportes cuadren entre sí y contra los movimientos, y que el Inicio y
 -- el Excel den lo mismo. Al final revisa lo de hoy: te deben, debes,
@@ -544,7 +965,7 @@ BEGIN
         v_ganancia   := v_netas - v_costo_neto;
         v_ganaste    := v_ganancia - v_gastos;
 
-        chequeo := 'De contado + A crédito = Vendiste';
+        chequeo := 'De contado + A crédito = Ventas antes de devoluciones';
         esperado := v_total; obtenido := v_contado + v_credito; ok := esperado = obtenido; detalle := NULL;
         RETURN NEXT;
 
@@ -600,42 +1021,35 @@ BEGIN
             RETURN NEXT;
         END IF;
 
-        -- El Inicio: las mismas filas que pide app/(app)/page.tsx, sumadas
-        -- y redondeadas como lo hace metricasInicio
+        -- El Inicio usa esta misma función. Aparte, se suman directo las
+        -- ventas, devoluciones y gastos del mes: tienen que dar lo mismo
         SELECT round(COALESCE(SUM(s.total), 0)),
                round(COALESCE(SUM((SELECT COALESCE(SUM(i.unit_cost * i.quantity), 0) FROM sale_items i WHERE i.sale_id = s.id)), 0))
           INTO v_x, v_y
           FROM sales s WHERE s.store_id = v_store AND s.created_at >= v_desde AND s.created_at <= v_hasta;
         SELECT v_x - round(COALESCE(SUM(total), 0)), v_y - round(COALESCE(SUM(cost_total), 0)) INTO v_x, v_y
           FROM sale_returns WHERE store_id = v_store AND created_at >= v_desde AND created_at <= v_hasta;
-        chequeo := 'Inicio = Reportes: Vendiste';
+        chequeo := 'Vendiste (después de devoluciones) = suma directa';
         esperado := v_netas; obtenido := v_x; ok := esperado = obtenido; detalle := NULL;
         RETURN NEXT;
-        chequeo := 'Inicio = Reportes: Ganancia en ventas';
+        chequeo := 'Ganancia en ventas = suma directa';
         esperado := v_ganancia; obtenido := v_x - v_y; ok := esperado = obtenido;
         RETURN NEXT;
         SELECT round(COALESCE(SUM(amount), 0)) INTO v_x FROM expenses
          WHERE store_id = v_store AND created_at >= v_desde AND created_at <= v_hasta;
-        chequeo := 'Inicio = Reportes: Gastos';
+        chequeo := 'Gastos = suma directa';
         esperado := v_gastos; obtenido := v_x; ok := esperado = obtenido;
         RETURN NEXT;
-        chequeo := 'Inicio = Reportes: Ganancia después de gastos';
+        chequeo := 'Ganancia después de gastos = suma directa';
         esperado := v_ganaste; obtenido := v_ganancia - v_x; ok := esperado = obtenido;
         RETURN NEXT;
 
-        -- La hoja "Ventas" del Excel: una fila por venta con la regla de
-        -- lib/reports/descargar.ts, sumada
-        WITH filas AS (
-            SELECT s.total,
-                   (SELECT COALESCE(SUM(i.unit_cost * i.quantity), 0) FROM sale_items i WHERE i.sale_id = s.id) AS costo,
-                   CASE WHEN s.is_credit
-                        THEN LEAST(GREATEST((SELECT COALESCE(SUM(sp.amount), 0) FROM sale_payments sp WHERE sp.sale_id = s.id), 0), s.total)
-                        ELSE s.total END AS contado
-              FROM sales s WHERE s.store_id = v_store AND s.created_at >= v_desde AND s.created_at <= v_hasta
-        )
-        SELECT round(COALESCE(SUM(total), 0)), round(COALESCE(SUM(costo), 0)), round(COALESCE(SUM(contado), 0)), count(*)::integer
-          INTO v_x, v_y, v_c, v_n FROM filas;
-        chequeo := 'Excel: la columna Total suma lo mismo que Vendiste';
+        -- La hoja "Ventas" del Excel, tal cual la arma toul_reporte_detalle
+        SELECT round(COALESCE(SUM((f->>'total')::numeric), 0)), round(COALESCE(SUM((f->>'costo')::numeric), 0)),
+               round(COALESCE(SUM((f->>'contado')::numeric), 0)), count(*)::integer
+          INTO v_x, v_y, v_c, v_n
+          FROM jsonb_array_elements(toul_reporte_detalle(v_desde, v_hasta)) f;
+        chequeo := 'Excel: la columna Total suma lo mismo que Ventas antes de devoluciones';
         esperado := v_total; obtenido := v_x; ok := esperado = obtenido; detalle := v_n || ' ventas en la hoja';
         RETURN NEXT;
         chequeo := 'Excel: la columna Costo suma lo mismo que el resumen';
@@ -675,10 +1089,16 @@ BEGIN
     detalle := CASE WHEN v_n > 0 THEN v_n || ' cliente(s) descuadrado(s): se arreglan con "Cuadrar" en su ficha' END;
     RETURN NEXT;
 
+    -- Debes: el Inicio y Proveedores usan toul_payables
+    v_y := round((toul_payables()->>'total')::numeric);
     SELECT round(COALESCE(SUM(total_debt), 0)) INTO v_x FROM providers WHERE store_id = v_store;
-    SELECT round(COALESCE(SUM(remaining_amount), 0)) INTO v_y FROM provider_debts WHERE store_id = v_store AND status <> 'paid';
-    chequeo := 'Debes: el Inicio (proveedores) = Proveedores (deudas por compra)';
-    esperado := v_y; obtenido := v_x; ok := esperado = obtenido; detalle := NULL;
+    SELECT count(*)::integer INTO v_n FROM providers pr
+     WHERE pr.store_id = v_store
+       AND round(COALESCE(pr.total_debt, 0)) <> round(COALESCE((SELECT SUM(remaining_amount) FROM provider_debts d
+                                                               WHERE d.provider_id = pr.id AND d.status <> 'paid'), 0));
+    chequeo := 'Debes = lo guardado en cada proveedor';
+    esperado := v_y; obtenido := v_x; ok := v_n = 0;
+    detalle := CASE WHEN v_n > 0 THEN v_n || ' proveedor(es) con la copia descuadrada' END;
     RETURN NEXT;
 
     SELECT round(COALESCE(SUM(p.total - (SELECT COALESCE(SUM(pp.amount), 0) FROM purchase_payments pp WHERE pp.purchase_id = p.id)), 0))
@@ -689,20 +1109,17 @@ BEGIN
     esperado := v_y; obtenido := v_x; ok := esperado = obtenido; detalle := NULL;
     RETURN NEXT;
 
-    -- Plata en mercancía, contada aparte: cada presentación con su costo
-    SELECT round(COALESCE(SUM(GREATEST(stock, 0) * cpp), 0)) INTO v_x FROM (
-        SELECT v.stock, v.cpp FROM product_variants v JOIN products p ON p.id = v.product_id
-         WHERE v.store_id = v_store AND v.is_active AND p.is_active
-        UNION ALL
-        SELECT p.stock, p.cpp FROM products p
-         WHERE p.store_id = v_store AND p.is_active
-           AND NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id AND v.is_active)
-    ) u;
-    SELECT round(COALESCE(SUM(GREATEST(stock, 0) * cpp), 0)) INTO v_y FROM products
-     WHERE store_id = v_store AND NOT is_active AND stock > 0;
-    chequeo := 'Plata en mercancía = stock × costo, con presentaciones';
+    -- Plata en mercancía, contada aparte: cada presentación con su costo,
+    -- también lo escondido que tiene stock
+    SELECT round(COALESCE(SUM(GREATEST(v.stock, 0) * COALESCE(v.cpp, 0)), 0)) INTO v_x
+      FROM product_variants v WHERE v.store_id = v_store;
+    SELECT v_x + round(COALESCE(SUM(GREATEST(p.stock, 0) * COALESCE(p.cpp, 0)), 0)) INTO v_x
+      FROM products p WHERE p.store_id = v_store
+       AND NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id);
+    v_y := round((toul_inventory_overview(1)->>'hiddenValue')::numeric);
+    chequeo := 'Plata en mercancía = stock × costo, con presentaciones y lo escondido';
     esperado := round((toul_inventory_overview(1)->>'value')::numeric); obtenido := v_x; ok := esperado = obtenido;
-    detalle := CASE WHEN v_y > 0 THEN 'No cuenta $' || v_y || ' de productos escondidos que todavía tienen stock' END;
+    detalle := CASE WHEN v_y > 0 THEN 'Incluye $' || v_y || ' de productos escondidos con stock' END;
     RETURN NEXT;
 
     SELECT count(*)::integer, string_agg(nombre, ', ') INTO v_n, v_txt FROM (

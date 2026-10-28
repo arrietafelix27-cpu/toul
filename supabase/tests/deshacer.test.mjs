@@ -39,7 +39,7 @@ export default async function (db) {
   const [cli] = await q(`INSERT INTO customers(store_id,name,total_debt) VALUES ($1,'María',0) RETURNING id`, [STORE])
   await q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'debt',500000)`, [STORE, cli.id])
   await q(`UPDATE customers SET total_debt=500000 WHERE id=$1`, [cli.id])
-  const [abono] = await q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'payment',200000) RETURNING id, created_at`, [STORE, cli.id])
+  const [abono] = await q(`INSERT INTO credits(store_id,customer_id,type,amount,payment_method) VALUES ($1,$2,'payment',200000,'Efectivo') RETURNING id, created_at`, [STORE, cli.id])
   await q(`UPDATE customers SET total_debt=300000 WHERE id=$1`, [cli.id])
   await q(`INSERT INTO payments(store_id,type,method,amount,notes,created_at)
            VALUES ($1,'sale_payment','General',200000,'Abono del cliente: María',$2)`, [STORE, abono.created_at])

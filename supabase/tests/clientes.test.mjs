@@ -65,7 +65,7 @@ export default async function (db) {
   const [desc] = await q(`INSERT INTO customers(store_id,name,total_debt) VALUES ($1,'Daneys',999999) RETURNING id`, [STORE])
   const [vd] = await q(`INSERT INTO sales(store_id,customer_id,total,is_credit) VALUES ($1,$2,300000,true) RETURNING id`, [STORE, desc.id])
   await q(`INSERT INTO credits(store_id,customer_id,sale_id,type,amount) VALUES ($1,$2,$3,'debt',300000)`, [STORE, desc.id, vd.id])
-  await q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'payment',100000)`, [STORE, desc.id])
+  await q(`INSERT INTO credits(store_id,customer_id,type,amount,payment_method) VALUES ($1,$2,'payment',100000,'Efectivo')`, [STORE, desc.id])
 
   const fix = await as(O, async () => (await one(`SELECT toul_recalc_customer_debt($1) r`, [desc.id])).r)
   ok(Number(fix.fixed) === 1, 'detecta que la ficha no cuadra con los movimientos')

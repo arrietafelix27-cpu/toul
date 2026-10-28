@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatPrecio } from '@/lib/utils'
+import { capitalizeFirst } from '@/lib/format/text'
+import { nombreCategoria } from '@/lib/types'
 import { ZONA_COLOMBIA, contraQue, enColombia, formatoColombia, textoRango, type Periodo, type Tramo } from '@/lib/periodos'
-import { deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir } from '@/lib/reports/calculos'
+import { deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir, textoPorcentaje } from '@/lib/reports/calculos'
 import type { MesReporte, ReporteSQL } from '@/lib/reports/types'
 
 /* ══════════════════════════════════════════════════════════════
@@ -42,14 +44,16 @@ function filasResumen(b: Base): [string, number, 'plata' | 'pct'][] {
     const r = resumir(b.actual)
     const filas: [string, number, 'plata' | 'pct'][] = [
         [r.ganaste < 0 ? 'Perdiste' : 'Ganaste', Math.abs(r.ganaste), 'plata'],
-        ['Vendiste', r.vendiste, 'plata'],
+        ['Vendiste (después de devoluciones)', r.vendiste, 'plata'],
+        ['Ventas antes de devoluciones', r.ventasAntes, 'plata'],
         ['De contado', r.contado, 'plata'],
         ['A crédito', r.credito, 'plata'],
+        ['Lo devuelto, a precio de venta', r.devoluciones, 'plata'],
         ['Abonos que te hicieron', r.abonos, 'plata'],
         ['Plata que entró', r.entro, 'plata'],
         ['Gastos', r.gastos, 'plata'],
         ['Mercancía que pagaste', r.mercancia, 'plata'],
-        ['Devoluciones', r.devuelto, 'plata'],
+        ['Devoluciones (plata que salió)', r.devuelto, 'plata'],
         ['Plata que salió', r.salio, 'plata'],
         ['Ganancia en ventas', r.gananciaVentas, 'plata'],
         ['Margen promedio', (r.margen ?? 0) / 100, 'pct'],
@@ -60,37 +64,20 @@ function filasResumen(b: Base): [string, number, 'plata' | 'pct'][] {
     return filas
 }
 
+/** Una fila de toul_reporte_detalle: la misma cuenta del resumen, venta por venta */
 interface VentaFila {
-    created_at: string; total: number; is_credit: boolean; customer_name: string | null; seller_name?: string | null
-    sale_items: { quantity: number; unit_cost: number; products: { name: string } | null; combos: { name: string } | null }[]
-    sale_payments: { amount: number; payment_methods: { name: string } | null }[]
+    fecha: string; cliente: string; vendedor: string; productos: string
+    total: number; costo: number; contado: number; credito: number
+    pagos: { metodo: string; monto: number }[]
 }
 
-async function ventasDelPeriodo(supabase: SupabaseClient, storeId: string, tramo: Tramo): Promise<VentaFila[]> {
-    const base = 'created_at, total, is_credit, customer_name, sale_items(quantity, unit_cost, products(name), combos(name)), sale_payments(amount, payment_methods(name))'
-    const filas: VentaFila[] = []
-    for (let desde = 0; ; desde += 1000) {
-        const pedir = (select: string) => {
-            let q = supabase.from('sales').select(select).eq('store_id', storeId).order('created_at')
-            if (tramo.from) q = q.gte('created_at', tramo.from)
-            if (tramo.to) q = q.lte('created_at', tramo.to)
-            return q.range(desde, desde + 999)
-        }
-        // seller_name existe desde el modo isla; si falta, se pide sin él
-        let { data, error } = await pedir(`${base}, seller_name`)
-        if (error) ({ data, error } = await pedir(base))
-        if (error) throw error
-        const pagina = (data ?? []) as unknown as VentaFila[]
-        filas.push(...pagina)
-        if (pagina.length < 1000) return filas
-    }
-}
-
-export async function descargarExcel(b: Base & { supabase: SupabaseClient; storeId: string }) {
-    const [{ default: writeXlsxFile }, ventas] = await Promise.all([
+export async function descargarExcel(b: Base & { supabase: SupabaseClient }) {
+    const [{ default: writeXlsxFile }, detalle] = await Promise.all([
         import('write-excel-file/browser'),
-        ventasDelPeriodo(b.supabase, b.storeId, b.tramo),
+        b.supabase.rpc('toul_reporte_detalle', { p_desde: b.tramo.from, p_hasta: b.tramo.to }),
     ])
+    if (detalle.error) throw detalle.error
+    const ventas = (detalle.data ?? []) as VentaFila[]
     const nombre = titulo(b.periodo, b.tramo)
     const negrita = { fontWeight: 'bold' as const }
     const plata = '#,##0'
@@ -105,7 +92,7 @@ export async function descargarExcel(b: Base & { supabase: SupabaseClient; store
         ]),
         [],
         [{ value: 'En qué gastaste', ...negrita }],
-        ...b.actual.gastosPorCategoria.map(g => [{ value: g.categoria }, { value: Number(g.monto), type: Number, format: plata }]),
+        ...b.actual.gastosPorCategoria.map(g => [{ value: nombreCategoria(g.categoria) }, { value: Number(g.monto), type: Number, format: plata }]),
         [],
         [{ value: 'Qué te dejó más', ...negrita }, { value: 'Ganancia', ...negrita }, { value: 'Margen', ...negrita }],
         ...b.actual.productos.map(p => [
@@ -114,37 +101,31 @@ export async function descargarExcel(b: Base & { supabase: SupabaseClient; store
         ]),
         [],
         [{ value: 'Cómo te pagan', ...negrita }],
-        ...b.actual.metodos.map(m => [{ value: m.nombre }, { value: Number(m.monto), type: Number, format: plata }]),
+        ...b.actual.metodos.map(m => [{ value: capitalizeFirst(m.nombre) }, { value: Number(m.monto), type: Number, format: plata }]),
     ]
 
     const cabeza = ['Fecha', 'Cliente', 'Vendedor', 'Productos', 'Total', 'Costo', 'Ganancia', 'De contado', 'A crédito', 'Cómo pagó']
-    const detalle = [
+    // Sin redondear cada venta: así la suma de cada columna da lo mismo que el resumen
+    const hoja = [
         cabeza.map(c => ({ value: c, ...negrita })),
-        ...ventas.map(v => {
-            // La misma cuenta que el resumen (toul_reporte_ventas): sin
-            // redondear cada venta, para que la suma de la columna dé lo mismo
-            const costo = v.sale_items.reduce((s, i) => s + Number(i.unit_cost) * Number(i.quantity), 0)
-            const pagado = v.sale_payments.reduce((s, p) => s + Number(p.amount), 0)
-            const contado = v.is_credit ? Math.min(Math.max(pagado, 0), Number(v.total)) : Number(v.total)
-            return [
-                // Excel no sabe de zonas horarias: se escribe la hora de Colombia (UTC−5)
-                { value: new Date(new Date(v.created_at).getTime() - 5 * 3_600_000), type: Date, format: 'dd/mm/yyyy hh:mm' },
-                { value: v.customer_name ?? '' },
-                { value: v.seller_name ?? '' },
-                { value: v.sale_items.map(i => `${i.quantity}× ${i.products?.name ?? i.combos?.name ?? 'Producto'}`).join(', ') },
-                { value: Number(v.total), type: Number, format: plata },
-                { value: costo, type: Number, format: plata },
-                { value: Number(v.total) - costo, type: Number, format: plata },
-                { value: contado, type: Number, format: plata },
-                { value: Number(v.total) - contado, type: Number, format: plata },
-                { value: v.sale_payments.map(p => `${p.payment_methods?.name ?? 'Pago'} ${formatPrecio(Number(p.amount))}`).join(', ') },
-            ]
-        }),
+        ...ventas.map(v => [
+            // Excel no sabe de zonas horarias: se escribe la hora de Colombia (UTC−5)
+            { value: new Date(new Date(v.fecha).getTime() - 5 * 3_600_000), type: Date, format: 'dd/mm/yyyy hh:mm' },
+            { value: v.cliente },
+            { value: v.vendedor },
+            { value: v.productos },
+            { value: Number(v.total), type: Number, format: plata },
+            { value: Number(v.costo), type: Number, format: plata },
+            { value: Number(v.total) - Number(v.costo), type: Number, format: plata },
+            { value: Number(v.contado), type: Number, format: plata },
+            { value: Number(v.credito), type: Number, format: plata },
+            { value: v.pagos.map(p => `${capitalizeFirst(p.metodo)} ${formatPrecio(Number(p.monto))}`).join(', ') },
+        ]),
     ]
 
     await writeXlsxFile([
         { sheet: 'Resumen', data: resumen, columns: [{ width: 32 }, { width: 16 }, { width: 10 }] },
-        { sheet: 'Ventas', data: detalle, stickyRowsCount: 1,
+        { sheet: 'Ventas', data: hoja, stickyRowsCount: 1,
             columns: [{ width: 17 }, { width: 22 }, { width: 16 }, { width: 44 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 30 }] },
     ] as Parameters<typeof writeXlsxFile>[0]).toFile(`TOUL - ${nombre}.xlsx`)
 }
@@ -237,7 +218,7 @@ export async function descargarPDF(b: Base) {
         y += 6.2
     }
     texto('Entradas', izq, y, 8.5, PAPEL.gris); y += 5.5
-    fila('Vendiste', r.vendiste)
+    fila('Ventas antes de devoluciones', r.ventasAntes)
     fila('De contado', r.contado, { sub: true })
     fila('A crédito', r.credito, { sub: true })
     fila('Abonos que te hicieron', r.abonos)
@@ -254,7 +235,7 @@ export async function descargarPDF(b: Base) {
     const der = 112, anchoDer = derecha - der
     y = arriba
     texto('De cada $100 que vendiste', der, y, 13, PAPEL.texto, true); y += 6
-    const cien = deCada100({ ventas: r.ventasNetas, costo: r.costoNeto, gastos: r.gastos })
+    const cien = deCada100({ ventas: r.vendiste, costo: r.costoNeto, gastos: r.gastos })
     if (!cien) {
         texto('Sin ventas en este periodo', der, y + 2, 10, PAPEL.gris); y += 10
     } else {
@@ -327,13 +308,12 @@ export async function descargarPDF(b: Base) {
             yy += 6
         }
     }
-    const categoria = (c: string) => c.charAt(0).toUpperCase() + c.slice(1)
-    lista(margen, 'En qué gastaste', b.actual.gastosPorCategoria.map(g => [categoria(g.categoria), '', Number(g.monto)]))
+    lista(margen, 'En qué gastaste', b.actual.gastosPorCategoria.map(g => [nombreCategoria(g.categoria), '', Number(g.monto)]))
     lista(margen + col3 + gap, 'Qué te dejó más',
         b.actual.productos.map(p => [p.nombre, `${Math.round(Number(p.margen))}% de margen`, Number(p.ganancia)]))
     const total = b.actual.metodos.reduce((s, m) => s + Number(m.monto), 0)
     lista(margen + (col3 + gap) * 2, 'Cómo te pagan',
-        b.actual.metodos.map(m => [m.nombre, total > 0 ? `${Math.round((Number(m.monto) / total) * 100)}%` : '', Number(m.monto)]))
+        b.actual.metodos.map(m => [capitalizeFirst(m.nombre), textoPorcentaje(Number(m.monto), total), Number(m.monto)]))
 
     const ahora = new Date().toLocaleString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: ZONA_COLOMBIA })
     texto(`Generado con TOUL el ${ahora}`, margen, 289, 8, PAPEL.gris)

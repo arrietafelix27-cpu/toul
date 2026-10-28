@@ -35,8 +35,8 @@ export default async function (db) {
     return v.id
   }
   const abonar = (cliente, monto, haceDias = 0) => q(
-    `INSERT INTO credits(store_id,customer_id,type,amount,created_at)
-     VALUES ($1,$2,'payment',$3, now() - ($4 || ' days')::interval)`,
+    `INSERT INTO credits(store_id,customer_id,type,amount,payment_method,created_at)
+     VALUES ($1,$2,'payment',$3,'Efectivo', now() - ($4 || ' days')::interval)`,
     [STORE, cliente, monto, String(haceDias)])
   const cliente = async (nombre) =>
     (await one(`INSERT INTO customers(store_id,name,phone) VALUES ($1,$2,'3001112233') RETURNING id`, [STORE, nombre])).id

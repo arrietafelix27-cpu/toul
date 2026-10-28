@@ -1,5 +1,9 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { enColombia } from '@/lib/periodos'
+import { resumir } from '@/lib/reports/calculos'
+import { REPORTE_VACIO, type ReporteSQL } from '@/lib/reports/types'
+import { capitalizeFirst } from '@/lib/format/text'
+import { nombreCategoria } from '@/lib/types'
 
 // ─── Business Snapshot Builder ──────────────────────────────────────────────
 // Pre-fetches ALL business data and builds a structured context string
@@ -17,28 +21,32 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
         { data: sales14d },
         { data: sales30d },
         { data: sales90d },
-        { data: salesPrev30d },
         { data: saleItems30d },
-        { data: expenses30d },
-        { data: payments30d },
         { data: cartera },
-        { data: credits30d },
         { data: inventario },
+        { data: rep7 },
+        { data: rep14 },
+        { data: rep30 },
+        { data: rep90 },
+        { data: repAntes },
     ] = await Promise.all([
         supabase.from('products').select('id, name, stock, sale_price, cost_price, cpp, low_stock_threshold, is_active, created_at').eq('store_id', storeId).eq('is_active', true),
         supabase.from('sales').select('id, total, created_at, payment_method, is_credit').eq('store_id', storeId).gte('created_at', daysAgo(7)),
         supabase.from('sales').select('id, total, created_at, payment_method, is_credit').eq('store_id', storeId).gte('created_at', daysAgo(14)),
         supabase.from('sales').select('id, total, created_at, payment_method, is_credit').eq('store_id', storeId).gte('created_at', daysAgo(30)),
         supabase.from('sales').select('id, total, created_at, payment_method, is_credit').eq('store_id', storeId).gte('created_at', daysAgo(90)),
-        supabase.from('sales').select('total').eq('store_id', storeId).gte('created_at', daysAgo(60)).lt('created_at', daysAgo(30)),
         supabase.from('sale_items').select('product_id, quantity, unit_price, unit_cost, sales!inner(created_at, store_id)').eq('sales.store_id', storeId).gte('sales.created_at', daysAgo(30)),
-        supabase.from('expenses').select('amount, category, description, created_at').eq('store_id', storeId).gte('created_at', daysAgo(30)),
-        supabase.from('payments').select('amount, type, method, created_at').eq('store_id', storeId).gte('created_at', daysAgo(30)),
         // Lo que te deben sale de los movimientos, igual que en Cuentas por cobrar
         supabase.rpc('toul_receivables'),
-        supabase.from('credits').select('type, amount, created_at').eq('store_id', storeId).gte('created_at', daysAgo(30)),
         // El valor del inventario cuenta cada presentación, igual que en Inventario
         supabase.rpc('toul_inventory_overview', { p_limit: 1 }),
+        // Ventas, ganancia, gastos, plata que entró y salió, métodos y
+        // productos: la misma función de Reportes, en cada ventana
+        supabase.rpc('toul_reporte', { p_desde: daysAgo(7), p_hasta: now.toISOString() }),
+        supabase.rpc('toul_reporte', { p_desde: daysAgo(14), p_hasta: now.toISOString() }),
+        supabase.rpc('toul_reporte', { p_desde: daysAgo(30), p_hasta: now.toISOString() }),
+        supabase.rpc('toul_reporte', { p_desde: daysAgo(90), p_hasta: now.toISOString() }),
+        supabase.rpc('toul_reporte', { p_desde: daysAgo(60), p_hasta: daysAgo(30) }),
     ])
 
     // ── Compute Derived Metrics ─────────────────────────────────────────────
@@ -47,22 +55,20 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
     const s14 = sales14d || []
     const s30 = sales30d || []
     const s90 = sales90d || []
-    const sPrev = salesPrev30d || []
     const items = saleItems30d || []
-    const exps = expenses30d || []
-    const pays = payments30d || []
+    const r = (x: unknown) => resumir((x ?? REPORTE_VACIO) as ReporteSQL)
+    const r7 = r(rep7), r14 = r(rep14), r30 = r(rep30), r90 = r(rep90), rPrev = r(repAntes)
+    const reporte30 = (rep30 ?? REPORTE_VACIO) as ReporteSQL
     const debts = ((cartera as { clientes?: { nombre: string; saldo: number }[] } | null)?.clientes ?? [])
         .map(c => ({ name: c.nombre, total_debt: Number(c.saldo) }))
         .sort((a, b) => b.total_debt - a.total_debt)
-    const creds = credits30d || []
 
-    // Revenue by period
-    const sum = (arr: any[]) => arr.reduce((s, v) => s + (v.total || 0), 0)
-    const rev7 = sum(s7)
-    const rev14 = sum(s14)
-    const rev30 = sum(s30)
-    const rev90 = sum(s90)
-    const revPrev30 = sum(sPrev)
+    // Vendiste por periodo: ya sin devoluciones, igual que en Reportes
+    const rev7 = r7.vendiste
+    const rev14 = r14.vendiste
+    const rev30 = r30.vendiste
+    const rev90 = r90.vendiste
+    const revPrev30 = rPrev.vendiste
 
     // Growth
     const growthVsPrev = revPrev30 > 0 ? ((rev30 - revPrev30) / revPrev30 * 100) : null
@@ -71,12 +77,12 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
     const dailyAvg90 = rev90 / 90
 
     // Tickets
-    const salesCount30 = s30.length
-    const avgTicket = salesCount30 > 0 ? rev30 / salesCount30 : 0
+    const salesCount30 = r30.cantidad
+    const avgTicket = r30.ticket ?? 0
 
-    // Credit sales
+    // Lo que quedó fiado (la parte a crédito de las ventas)
     const creditSales30 = s30.filter(s => s.is_credit)
-    const creditRevenue30 = sum(creditSales30)
+    const creditRevenue30 = r30.credito
 
     // Product analytics
     type ProdMetric = { name: string; revenue: number; units: number; cost: number; stock: number; cpp: number; salePrice: number }
@@ -100,8 +106,8 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
     })).sort((a, b) => b.revenue - a.revenue)
 
     const totalRevenue = rev30
-    const grossProfit = prodList.reduce((s, p) => s + p.profit, 0)
-    const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue * 100) : 0
+    const grossProfit = r30.gananciaVentas
+    const grossMargin = r30.margen ?? 0
 
     // Inventory
     const inventoryValue = Number((inventario as { value?: number } | null)?.value ?? 0)
@@ -110,28 +116,25 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
     const noRotation = prodList.filter(p => p.units === 0 && p.stock > 0)
     const trappedCapitalTotal = noRotation.reduce((s, p) => s + p.trappedCapital, 0)
 
-    // Expenses
-    const totalExpenses = exps.reduce((s, e) => s + e.amount, 0)
-    const expByCat: Record<string, number> = {}
-    for (const e of exps) expByCat[e.category] = (expByCat[e.category] || 0) + e.amount
-    const topExpCats = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).slice(0, 3)
+    // Gastos, como en Reportes
+    const totalExpenses = r30.gastos
+    const topExpCats = reporte30.gastosPorCategoria.slice(0, 3).map(g => [nombreCategoria(g.categoria), Number(g.monto)] as [string, number])
 
-    // Cash flow
-    const cashIn = pays.filter(p => p.type === 'inflow').reduce((s, p) => s + p.amount, 0)
-    const cashOut = totalExpenses
+    // Plata que entró y salió, como en "Tu plata" de Reportes. Antes se
+    // buscaba un tipo de movimiento que no existe y siempre daba $0
+    const cashIn = r30.entro
+    const cashOut = r30.salio
     const netCashFlow = cashIn - cashOut
 
-    // Payment methods
-    const methodMap: Record<string, number> = {}
-    for (const s of s30) methodMap[s.payment_method] = (methodMap[s.payment_method] || 0) + s.total
-    const topMethods = Object.entries(methodMap).sort((a, b) => b[1] - a[1]).slice(0, 3)
+    // Cómo te pagan, como en Reportes
+    const topMethods = reporte30.metodos.slice(0, 3).map(m => [capitalizeFirst(m.nombre), Number(m.monto)] as [string, number])
 
     // Debts
     const totalDebt = debts.reduce((s, c) => s + c.total_debt, 0)
     const topDebtors = debts.slice(0, 5)
 
-    // Credits / payments received
-    const abonos = creds.filter(c => c.type === 'payment').reduce((s, c) => s + c.amount, 0)
+    // Abonos que te hicieron
+    const abonos = r30.abonos
 
     // Sales by day of week
     const dayMap: Record<number, number> = {}
@@ -143,14 +146,21 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
 
     // Sales by hour
     const hourMap: Record<number, number> = {}
-    for (const s of s30) { const h = new Date(s.created_at).getHours(); hourMap[h] = (hourMap[h] || 0) + 1 }
+    // La hora en Colombia: el servidor está en UTC
+    for (const s of s30) { const h = enColombia(s.created_at).hora; hourMap[h] = (hourMap[h] || 0) + 1 }
     const bestHourEntry = Object.entries(hourMap).sort((a, b) => Number(b[1]) - Number(a[1]))[0]
     const bestHour = bestHourEntry ? `${Number(bestHourEntry[0])}:00` : 'sin datos'
 
-    // Top products
-    const top5Revenue = prodList.slice(0, 5)
-    const top5Margin = [...prodList].filter(p => p.revenue > 0).sort((a, b) => b.margin - a.margin).slice(0, 5)
-    const starProduct = prodList[0]
+    // Top products: lo que vendió y dejó cada uno sale de Reportes (ya sin
+    // devoluciones y con los descuentos repartidos); el stock, del catálogo
+    const delReporte = reporte30.productos.map(p => ({
+        id: p.id, name: p.nombre,
+        revenue: Number(p.ventas), profit: Number(p.ganancia), margin: Number(p.margen),
+        units: prodMap[p.id]?.units ?? 0, stock: prodMap[p.id]?.stock ?? 0,
+    }))
+    const top5Revenue = [...delReporte].sort((a, b) => b.revenue - a.revenue).slice(0, 5)
+    const top5Margin = [...delReporte].filter(p => p.revenue > 0).sort((a, b) => b.margin - a.margin).slice(0, 5)
+    const starProduct = top5Revenue[0]
     const starDependency = starProduct && totalRevenue > 0 ? (starProduct.revenue / totalRevenue * 100) : 0
 
     // ── Interpreted Signals ─────────────────────────────────────────────────
@@ -234,8 +244,8 @@ RENTABILIDAD
 ═══════════════════════════════════════════════════
 FLUJO DE CAJA
 ═══════════════════════════════════════════════════
-• Ingresos de caja (30d): $${fmt(cashIn)}
-• Egresos (gastos 30d): $${fmt(cashOut)}
+• Plata que entró (30d): $${fmt(cashIn)} (de contado + abonos)
+• Plata que salió (30d): $${fmt(cashOut)} (gastos + mercancía pagada + devoluciones)
 • Flujo neto: $${fmt(netCashFlow)} ${netCashFlow >= 0 ? '✅' : '⚠️'}
 
 ═══════════════════════════════════════════════════

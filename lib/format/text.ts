@@ -39,3 +39,10 @@ export function toMoneyDigits(value: string | number | null | undefined): string
     const entero = /^\d+[.,]\d{1,2}$/.test(text) ? text.split(/[.,]/)[0] : text
     return onlyDigits(entero)
 }
+
+/** El nombre de un método de pago para mostrarlo: "datafono" → "Datafono".
+ *  Lo guardado no cambia */
+export function nombreMetodo(raw: string | null | undefined): string {
+    const limpio = (raw ?? '').trim()
+    return limpio ? capitalizeFirst(limpio) : 'Pago'
+}

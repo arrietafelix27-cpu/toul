@@ -9,8 +9,8 @@
 // decir cuál.
 //
 // Solo corre en la base de pruebas en memoria (PGlite), nunca en producción.
-import { deCada100, metricasInicio, porcentajeTendencia, resumir } from '../../lib/reports/calculos.ts'
-import { getDateRange, instanteDeDia, rangoAnterior, rangoPeriodo } from '../../lib/periodos.ts'
+import { deCada100, porcentajeTendencia, resumir } from '../../lib/reports/calculos.ts'
+import { instanteDeDia, rangoAnterior, rangoPeriodo } from '../../lib/periodos.ts'
 
 const O = '11111111-1111-1111-1111-111111111111'
 const STORE = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
@@ -35,6 +35,20 @@ const co = (texto) => `${texto}-05`
 export default async function (db) {
   const q = async (sql, p) => (await db.query(sql, p)).rows
   const one = async (sql, p) => (await q(sql, p))[0]
+  /** Dentro de una transacción: un error esperado no puede tumbar lo que sigue */
+  const errTx = async (sql, p, uid = null) => {
+    await db.exec('SAVEPOINT intento')
+    try {
+      if (uid) await db.exec(`SELECT set_config('request.jwt.claim.sub', '${uid}', true); SET LOCAL ROLE authenticated;`)
+      await db.query(sql, p)
+      await db.exec('RELEASE SAVEPOINT intento')
+      if (uid) await db.exec('RESET ROLE')
+      return null
+    } catch (e) {
+      await db.exec('ROLLBACK TO SAVEPOINT intento')
+      return e.message
+    }
+  }
   const as = async (uid, fn) => {
     await db.exec(`SELECT set_config('request.jwt.claim.sub', '${uid}', false); SET ROLE authenticated;`)
     try { return await fn() } finally { await db.exec(`RESET ROLE;`) }
@@ -110,10 +124,9 @@ export default async function (db) {
     const [g] = await q(`INSERT INTO expenses(store_id,category,description,amount,created_at) VALUES ($1,$2,$2,$3,$4) RETURNING id`, [STORE, categoria, monto, co(cuando)])
     await q(`INSERT INTO payments(store_id,type,method,amount,reference_id,notes,created_at) VALUES ($1,'expense','General',$2,$3,'Gasto',$4)`, [STORE, monto, g.id, co(cuando)])
   }
-  // 11. Pago al proveedor por $120.000 (lo mismo que hace /api/providers/payment)
-  await q(`UPDATE providers SET total_debt = total_debt - 120000 WHERE id = $1`, [prov.id])
-  await q(`UPDATE provider_debts SET remaining_amount = remaining_amount - 120000 WHERE provider_id = $1`, [prov.id])
-  await q(`INSERT INTO payments(store_id,type,method,amount,reference_id,notes,created_at) VALUES ($1,'provider_payment','General',120000,$2,'Abono a proveedor',$3)`, [STORE, prov.id, co('2026-10-22 10:00')])
+  // 11. Pago al proveedor por $120.000, con la misma función que usa la app
+  await r(`SELECT toul_pagar_proveedor($1,120000,NULL) r`, [prov.id])
+  await q(`UPDATE payments SET created_at = $2 WHERE reference_id = $1 AND type = 'provider_payment'`, [prov.id, co('2026-10-22 10:00')])
   // 12. 25 oct: venta de contado de 1 B por $80.000 que se anula el mismo día
   const anulada = await vender('2026-10-25 10:00', B, 1, 80000, { pagos: efectivo(80000) })
   await comoDueno(() => q(`SELECT toul_void_sale($1,'Prueba: se anula el mismo día')`, [anulada]))
@@ -159,7 +172,7 @@ export default async function (db) {
   igual('Métodos en la dona', 2, rep.metodos.length, tal)
 
   console.log('\n— Octubre: de cada $100 que vendiste')
-  const cien = deCada100({ ventas: res.ventasNetas, costo: res.costoNeto, gastos: res.gastos })
+  const cien = deCada100({ ventas: res.vendiste, costo: res.costoNeto, gastos: res.gastos })
   igual('Se fue en mercancía', 52, cien?.mercancia, (n) => `$${n}`)
   igual('Se fue en gastos', 6, cien?.gastos, (n) => `$${n}`)
   igual('Te quedó', 42, cien?.quedo, (n) => `$${n}`)
@@ -227,12 +240,12 @@ export default async function (db) {
   igual('Carla', 60000, debe('Carla'))
   const guardado = await one(`SELECT COALESCE(SUM(total_debt),0) s FROM customers WHERE store_id=$1`, [STORE])
   igual('Te deben, según lo guardado en cada cliente', 220000, guardado.s)
-  // "Debes": el Inicio lee providers.total_debt y Proveedores lee provider_debts
-  const debesInicio = await one(`SELECT COALESCE(SUM(total_debt),0) s, count(*) FILTER (WHERE total_debt > 0)::int n FROM providers WHERE store_id=$1`, [STORE])
-  const debesProveedores = await one(`SELECT COALESCE(SUM(remaining_amount),0) s FROM provider_debts WHERE store_id=$1 AND status <> 'paid'`, [STORE])
-  igual('Debes (como lo lee el Inicio)', 80000, debesInicio.s)
-  igual('Debes (como lo lee Proveedores)', 80000, debesProveedores.s)
-  igual('Proveedores a los que les debes', 1, debesInicio.n, tal)
+  // "Debes": el Inicio y Proveedores usan la misma función (toul_payables)
+  const debes = await r(`SELECT toul_payables() r`)
+  igual('Debes', 80000, debes.total)
+  igual('Proveedores a los que les debes', 1, debes.proveedores.length, tal)
+  const copiaProveedor = await one(`SELECT COALESCE(SUM(total_debt),0) s FROM providers WHERE store_id=$1`, [STORE])
+  igual('Debes, según lo guardado en el proveedor', 80000, copiaProveedor.s)
   const inventario = await r(`SELECT toul_inventory_overview(1) r`)
   igual('Plata en mercancía', 450000, inventario.value)
   const stock = await q(`SELECT name, stock FROM products WHERE store_id=$1 ORDER BY name`, [STORE])
@@ -240,33 +253,12 @@ export default async function (db) {
   igual('Perfume B en stock', 7, stock[1].stock, tal)
 
   console.log('\n— El Inicio con el periodo octubre')
-  const filas = async (tabla, campos) => q(`SELECT ${campos} FROM ${tabla} WHERE store_id=$1 AND created_at >= $2 AND created_at <= $3`, [STORE, octubre.from, octubre.to])
-  // Las mismas columnas que pide app/(app)/page.tsx, pasadas por su misma función
-  const inicio = metricasInicio({
-    ventas: await filas('sales s', `s.total, COALESCE((SELECT json_agg(json_build_object('unit_cost', i.unit_cost, 'quantity', i.quantity)) FROM sale_items i WHERE i.sale_id = s.id), '[]') AS sale_items`),
-    gastos: await filas('expenses', 'amount'),
-    devoluciones: await filas('sale_returns', 'total, cost_total'),
-  })
-  igual('Inicio: Vendiste', res.ventasNetas, inicio.ventasNetas)
-  igual('Inicio: Ganancia en ventas', res.gananciaVentas, inicio.gananciaVentas)
-  igual('Inicio: Gastos', res.gastos, inicio.gastos)
-  igual('Inicio: Ganancia después de gastos', res.ganaste, inicio.ganaste)
-  igual('Inicio: Ganancia después de gastos, contra tu cuenta', 270000, inicio.ganaste)
-
-  // El Inicio y Reportes en "Hoy", "Esta semana" y "Este mes", vistos el 31 a las 23:45
-  for (const periodo of ['today', 'week', 'month']) {
-    const t = getDateRange(periodo, new Date(co('2026-10-31 23:45')))
-    const reporte = resumir(await r(`SELECT toul_reporte($1,$2) r`, [t.from, t.to]))
-    const filasT = async (tabla, campos) => q(`SELECT ${campos} FROM ${tabla} WHERE store_id=$1 AND created_at >= $2 AND created_at <= $3`, [STORE, t.from, t.to])
-    const ini = metricasInicio({
-      ventas: await filasT('sales s', `s.total, COALESCE((SELECT json_agg(json_build_object('unit_cost', i.unit_cost, 'quantity', i.quantity)) FROM sale_items i WHERE i.sale_id = s.id), '[]') AS sale_items`),
-      gastos: await filasT('expenses', 'amount'),
-      devoluciones: await filasT('sale_returns', 'total, cost_total'),
-    })
-    si(`${periodo}: el Inicio y Reportes dan lo mismo`, ini.ventasNetas === reporte.ventasNetas && ini.gananciaVentas === reporte.gananciaVentas && ini.ganaste === reporte.ganaste,
-      `vendiste ${peso(ini.ventasNetas)}, ganaste ${peso(ini.ganaste)}`)
-  }
-
+  // El Inicio pide lo mismo que Reportes (toul_reporte) y lo pasa por resumir
+  const inicio = resumir(await r(`SELECT toul_reporte($1,$2) r`, [octubre.from, octubre.to]))
+  igual('Inicio: Vendiste', 640000, inicio.vendiste)
+  igual('Inicio: Ganancia en ventas', 310000, inicio.gananciaVentas)
+  igual('Inicio: Gastos', 40000, inicio.gastos)
+  igual('Inicio: Ganancia después de gastos', 270000, inicio.ganaste)
 
   console.log('\n— La auditoría (A4) sobre esta tienda')
   const auditoria = await comoDueno(() => q(`SELECT * FROM toul_auditoria()`))
@@ -300,6 +292,100 @@ export default async function (db) {
   si('y todo cuadra en las dos', todas.every(f => f.ok), todas.filter(f => !f.ok).map(f => `${f.tienda}: ${f.chequeo}`).join(' | '))
   const escribir = await q(`SELECT toul_auditoria_todas()`).then(() => null)
   si('no deja rastro: las ventas siguen iguales', (await one(`SELECT count(*)::int n FROM sales WHERE store_id=$1`, [STORE])).n === 7, String(escribir))
+
+  console.log('\n— Casos nuevos (se deshacen al final: tu tienda queda como estaba)')
+  await db.exec('BEGIN')
+  const noviembre = { from: instanteDeDia('2026-11-01').toISOString(), to: instanteDeDia('2026-11-30', true).toISOString() }
+
+  // La hoja "Ventas" del Excel sale de la misma función del resumen
+  const hoja = await r(`SELECT toul_reporte_detalle($1,$2) r`, [octubre.from, octubre.to])
+  const sumaHoja = (campo) => hoja.reduce((s, f) => s + Number(f[campo]), 0)
+  igual('Excel de octubre: filas', 5, hoja.length, tal)
+  igual('Excel: la columna Total suma Ventas antes de devoluciones', 640000, sumaHoja('total'))
+  igual('Excel: la columna Costo', 330000, sumaHoja('costo'))
+  igual('Excel: De contado', 410000, sumaHoja('contado'))
+  igual('Excel: A crédito', 230000, sumaHoja('credito'))
+  si('Excel: cada venta dice por dónde pagó', hoja.some(f => f.pagos.some(p => p.metodo === 'Nequi' && Number(p.monto) === 80000)))
+
+  // Un abono de los de antes que quedó como "General" se muestra como "Abonos"
+  await db.exec(`ALTER TABLE credits DISABLE TRIGGER trg_toul_abono_con_metodo`)
+  // Como lo guardaba la app entre el 29 sep y el 14 oct: el movimiento, la caja y la deuda
+  const ana = await cliente('Ana')
+  await q(`INSERT INTO credits(store_id,customer_id,type,amount,payment_method,created_at) VALUES ($1,$2,'payment',450,'General',$3)`, [STORE, ana, co('2026-10-20 12:00')])
+  await q(`INSERT INTO payments(store_id,type,method,amount,reference_id,notes,created_at) VALUES ($1,'credit_payment','General',450,$2,'Abono cliente: Ana',$3)`, [STORE, ana, co('2026-10-20 12:00')])
+  await q(`UPDATE customers SET total_debt = total_debt - 450 WHERE id = $1`, [ana])
+  await db.exec(`ALTER TABLE credits ENABLE TRIGGER trg_toul_abono_con_metodo`)
+  const conGeneral = await r(`SELECT toul_reporte($1,$2) r`, [octubre.from, octubre.to])
+  si('"General" ya no sale en la dona', !conGeneral.metodos.some(m => m.nombre === 'General'))
+  igual('sale como "Abonos"', 450, Number(conGeneral.metodos.find(m => m.nombre === 'Abonos')?.monto ?? 0))
+  igual('y la dona suma lo que entró', resumir(conGeneral).entro, conGeneral.metodos.reduce((s, m) => s + Number(m.monto), 0))
+
+  // Un abono nuevo sin método ya no se puede guardar, venga de donde venga
+  const beto = await cliente('Beto')
+  const sinMetodo = await errTx(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'payment',1000)`, [STORE, beto])
+  si('un abono nuevo sin método se rechaza', /por dónde/.test(sinMetodo ?? ''), sinMetodo)
+  const sinMetodoApp = await errTx(`SELECT toul_registrar_abono($1,1000,NULL,NULL)`, [beto], O)
+  si('tampoco desde la app', /por dónde/.test(sinMetodoApp ?? ''), sinMetodoApp)
+
+  // Plata en mercancía también cuenta lo escondido que tiene stock
+  await q(`UPDATE products SET is_active = false WHERE id = $1`, [B.id])
+  const conEscondido = await r(`SELECT toul_inventory_overview(1) r`)
+  igual('Plata en mercancía con el Perfume B escondido', 450000, conEscondido.value)
+  igual('de eso, escondido', 210000, conEscondido.hiddenValue)
+  await q(`UPDATE products SET is_active = true WHERE id = $1`, [B.id])
+
+  // "Menos stock" cuenta las presentaciones
+  const [C] = await q(`INSERT INTO products(store_id,name,sale_price,cpp) VALUES ($1,'Perfume C',50000,20000) RETURNING id`, [STORE])
+  const [ml50] = await q(`INSERT INTO product_variants(store_id,product_id,name,sale_price,cpp,low_stock_threshold) VALUES ($1,$2,'50ml',50000,20000,3) RETURNING id`, [STORE, C.id])
+  await q(`INSERT INTO inventory_adjustments(store_id,product_id,variant_id,quantity,reason) VALUES ($1,$2,$3,2,'initial')`, [STORE, C.id, ml50.id])
+  const conPresentacion = await r(`SELECT toul_inventory_overview(30) r`)
+  si('"Menos stock" muestra la presentación de 50ml con 2 unidades', conPresentacion.alerts.some(a => a.kind === 'presentacion' && a.variant_name === '50ml' && Number(a.stock) === 2))
+  igual('y la plata en mercancía la cuenta', 490000, conPresentacion.value)
+
+  // Pagarle al proveedor: todo o nada
+  const deMas = await errTx(`SELECT toul_pagar_proveedor($1,999999,NULL) r`, [prov.id], O)
+  si('no deja pagar más de lo que le debes', /no puede ser mayor/.test(deMas ?? ''), deMas)
+  igual('y no toca nada', 80000, (await r(`SELECT toul_payables() r`)).total)
+  await r(`SELECT toul_pagar_proveedor($1,30000,NULL) r`, [prov.id])
+  igual('pagas $30.000: ahora le debes', 50000, (await r(`SELECT toul_payables() r`)).total)
+  igual('la copia del proveedor queda igual', 50000, (await one(`SELECT total_debt s FROM providers WHERE id=$1`, [prov.id])).s)
+  igual('y la caja tiene los dos pagos', 150000, (await one(`SELECT SUM(amount) s FROM payments WHERE store_id=$1 AND type='provider_payment'`, [STORE])).s)
+
+  // Una venta sin internet: la caja, los pagos y el fiado quedan con la hora real
+  const hace2 = new Date(Date.now() - 2 * 86_400_000)
+  const offline = await r(`SELECT (process_sale($1::jsonb))->>'saleId' r`, [JSON.stringify({
+    cart: [{ product: { id: B.id, name: 'x' }, quantity: 1, unitPrice: 80000 }],
+    payments: nequi(30000), subtotal: 80000, total: 80000, isCredit: true, customerName: 'Daniel',
+    initialPayment: 30000, soldAt: hace2.toISOString(), clientSaleId: 'sin-senal-1',
+  })])
+  const hora = async (sql) => new Date((await one(sql, [offline])).t).getTime()
+  si('la venta quedó con su hora real', await hora(`SELECT created_at t FROM sales WHERE id=$1`) === hace2.getTime())
+  si('la entrada de caja también', await hora(`SELECT created_at t FROM payments WHERE reference_id=$1 AND type='sale'`) === hace2.getTime())
+  si('el detalle del pago también', await hora(`SELECT created_at t FROM sale_payments WHERE sale_id=$1`) === hace2.getTime())
+  si('y el fiado también', await hora(`SELECT created_at t FROM credits WHERE sale_id=$1 AND type='debt'`) === hace2.getTime())
+
+  // Una devolución el 2 de noviembre: "Vendiste" es después de devoluciones.
+  // La devolución solo se permite hasta 30 días: se acerca la venta a hoy y luego se le devuelve su hora
+  const ventaNov = (await one(`SELECT id FROM sales WHERE store_id=$1 AND created_at >= $2 AND created_at <= $3`, [STORE, noviembre.from, noviembre.to])).id
+  const itemNov = (await one(`SELECT id FROM sale_items WHERE sale_id=$1`, [ventaNov])).id
+  await q(`UPDATE sales SET created_at = now() WHERE id=$1`, [ventaNov])
+  await comoDueno(() => q(`SELECT toul_return_sale($1,$2::jsonb,NULL,'No le gustó')`, [ventaNov, JSON.stringify([{ saleItemId: itemNov, quantity: 1 }])]))
+  await q(`UPDATE sales SET created_at = $2 WHERE id=$1`, [ventaNov, co('2026-11-01 00:15')])
+  await q(`UPDATE sale_returns SET created_at = $2 WHERE sale_id=$1`, [ventaNov, co('2026-11-02 10:00')])
+  const conDevolucion = resumir(await r(`SELECT toul_reporte($1,$2) r`, [noviembre.from, noviembre.to]))
+  igual('Noviembre con la devolución: Vendiste', 0, conDevolucion.vendiste)
+  igual('Ventas antes de devoluciones', 100000, conDevolucion.ventasAntes)
+  igual('De contado + A crédito = Ventas antes de devoluciones', 100000, conDevolucion.contado + conDevolucion.credito)
+  igual('la devolución sale como plata', 100000, conDevolucion.devuelto)
+  igual('Ganaste', 0, conDevolucion.ganaste)
+  const mesesConDevolucion = await r(`SELECT toul_reporte_meses(6, '2026-11-01') r`)
+  igual('Mes a mes de noviembre: ventas', 0, mesesConDevolucion.find(m => m.mes === '2026-11-01')?.ventas)
+  igual('Mes a mes de noviembre: ganancia', 0, mesesConDevolucion.find(m => m.mes === '2026-11-01')?.ganancia)
+
+  const auditoriaNueva = await comoDueno(() => q(`SELECT * FROM toul_auditoria()`))
+  si('con todos los casos nuevos, la auditoría sigue cuadrando', auditoriaNueva.every(f => f.ok),
+    auditoriaNueva.filter(f => !f.ok).map(f => `${f.periodo} ${f.chequeo}: ${f.esperado} vs ${f.obtenido}`).join(' | '))
+  await db.exec('ROLLBACK')
 
   console.log(fails === 0 ? '  TODO OK' : `  ${fails} FALLOS`)
   return { fails }

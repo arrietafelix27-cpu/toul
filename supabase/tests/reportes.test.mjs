@@ -68,15 +68,24 @@ export default async function (db) {
   ok(caja?.method === 'Nequi' && Number(caja.amount) === 50000, 'y la caja lo recibe por Nequi, atado al abono')
   ok(Number((await one(`SELECT total_debt FROM customers WHERE id=$1`, [pedro])).total_debt) === 50000, 'la deuda del cliente queda en $50.000')
 
-  // Un abono de antes, sin método
-  await q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'payment',10000)`, [STORE, pedro])
+  // Dos abonos de antes: uno sin método y otro "General" (del 29 sep al 14 oct).
+  // Se meten apagando el control nuevo, como quedaron en la base
+  await db.exec(`ALTER TABLE credits DISABLE TRIGGER trg_toul_abono_con_metodo`)
+  await q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'payment',6000)`, [STORE, pedro])
+  await q(`INSERT INTO credits(store_id,customer_id,type,amount,payment_method) VALUES ($1,$2,'payment',4000,'General')`, [STORE, pedro])
+  await db.exec(`ALTER TABLE credits ENABLE TRIGGER trg_toul_abono_con_metodo`)
+  ok((await err(() => q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'payment',1000)`, [STORE, pedro])))?.includes('por dónde'),
+    'un abono nuevo sin método ya no se puede guardar, venga de donde venga')
+  await q(`UPDATE credits SET notes = 'revisado' WHERE store_id=$1 AND type='payment' AND payment_method IS NULL`, [STORE])
+  ok(true, 'los abonos viejos sin método se pueden seguir moviendo')
 
   rep = await reporte()
   ok(Number(rep.abonos) === 60000, `abonos que te hicieron: $60.000 (dio ${rep.abonos})`)
   ok(Number(rep.ventas.contado) + Number(rep.abonos) === 360000, 'plata que entró = de contado + abonos = $360.000')
   ok(metodo(rep, 'Efectivo') === 200000, 'por Efectivo entraron $200.000')
   ok(metodo(rep, 'Nequi') === 150000, 'por Nequi $150.000: el abono inicial del fiado + el abono de Pedro')
-  ok(metodo(rep, 'Abonos') === 10000, 'el abono viejo sin método aparece como "Abonos"')
+  ok(metodo(rep, 'Abonos') === 10000, 'los abonos viejos (sin método o "General") aparecen como "Abonos"')
+  ok(metodo(rep, 'General') === 0, 'y "General" ya no sale como si fuera un método')
   ok(rep.metodos.reduce((s, m) => s + Number(m.monto), 0) === 360000, 'la dona suma lo mismo que la plata que entró')
 
   console.log('\n— Abonos: todo o nada, y nunca más de lo que debe')
@@ -89,7 +98,7 @@ export default async function (db) {
   ok((await err(() => as(S, () => q(`SELECT toul_registrar_abono($1,1000,$2,NULL)`, [pedro, neq.id])))) !== null,
     'la vendedora no puede registrar abonos')
   const abonosPedro = await q(`SELECT id FROM credits WHERE customer_id=$1 AND type='payment'`, [pedro])
-  ok(abonosPedro.length === 2, 'los intentos fallidos no dejan nada guardado')
+  ok(abonosPedro.length === 3, 'los intentos fallidos no dejan nada guardado')
 
   console.log('\n— Deshacer el abono nuevo saca justo su entrada de caja')
   await as(O, () => q(`SELECT toul_undo_payment($1)`, [abono.creditId]))

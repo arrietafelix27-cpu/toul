@@ -1,4 +1,5 @@
 'use client'
+import { nombreMetodo } from '@/lib/format/text'
 
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
@@ -198,7 +199,7 @@ export default function TurnosPage() {
                                                 <div key={m.method}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 5 }}>
                                                         <span style={{ fontSize: 13, color: m.isCash ? 'var(--toul-text)' : 'var(--toul-text-dim)', fontWeight: m.isCash ? 600 : 400 }}>
-                                                            {m.method}
+                                                            {nombreMetodo(m.method)}
                                                         </span>
                                                         <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }}>
                                                             {formatCOP(m.net)}

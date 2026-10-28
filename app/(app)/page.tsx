@@ -17,8 +17,9 @@ import { Vendiste, GananciaGastos, type MetricasInicio, type Tendencia } from '@
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
 import { ENTRADA_INICIO_CSS, entrada, useEntradaInicio } from '@/lib/motion'
-import { contraQue, rangoAnterior } from '@/lib/periodos'
-import { metricasInicio, porcentajeTendencia, type FilasInicio } from '@/lib/reports/calculos'
+import { contraQue, diasEntre, rangoAnterior } from '@/lib/periodos'
+import { porcentajeTendencia, resumir } from '@/lib/reports/calculos'
+import type { ReporteSQL } from '@/lib/reports/types'
 import type { AIInsight } from '@/lib/types'
 
 type Period = Periodo
@@ -40,52 +41,34 @@ export default function DashboardPage() {
         storeId ? ['dashboard-v3', storeId, period, customRange] : null,
         async () => {
             const range = period === 'custom' && customRange ? customRange : getDateRange(period)
-
-            // Previous period range for variation
+            // El mismo tramo del periodo anterior, para la tendencia
             const prevRange = rangoAnterior(period, range)
 
-            const [sales, expenses, products, customersDebt, providersPending, allPurchases] = await Promise.all([
-                supabase.from('sales').select('total, subtotal, created_at, is_credit, sale_items(unit_price, unit_cost, quantity, product_id, products(name, image_url))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
-                supabase.from('expenses').select('amount, category, created_at').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
-                supabase.from('products').select('*').eq('store_id', storeId).eq('is_active', true),
-                // Lo que te deben sale de los movimientos, igual que en
-                // Cuentas por cobrar: un solo número en toda la app
-                supabase.rpc('toul_receivables'),
-                // Mejora 2: Providers with credit purchases pending
-                supabase.from('providers').select('id, name, phone, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }),
-                // Desde cuándo le debes a cada proveedor
-                supabase.from('purchases').select('provider_id, created_at').eq('store_id', storeId).not('provider_id', 'is', null).order('created_at', { ascending: true })
-            ])
-
-            // Fetch previous data for variations
-            const [prevSales, prevExpenses, returns, prevReturns] = await Promise.all([
-                supabase.from('sales').select('total, sale_items(unit_price, unit_cost, quantity)').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01'),
-                supabase.from('expenses').select('amount').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01'),
-                // Lo devuelto resta el día en que se devuelve. Antes de activar
-                // las devoluciones la tabla no existe y no llega nada
+            const [reporte, reporteAntes, sales, returns, customersDebt, payables, pulse] = await Promise.all([
+                // Vendiste, ganancia en ventas y gastos salen de la misma
+                // función de Reportes: los dos no pueden dar números distintos
+                supabase.rpc('toul_reporte', { p_desde: range.from, p_hasta: range.to }),
+                prevRange.from && prevRange.to
+                    ? supabase.rpc('toul_reporte', { p_desde: prevRange.from, p_hasta: prevRange.to })
+                    : Promise.resolve({ data: null, error: null }),
+                // Las ventas y devoluciones, solo para las listas de productos
+                supabase.from('sales').select('total, subtotal, created_at, sale_items(unit_price, unit_cost, quantity, product_id, products(name, image_url))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
                 supabase.from('sale_returns').select('total, cost_total, sale_return_items(quantity, unit_price, unit_cost, sale_items(product_id, sales(total, subtotal)))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
-                supabase.from('sale_returns').select('total, cost_total').eq('store_id', storeId).gte('created_at', prevRange.from || '2000-01-01').lte('created_at', prevRange.to || '2000-01-01'),
+                // Lo que te deben y lo que debes: las mismas funciones de
+                // Cuentas por cobrar y de Proveedores
+                supabase.rpc('toul_receivables'),
+                supabase.rpc('toul_payables'),
+                // Menos stock y sin mover: lo mismo que Inventario, por presentación
+                supabase.rpc('toul_inventory_overview', { p_limit: 30 }),
             ])
+            if (reporte.error) throw reporte.error
 
             // 1. LO VENDIDO, LA GANANCIA Y LOS GASTOS
-            // La misma cuenta que Reportes (lib/reports/calculos): lo devuelto
-            // resta el día en que se devuelve y se redondea al final
-            const actual = metricasInicio({
-                ventas: (sales.data || []) as FilasInicio['ventas'],
-                gastos: expenses.data || [],
-                devoluciones: (returns.data || []) as FilasInicio['devoluciones'],
-            })
-            const anterior = metricasInicio({
-                ventas: (prevSales.data || []) as FilasInicio['ventas'],
-                gastos: prevExpenses.data || [],
-                devoluciones: (prevReturns.data || []) as FilasInicio['devoluciones'],
-            })
-            const currentRevenue = actual.ventasNetas
-            const currentExpenses = actual.gastos
-            const salesCount = actual.cantidad
-            const avgTicket = salesCount > 0 ? Math.round(currentRevenue / salesCount) : 0
+            const actual = resumir(reporte.data as ReporteSQL)
+            const anterior = reporteAntes.data ? resumir(reporteAntes.data as ReporteSQL) : null
 
-            const productUnitsMap: Record<string, { name: string; image_url: string | null; units: number; profit: number; revenue: number; stock: number; last_sale: string }> = {}
+            // 2. LAS LISTAS DE PRODUCTOS
+            const productUnitsMap: Record<string, { name: string; image_url: string | null; units: number; profit: number; revenue: number; last_sale: string }> = {}
 
             // El descuento de una venta se reparte entre sus productos en
             // proporción a lo que valía cada uno, igual que en Reportes y en
@@ -93,11 +76,11 @@ export default function DashboardPage() {
             const factor = (v: { total: number; subtotal?: number | null } | null | undefined) =>
                 v && Number(v.subtotal) > 0 ? Number(v.total) / Number(v.subtotal) : 1
 
-            for (const s of (sales.data || [])) {
+            type ItemVendido = { unit_price: number; unit_cost: number; quantity: number; product_id: string | null; products: { name: string; image_url: string | null } | null }
+            type VentaFila = { total: number; subtotal: number | null; created_at: string; sale_items: ItemVendido[] | null }
+            for (const s of ((sales.data || []) as unknown as VentaFila[])) {
                 const f = factor(s)
-                for (const item of (s.sale_items as any || [])) {
-                    const profitVal = Math.round((item.unit_price * f - (item.unit_cost || 0)) * item.quantity)
-
+                for (const item of (s.sale_items || [])) {
                     // Los combos no tienen ficha de producto (se guardan sin product_id):
                     // cuentan en los totales, no en las listas de productos
                     const pid = item.product_id
@@ -109,12 +92,11 @@ export default function DashboardPage() {
                             units: 0,
                             profit: 0,
                             revenue: 0,
-                            stock: 0,
-                            last_sale: s.created_at
+                            last_sale: s.created_at,
                         }
                     }
                     productUnitsMap[pid].units += item.quantity
-                    productUnitsMap[pid].profit += profitVal
+                    productUnitsMap[pid].profit += Math.round((item.unit_price * f - (item.unit_cost || 0)) * item.quantity)
                     productUnitsMap[pid].revenue += Math.round(item.unit_price * f * item.quantity)
                 }
             }
@@ -132,37 +114,6 @@ export default function DashboardPage() {
                 producto.revenue -= Math.round(Number(item.unit_price) * f * Number(item.quantity))
             }
 
-            const currentNetProfit = actual.ganaste
-            const currentGrossProfit = actual.gananciaVentas
-            const currentCost = actual.costoNeto
-
-            // Unidades que salieron del inventario en el periodo
-            const unitsSold = (sales.data || []).reduce(
-                (sum, sale) => sum + ((sale.sale_items as any[]) || []).reduce((n, item) => n + Number(item.quantity), 0), 0)
-                - itemsDevueltos.reduce((n, item) => n + Number(item.quantity), 0)
-
-            // Lo fiado: una venta es una venta, pero esa plata todavía no entró
-            const creditAmount = Math.round((sales.data || [])
-                .filter(sale => (sale as any).is_credit)
-                .reduce((sum, sale) => sum + sale.total, 0))
-
-            // Qué categoría se llevó la mayoría de los gastos
-            const byCategory: Record<string, number> = {}
-            for (const expense of (expenses.data || [])) {
-                const key = (expense as any).category || 'otros'
-                byCategory[key] = (byCategory[key] || 0) + Number(expense.amount)
-            }
-            const topExpense = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]
-            const expensesTopCategory = topExpense ? topExpense[0] : null
-
-            // El mismo tramo del periodo anterior, para la tendencia
-            const pRev = anterior.ventasNetas
-            const pExp = anterior.gastos
-            const pSalesCount = anterior.cantidad
-            const pNetProfit = anterior.ganaste
-            const pGrossProfit = anterior.gananciaVentas
-
-            // 2. OPERATIONAL DATA: PRODUCTS
             // Hasta 10 por lista: el celular los muestra en una fila que se
             // desliza; el computador, los 3 primeros.
             // Lo que se devolvió completo ya no cuenta como vendido
@@ -176,37 +127,26 @@ export default function DashboardPage() {
                 .filter(([, p]) => p.revenue > 0)
                 .map(([id, p]) => ({ id, name: p.name, image_url: p.image_url, value: Math.round((p.profit / p.revenue) * 100) }))
                 .sort((a, b) => b.value - a.value || productUnitsMap[b.id].profit - productUnitsMap[a.id].profit).slice(0, 10)
-            const lowStock = (products.data || []).filter(p => p.stock <= (p.low_stock_threshold || 5)).map(p => ({ id: p.id, name: p.name, image_url: p.image_url, value: p.stock })).sort((a, b) => a.value - b.value).slice(0, 10)
 
-            // "Sin mover" sale de la base: días desde la última venta de
-            // verdad. Antes se contaba desde que se creó la ficha y
-            // entraba todo lo que no se hubiera vendido en el periodo
-            // que estuvieras mirando — por eso decía 160 días.
-            const { data: pulse } = await supabase.rpc('toul_inventory_overview', { p_limit: 30 })
-            const dormant = (pulse?.dormant ?? []) as {
+            // Menos stock y sin mover salen de la base, por presentación, con
+            // el mismo mínimo que usa Inventario (el que pusiste o el que
+            // calcula según lo que vendes)
+            type Unidad = {
                 id: string; kind: string; product_id: string; product_name: string
                 variant_name: string | null; image_url: string | null
-                stock: number; idle_days: number; never_sold: boolean
-            }[]
-            const slowMoving = dormant.slice(0, 10).map(row => ({
+                stock: number; idle_days: number
+            }
+            const enLista = (row: Unidad, value: number) => ({
                 id: row.kind === 'presentacion' ? row.product_id : row.id,
                 name: row.variant_name ? `${row.product_name} · ${row.variant_name}` : row.product_name,
                 image_url: row.image_url,
-                value: row.idle_days,
-            }))
+                value,
+            })
+            const lowStock = ((pulse.data?.alerts ?? []) as Unidad[]).slice(0, 10).map(row => enLista(row, Number(row.stock)))
+            // "Sin mover": días desde la última venta de verdad
+            const slowMoving = ((pulse.data?.dormant ?? []) as Unidad[]).slice(0, 10).map(row => enLista(row, row.idle_days))
 
-            // ── Plata pendiente ──────────────────────────────────────────────
-            // Hace cuánto quedó debiendo cada uno: la fiada o la compra más
-            // vieja. Antes se mostraba la fecha en que se creó el cliente,
-            // que no tiene nada que ver con la deuda.
-            const daysSince = (iso: string | null) =>
-                iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)) : null
-
-            const firstPurchase = new Map<string, string>()
-            for (const row of (allPurchases.data || [])) {
-                if (row.provider_id && !firstPurchase.has(row.provider_id)) firstPurchase.set(row.provider_id, row.created_at)
-            }
-
+            // 3. PLATA PENDIENTE
             type FilaCartera = { id: string; nombre: string; telefono: string | null; saldo: number; diasFiado: number | null }
             const cartera = (customersDebt.data as { clientes?: FilaCartera[] } | null)?.clientes ?? []
             const customerDebts = cartera.map(c => ({
@@ -218,31 +158,25 @@ export default function DashboardPage() {
                 days: c.diasFiado ?? null,
             }))
 
-            const providerDebts = (providersPending.data || []).map(p => ({
+            // Hace cuánto le debes: la compra más vieja que sigue sin pagar
+            type FilaDebes = { id: string; nombre: string; telefono: string | null; saldo: number; desde: string | null }
+            const debes = (payables.data as { proveedores?: FilaDebes[] } | null)?.proveedores ?? []
+            const providerDebts = debes.map(p => ({
                 id: p.id,
-                name: p.name,
-                amount: Math.round(p.total_debt),
-                phone: p.phone ?? null,
-                days: daysSince(firstPurchase.get(p.id) ?? null),
+                name: p.nombre,
+                amount: Math.round(Number(p.saldo)),
+                phone: p.telefono ?? null,
+                days: p.desde ? Math.max(0, diasEntre(p.desde, new Date())) : null,
             }))
 
             return {
                 metrics: {
-                    revenue: currentRevenue,
-                    expenses: currentExpenses,
-                    netProfit: currentNetProfit,
-                    grossProfit: currentGrossProfit,
-                    cost: currentCost,
-                    salesCount,
-                    unitsSold,
-                    creditAmount,
-                    expensesTopCategory,
-                    avgTicket,
-                    prevRevenue: pRev,
-                    prevExpenses: pExp,
-                    prevNetProfit: pNetProfit,
-                    prevGrossProfit: pGrossProfit,
-                    prevSalesCount: pSalesCount
+                    revenue: actual.vendiste,
+                    expenses: actual.gastos,
+                    grossProfit: actual.gananciaVentas,
+                    salesCount: actual.cantidad,
+                    prevRevenue: anterior?.vendiste ?? 0,
+                    prevSalesCount: anterior?.cantidad ?? 0,
                 },
                 operational: {
                     products: { topUnits: sortedByUnits, topProfit: sortedByProfit, lowStock, slowMoving }

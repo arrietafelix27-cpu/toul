@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
+import { nombreMetodo } from '@/lib/format/text'
 
 /* ══════════════════════════════════════════════════════════════
    "¿Por dónde te pagó?" al registrar un abono. Los mismos métodos
@@ -42,7 +43,7 @@ export function MetodoAbono({ valor, onCambio }: {
                     : methods.map(m => (
                         <button key={m.id} type="button" className="ma-chip" aria-pressed={valor === m.id}
                             onClick={() => onCambio(m.id)}>
-                            {m.name}
+                            {nombreMetodo(m.name)}
                         </button>
                     ))}
             </div>

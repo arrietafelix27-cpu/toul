@@ -109,7 +109,7 @@ function Reportes() {
                 tienda: store?.name || 'Mi negocio', periodo, tramo,
                 actual: data.actual, anterior: data.anterior, meses: meses ?? [], inventario: inventario ?? null,
             }
-            if (formato === 'excel') await descargarExcel({ ...base, supabase, storeId })
+            if (formato === 'excel') await descargarExcel({ ...base, supabase })
             else await descargarPDF(base)
             toast.success('Listo, quedó en tus descargas', { id: aviso })
         } catch (e) {

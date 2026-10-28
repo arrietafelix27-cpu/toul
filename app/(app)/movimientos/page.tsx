@@ -7,6 +7,7 @@ import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange } from '@/lib/utils'
 import { ZONA_COLOMBIA } from '@/lib/periodos'
+import { nombreMetodo } from '@/lib/format/text'
 import { useStore } from '@/lib/hooks/useData'
 import { EASE_OUT_EMIL } from '@/components/ui'
 
@@ -186,7 +187,7 @@ export default function MovimientosPage() {
                                 </span>
                                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)' }}>{m.notes || LABELS[m.type] || 'Movimiento'}</span>
                                 <span style={{ fontSize: 13, color: 'var(--toul-text-dim)' }}>{LABELS[m.type] || 'Movimiento'}</span>
-                                <span style={{ fontSize: 13, color: 'var(--toul-text-dim)' }}>{m.method}</span>
+                                <span style={{ fontSize: 13, color: 'var(--toul-text-dim)' }}>{nombreMetodo(m.method)}</span>
                                 <span className="mv-num" style={{ fontSize: 14.5, fontWeight: 700, color: isOut ? 'var(--toul-error)' : 'var(--toul-accent)' }}>
                                     {isOut ? '−' : '+'}{formatCOP(Math.abs(m.signed))}
                                 </span>
@@ -211,7 +212,7 @@ export default function MovimientosPage() {
                                     <span style={{ display: 'block', fontSize: 13, color: 'var(--toul-text-dim)' }}>
                                         {/* "Venta #ba77…" y abajo otra vez "Venta": el tipo solo va si el título no lo dice ya */}
                                         {LABELS[m.type] && primeraPalabra(m.notes || '') === primeraPalabra(LABELS[m.type]) ? '' : `${LABELS[m.type] || 'Movimiento'} · `}
-                                        {m.method} · {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ZONA_COLOMBIA })}
+                                        {nombreMetodo(m.method)} · {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ZONA_COLOMBIA })}
                                     </span>
                                 </span>
                                 <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', flexShrink: 0, color: isOut ? 'var(--toul-error)' : 'var(--toul-accent)' }}>

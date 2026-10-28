@@ -1,4 +1,5 @@
 'use client'
+import { nombreMetodo } from '@/lib/format/text'
 
 import { formatCOP } from '@/lib/utils'
 import type { CashSessionSummary } from '@/lib/isla/types'
@@ -47,7 +48,7 @@ export function CashSummary({ summary }: { summary: CashSessionSummary }) {
             {summary.byMethod.length === 0
                 ? <Row label="Sin movimientos" value="—" tone="muted" />
                 : summary.byMethod.map(m => (
-                    <Row key={m.method} label={m.isCash ? `${m.method} (movimientos)` : m.method} value={formatCOP(m.net)} />
+                    <Row key={m.method} label={m.isCash ? `${nombreMetodo(m.method)} (movimientos)` : nombreMetodo(m.method)} value={formatCOP(m.net)} />
                 ))}
 
             <p className="toul-section-label" style={{ margin: '18px 0 0' }}>Ventas del turno</p>

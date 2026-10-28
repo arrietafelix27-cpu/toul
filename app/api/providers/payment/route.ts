@@ -2,96 +2,35 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 /**
- * atomic provider payment API
- * Handles:
- * 1. provider.total_debt reduction
- * 2. provider_debts.remaining_amount distribution (FIFO: oldest first)
- * 3. Movement record
+ * Pago a un proveedor.
+ *
+ * Todo pasa en una sola transacción (toul_pagar_proveedor): baja lo que
+ * falta de sus compras, de la más vieja a la más nueva, anota la salida de
+ * caja y deja la copia del proveedor igual a lo que de verdad falta. Antes
+ * eran tres escrituras sueltas y si una fallaba quedaba descuadrado.
  */
 export async function POST(request: Request) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    try {
-        const { providerId, amount } = await request.json()
+    const { providerId, amount, notes } = await request.json().catch(() => ({}))
 
-        if (!providerId || !amount || amount <= 0) {
-            return NextResponse.json({ error: 'Datos de pago inválidos' }, { status: 400 })
-        }
-
-        // 1. Get Store
-        const { data: store } = await supabase
-            .from('stores')
-            .select('id')
-            .eq('owner_id', user.id)
-            .single()
-
-        if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
-
-        const storeId = store.id
-
-        // 2. Fetch Provider and Verify Debt
-        const { data: provider, error: fetchError } = await supabase
-            .from('providers')
-            .select('id, name, total_debt')
-            .eq('id', providerId)
-            .single()
-
-        if (fetchError || !provider) {
-            return NextResponse.json({ error: 'Proveedor no encontrado' }, { status: 404 })
-        }
-
-        if (Number(provider.total_debt) < amount) {
-            return NextResponse.json({ error: 'El monto del abono supera la deuda total' }, { status: 400 })
-        }
-
-
-
-        // 4. Perform atomic-like operations
-
-        // A. Reduce providers.total_debt
-        await supabase.from('providers').update({
-            total_debt: Math.max(0, Number(provider.total_debt) - amount)
-        }).eq('id', providerId)
-
-        // B. Distribute abono to provider_debts (FIFO)
-        const { data: debts } = await supabase
-            .from('provider_debts')
-            .select('*')
-            .eq('provider_id', providerId)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: true })
-
-        let remainingToPay = amount
-        for (const debt of (debts || [])) {
-            if (remainingToPay <= 0) break
-
-            const deduction = Math.min(remainingToPay, Number(debt.remaining_amount))
-            const newRemaining = Number(debt.remaining_amount) - deduction
-
-            await supabase.from('provider_debts').update({
-                remaining_amount: newRemaining,
-                status: newRemaining <= 0 ? 'paid' : 'pending'
-            }).eq('id', debt.id)
-
-            remainingToPay -= deduction
-        }
-
-        // C. Movimiento de caja (los métodos de pago son solo para ventas)
-        await supabase.from('payments').insert({
-            store_id: storeId,
-            type: 'provider_payment',
-            method: 'General',
-            amount: amount,
-            reference_id: providerId,
-            notes: `Abono a proveedor: ${provider.name}`
-        })
-
-        return NextResponse.json({ success: true })
-
-    } catch (error: any) {
-        console.error('Provider Payment Error:', error)
-        return NextResponse.json({ error: error.message || 'Error interno al procesar el abono' }, { status: 500 })
+    if (!providerId || !amount || Number(amount) <= 0) {
+        return NextResponse.json({ error: 'Escribe cuánto le pagaste' }, { status: 400 })
     }
+
+    const { data, error } = await supabase.rpc('toul_pagar_proveedor', {
+        p_provider_id: providerId,
+        p_amount: Math.round(Number(amount)),
+        p_notes: notes ?? null,
+    })
+
+    if (error) {
+        console.error('Provider Payment Error:', error)
+        // Los mensajes de la base ya vienen en español y para el usuario
+        return NextResponse.json({ error: error.message || 'No se pudo registrar el pago' }, { status: 400 })
+    }
+
+    return NextResponse.json(data)
 }

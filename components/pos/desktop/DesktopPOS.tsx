@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
-import { onlyDigits, withThousands } from '@/lib/format/text'
+import { onlyDigits, withThousands, nombreMetodo } from '@/lib/format/text'
 import {
     Search, Plus, Minus, Trash2, SlidersHorizontal, Package, Check,
     ShoppingBag, UserPlus, ChevronRight, AlertTriangle, RefreshCw, X, Layers,
@@ -1058,7 +1058,7 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: m.color }} />
                                             </div>
                                             <span style={{ fontSize: 14, color: 'var(--toul-pos-text-main)', fontWeight: 500 }}>
-                                                {m.name}
+                                                {nombreMetodo(m.name)}
                                             </span>
                                         </button>
                                     )
@@ -1074,7 +1074,7 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                             background: 'var(--toul-pos-bg-main)', borderRadius: 8, padding: '6px 10px', border: `1px solid ${'var(--toul-pos-border)'}`,
                                         }}>
                                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.methodColor, flexShrink: 0 }} />
-                                            <span style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', fontWeight: 600, flexShrink: 0 }}>{s.methodName}</span>
+                                            <span style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', fontWeight: 600, flexShrink: 0 }}>{nombreMetodo(s.methodName)}</span>
                                             <input
                                                 type="text" inputMode="numeric" value={withThousands(String(s.amount || ''))} placeholder="0"
                                                 onChange={e => payment.setMethodAmount(s.methodId, Number(onlyDigits(e.target.value)) || 0)}

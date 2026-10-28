@@ -304,6 +304,12 @@ export const EXPENSE_CATEGORIES = [
     { value: 'otros', label: 'Otros' },
 ]
 
+/** El nombre de una categoría de gasto para mostrarla: "publicidad" → "Publicidad" */
+export function nombreCategoria(valor: string): string {
+    const v = (valor || 'otros').trim()
+    return EXPENSE_CATEGORIES.find(c => c.value === v)?.label ?? v.charAt(0).toUpperCase() + v.slice(1)
+}
+
 export interface AIInsight {
     id: string
     status_label: string // e.g. "Negocio saludable", "En crecimiento", "En riesgo"

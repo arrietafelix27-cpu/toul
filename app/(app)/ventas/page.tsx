@@ -1,9 +1,11 @@
 'use client'
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { Suspense, useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange } from '@/lib/utils'
 import { ZONA_COLOMBIA, instanteDeDia } from '@/lib/periodos'
+import { nombreMetodo } from '@/lib/format/text'
 import { Clock, Ban, Search, SlidersHorizontal, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
@@ -75,14 +77,38 @@ const KINDS: { value: Kind; label: string }[] = [
     { value: 'descuento', label: 'Con descuento' },
 ]
 
+/** El periodo que trae la dirección, o "Hoy" */
+function periodoDeLaDireccion(params: URLSearchParams | ReadonlyURLSearchParams): { period: Period; desde: string; hasta: string } {
+    const p = params.get('periodo')
+    const dia = /^\d{4}-\d{2}-\d{2}$/
+    const desde = params.get('desde') ?? ''
+    const hasta = params.get('hasta') ?? ''
+    if (p === 'custom' && dia.test(desde) && dia.test(hasta)) return { period: 'custom', desde, hasta }
+    if (p === 'today' || p === 'week' || p === 'month' || p === 'total') return { period: p, desde: '', hasta: '' }
+    return { period: 'today', desde: '', hasta: '' }
+}
+
 export default function VentasPage() {
+    // useSearchParams necesita su propio Suspense en el App Router
+    return (
+        <Suspense fallback={null}>
+            <Ventas />
+        </Suspense>
+    )
+}
+
+function Ventas() {
     const supabase = createClient()
     const { data: store, isLoading: storeLoading } = useStore()
     const storeId = store?.id || null
 
-    const [period, setPeriod] = useState<Period>('today')
-    const [fromDate, setFromDate] = useState('')
-    const [toDate, setToDate] = useState('')
+    // Desde Reportes llega con el mismo periodo:
+    // /ventas?periodo=month o /ventas?periodo=custom&desde=2026-10-01&hasta=2026-10-31
+    const params = useSearchParams()
+    const [inicial] = useState(() => periodoDeLaDireccion(params))
+    const [period, setPeriod] = useState<Period>(inicial.period)
+    const [fromDate, setFromDate] = useState(inicial.desde)
+    const [toDate, setToDate] = useState(inicial.hasta)
     const [selectedSale, setSelectedSale] = useState<VentaData | null>(null)
     const [limit, setLimit] = useState(PAGE_SIZE)
     const [hasMore, setHasMore] = useState(true)
@@ -187,8 +213,8 @@ export default function VentasPage() {
         return map
     }, { revalidateOnFocus: false })
 
-    const methodLabel = (raw: string) =>
-        methodNames?.[raw?.toLowerCase()] ?? (raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : 'Pago')
+    // El nombre como está en Ajustes, con mayúscula inicial al mostrarlo
+    const methodLabel = (raw: string) => nombreMetodo(methodNames?.[raw?.toLowerCase()] ?? raw)
 
     const { data: sellers } = useSWR(storeId ? ['sellers', storeId] : null, async () => {
         const { data } = await supabase.from('store_members').select('display_name').eq('store_id', storeId).order('created_at')

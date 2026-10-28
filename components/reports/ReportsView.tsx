@@ -1,16 +1,17 @@
 'use client'
 
-import type { CSSProperties, ReactNode } from 'react'
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Download, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react'
+import { useState, type CSSProperties, type PointerEvent as PunteroReact, type ReactNode } from 'react'
+import Link from 'next/link'
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, ChevronRight, Download, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react'
 import AnimatedNumber from '@/components/ui/AnimatedNumber'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Desplegable, SelectorPeriodo, type Variante } from '@/components/dashboard/Desplegable'
 import { ENTRADA_INICIO_CSS, entrada } from '@/lib/motion'
 import { formatPrecio } from '@/lib/utils'
-import { capitalizeFirst } from '@/lib/format/text'
-import { EXPENSE_CATEGORIES } from '@/lib/types'
-import { ZONA_COLOMBIA, contraQue, enColombia, formatoColombia, type Periodo, type Rango, type Tramo } from '@/lib/periodos'
-import { conOtros, deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir, type ResumenReporte } from '@/lib/reports/calculos'
+import { nombreMetodo } from '@/lib/format/text'
+import { nombreCategoria } from '@/lib/types'
+import { ZONA_COLOMBIA, contraQue, diaColombia, enColombia, formatoColombia, type Periodo, type Rango, type Tramo } from '@/lib/periodos'
+import { conOtros, deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir, textoPorcentaje, type ResumenReporte } from '@/lib/reports/calculos'
 import type { MesReporte, ReporteSQL } from '@/lib/reports/types'
 
 /* ══════════════════════════════════════════════════════════════
@@ -78,12 +79,42 @@ const CSS = ENTRADA_INICIO_CSS + `
 .rp-fila-total { margin-top: 6px; padding-top: 13px; border-top: 1px solid var(--toul-border); font-size: 15px; font-weight: 600; }
 .rp-fila-nota { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--toul-text-dim); }
 
+/* Una fila que lleva a su detalle */
+.rp-enlace { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 0 -8px; padding-left: 8px; padding-right: 8px;
+    border-radius: 10px; color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    transition: background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
+.rp-enlace:active { transform: scale(0.99); }
+.rp-enlace:focus-visible { outline: 2px solid var(--toul-border-2); outline-offset: 0; }
+.rp-enlace-flecha { flex-shrink: 0; align-self: center; margin-left: -10px; color: var(--toul-text-faint); }
+.rp-item-enlace { display: block; margin: -6px -8px; padding: 6px 8px; border-radius: 10px; color: inherit; text-decoration: none;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    transition: background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
+.rp-item-enlace:active { transform: scale(0.99); }
+.rp-item-enlace:focus-visible { outline: 2px solid var(--toul-border-2); }
+
 /* Mes a mes */
 .rp-leyenda { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--toul-text-subtle); }
 .rp-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
 .rp-punto { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
 .rp-meses { display: grid; grid-template-columns: repeat(var(--rp-n), minmax(0, 1fr)); column-gap: 10px; }
-.rp-mes { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.rp-mes { display: flex; flex-direction: column; align-items: center; min-width: 0; width: 100%; padding: 0; border: none; background: none;
+    font: inherit; color: inherit; cursor: default; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.rp-mes:focus-visible { outline: none; }
+.rp-mes:focus-visible .rp-mes-nombre { color: var(--toul-text); text-decoration: underline; text-underline-offset: 3px; }
+/* La etiqueta del mes: aparece al pasar el cursor, al tocar la barra o con el teclado */
+.rp-globo { position: absolute; z-index: 20; left: 50%; bottom: calc(var(--rp-alto, 0%) + 10px); pointer-events: none; white-space: nowrap;
+    padding: 8px 10px; border-radius: 10px; background: var(--toul-surface-overlay); border: 1px solid var(--toul-border-2);
+    box-shadow: 0 10px 28px color-mix(in srgb, var(--toul-bg) 60%, transparent); text-align: left;
+    opacity: 0; transform: translateX(-50%) translateY(3px);
+    transition: opacity 140ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
+.rp-globo[data-borde="inicio"] { left: 0; transform: translateY(3px); }
+.rp-globo[data-borde="fin"] { left: auto; right: 0; transform: translateY(3px); }
+.rp-mes[data-abierto="true"] .rp-globo { opacity: 1; transform: translateX(-50%) translateY(0); }
+.rp-mes[data-abierto="true"] .rp-globo[data-borde] { transform: translateY(0); }
+.rp-mes[data-abierto="true"] .rp-mes-valor { opacity: 0; }
+.rp-globo-mes { display: block; margin-bottom: 5px; font-size: 12px; color: var(--toul-text-subtle); }
+.rp-globo-fila { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 1.6; color: var(--toul-text-muted); }
+.rp-globo-fila b { margin-left: auto; padding-left: 14px; font-weight: 600; color: var(--toul-text); font-variant-numeric: tabular-nums; }
 .rp-mes-area { position: relative; width: min(100%, 48px); height: 170px; margin-top: 24px; }
 .rp-mes-ventas, .rp-mes-ganancia { position: absolute; bottom: 0; height: 100%;
     transition: clip-path 600ms var(--toul-ease-emil); }
@@ -175,10 +206,15 @@ const CSS = ENTRADA_INICIO_CSS + `
 }
 @media (hover: hover) and (pointer: fine) {
     .rp-reintentar:hover { color: var(--toul-text); }
+    .rp-enlace:hover, .rp-item-enlace:hover { background: var(--toul-surface-3); }
+    .rp-enlace:hover .rp-enlace-flecha { color: var(--toul-text-subtle); }
 }
 @media (prefers-reduced-motion: reduce) {
     .rp-crece-x, .rp-crece-y, .rp-cien, .rp-dona-tramo { animation: rp-aparece 200ms ease backwards; }
     .rp-relleno, .rp-mes-ventas, .rp-mes-ganancia, .rp-cien-tramo, .rp-dona-tramo { transition: none; }
+    .rp-globo, .rp-globo[data-borde] { transform: translateX(-50%); transition: opacity 140ms ease; }
+    .rp-globo[data-borde] { transform: none; }
+    .rp-enlace:active, .rp-item-enlace:active { transform: none; }
 }
 `
 
@@ -194,9 +230,20 @@ const TONOS = [
 const pct = (v: number) => `${Math.round(v)}%`
 const restante = (fraccion: number) => `${Math.round((1 - Math.min(Math.max(fraccion, 0), 1)) * 1000) / 10}%`
 const estilo = (vars: Record<string, string | number>) => vars as CSSProperties
+const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 
-function nombreCategoria(valor: string): string {
-    return EXPENSE_CATEGORIES.find(c => c.value === valor)?.label ?? capitalizeFirst(valor)
+/** Ventas, en el mismo periodo. "Este año" no existe allá: van las mismas fechas */
+function hrefVentas(periodo: Periodo, tramo: Tramo): string {
+    if (periodo === 'today' || periodo === 'week' || periodo === 'month') return `/ventas?periodo=${periodo}`
+    const desde = tramo.from ? diaColombia(tramo.from) : ''
+    const hasta = diaColombia(tramo.to ?? new Date())
+    return `/ventas?periodo=custom&desde=${desde}&hasta=${hasta}`
+}
+
+/** "octubre de 2026" */
+function mesLargo(iso: string): string {
+    const [y, m] = iso.split('-').map(Number)
+    return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('es-CO', { month: 'long', year: 'numeric', timeZone: ZONA_COLOMBIA })
 }
 
 function mesCorto(iso: string): string {
@@ -300,7 +347,7 @@ export function ReportsView({
 
                 <div className="rp-medio">
                     <section {...entrada(3, true, 'rp-col')} aria-labelledby="rp-tu-plata">
-                        <TuPlata r={r} clave={clave} cargando={cargando} />
+                        <TuPlata r={r} clave={clave} cargando={cargando} hrefVentas={hrefVentas(periodo, tramo)} />
                     </section>
                     <div {...entrada(4, true, 'rp-col rp-derecha')}>
                         <MesAMes meses={meses} />
@@ -407,26 +454,34 @@ function Barra({ fraccion, color, alto, retraso = 0 }: { fraccion: number; color
     )
 }
 
-function Fila({ rotulo, valor, sub, total, color, nota }: {
+function Fila({ rotulo, valor, sub, total, color, nota, href }: {
     rotulo: string
     valor: number
     sub?: boolean
     total?: boolean
     color?: string
     nota?: string
+    /** Su detalle, en el mismo periodo */
+    href?: string
 }) {
+    const clase = `rp-fila${sub ? ' rp-fila-sub' : ''}${total ? ' rp-fila-total' : ''}`
+    const contenido = <>
+        <span>
+            {rotulo}
+            {nota && <span className="rp-fila-nota">{nota}</span>}
+        </span>
+        <span className="rp-fila-valor" style={color ? { color } : undefined}>{formatPrecio(valor)}</span>
+    </>
+    if (!href) return <div className={clase}>{contenido}</div>
     return (
-        <div className={`rp-fila${sub ? ' rp-fila-sub' : ''}${total ? ' rp-fila-total' : ''}`}>
-            <span>
-                {rotulo}
-                {nota && <span className="rp-fila-nota">{nota}</span>}
-            </span>
-            <span className="rp-fila-valor" style={color ? { color } : undefined}>{formatPrecio(valor)}</span>
-        </div>
+        <Link href={href} className={`${clase} rp-enlace`}>
+            {contenido}
+            <ChevronRight size={14} strokeWidth={2.2} className="rp-enlace-flecha" aria-hidden />
+        </Link>
     )
 }
 
-function TuPlata({ r, clave, cargando }: { r: ResumenReporte | null; clave: string; cargando: boolean }) {
+function TuPlata({ r, clave, cargando, hrefVentas }: { r: ResumenReporte | null; clave: string; cargando: boolean; hrefVentas: string }) {
     const mayor = Math.max(r?.entro ?? 0, r?.salio ?? 0, 1)
 
     return (
@@ -457,7 +512,7 @@ function TuPlata({ r, clave, cargando }: { r: ResumenReporte | null; clave: stri
 
                     <div className="rp-grupo">
                         <p className="rp-grupo-titulo">Entradas</p>
-                        <Fila rotulo="Vendiste" valor={r.vendiste} />
+                        <Fila rotulo="Ventas antes de devoluciones" valor={r.ventasAntes} href={hrefVentas} />
                         <Fila rotulo="De contado" valor={r.contado} sub />
                         <Fila rotulo="A crédito" valor={r.credito} sub />
                         <Fila rotulo="Abonos que te hicieron" valor={r.abonos} />
@@ -481,6 +536,9 @@ function TuPlata({ r, clave, cargando }: { r: ResumenReporte | null; clave: stri
 
 function MesAMes({ meses }: { meses: MesReporte[] | null }) {
     const mayor = Math.max(...(meses ?? []).map(m => Math.max(m.ventas, m.ganancia, 0)), 1)
+    // El mes que muestra su etiqueta: con el cursor encima, al tocarlo o con el teclado
+    const [abierto, setAbierto] = useState<string | null>(null)
+    const conMouse = (e: PunteroReact) => e.pointerType === 'mouse'
 
     return (
         <section aria-labelledby="rp-mes-a-mes">
@@ -496,15 +554,20 @@ function MesAMes({ meses }: { meses: MesReporte[] | null }) {
             ) : meses.length === 0 ? (
                 <p className="rp-vacio">Aún no hay ventas</p>
             ) : (
-                <div className="rp-meses" style={estilo({ '--rp-n': meses.length })} role="list">
+                <div className="rp-meses" style={estilo({ '--rp-n': meses.length })}>
                     {meses.map((m, i) => {
                         const actual = i === meses.length - 1
                         const ventas = Math.max(m.ventas, 0) / mayor
                         const ganancia = Math.max(m.ganancia, 0) / mayor
                         const retraso = `${i * 70}ms`
                         return (
-                            <div key={m.mes} className="rp-mes" data-actual={actual} role="listitem"
-                                aria-label={`${mesCorto(m.mes)}: vendiste ${formatPrecio(m.ventas)}, ganaste ${formatPrecio(m.ganancia)}`}>
+                            <button key={m.mes} type="button" className="rp-mes" data-actual={actual} data-abierto={abierto === m.mes}
+                                aria-label={`${mesLargo(m.mes)}: vendiste ${formatPrecio(m.ventas)}, ganaste ${formatPrecio(m.ganancia)}`}
+                                onPointerEnter={e => { if (conMouse(e)) setAbierto(m.mes) }}
+                                onPointerLeave={e => { if (conMouse(e)) setAbierto(a => (a === m.mes ? null : a)) }}
+                                onClick={() => setAbierto(a => (a === m.mes ? null : m.mes))}
+                                onFocus={() => setAbierto(m.mes)}
+                                onBlur={() => setAbierto(a => (a === m.mes ? null : a))}>
                                 <div className="rp-mes-area">
                                     <div className="rp-mes-ventas rp-crece-y"
                                         style={estilo({ '--rp-arriba': restante(ventas), '--rp-d': retraso })} />
@@ -516,9 +579,22 @@ function MesAMes({ meses }: { meses: MesReporte[] | null }) {
                                             {formatoCorto(m.ventas)}
                                         </span>
                                     )}
+                                    <span className="rp-globo" aria-hidden
+                                        data-borde={i === 0 && meses.length > 1 ? 'inicio' : i === meses.length - 1 && meses.length > 1 ? 'fin' : undefined}
+                                        style={estilo({ '--rp-alto': `${Math.round(Math.max(ventas, ganancia) * 1000) / 10}%` })}>
+                                        <span className="rp-globo-mes">{capitalizar(mesLargo(m.mes))}</span>
+                                        <span className="rp-globo-fila">
+                                            <i className="rp-punto" style={{ background: 'color-mix(in srgb, var(--toul-text) 20%, transparent)' }} />
+                                            Ventas <b>{formatPrecio(m.ventas)}</b>
+                                        </span>
+                                        <span className="rp-globo-fila">
+                                            <i className="rp-punto" style={{ background: 'var(--toul-accent)' }} />
+                                            {m.ganancia < 0 ? 'Pérdida' : 'Ganancia'} <b>{formatPrecio(Math.abs(m.ganancia))}</b>
+                                        </span>
+                                    </span>
                                 </div>
                                 <span className="rp-mes-nombre">{mesCorto(m.mes)}</span>
-                            </div>
+                            </button>
                         )
                     })}
                 </div>
@@ -530,7 +606,7 @@ function MesAMes({ meses }: { meses: MesReporte[] | null }) {
 /* ── De cada $100 ───────────────────────────────────────────── */
 
 function DeCadaCien({ r, cargando }: { r: ResumenReporte | null; cargando: boolean }) {
-    const cien = r ? deCada100({ ventas: r.ventasNetas, costo: r.costoNeto, gastos: r.gastos }) : null
+    const cien = r ? deCada100({ ventas: r.vendiste, costo: r.costoNeto, gastos: r.gastos }) : null
     const tramos = cien ? [
         { clave: 'mercancia', rotulo: 'Se fue en mercancía', valor: cien.mercancia, barra: cien.barra.mercancia,
             color: 'color-mix(in srgb, var(--toul-text) 22%, transparent)' },
@@ -628,17 +704,19 @@ function QueTeDejoMas({ filas, cargando }: { filas: ReporteSQL['productos'] | nu
                 <ol className="rp-lista" aria-labelledby="rp-productos">
                     {lista.map((p, i) => (
                         <li key={p.id} className="rp-item">
-                            <div className="rp-item-cabeza">
-                                <span className="rp-pos">{i + 1}</span>
-                                <span className="rp-item-texto">
-                                    <span className="rp-item-nombre">{p.nombre}</span>
-                                    <span className="rp-item-sub">{Math.round(Number(p.margen))}% de margen</span>
-                                </span>
-                                <span className="rp-item-monto">{formatPrecio(Number(p.ganancia))}</span>
-                            </div>
-                            <div style={{ paddingLeft: 24 }}>
-                                <Barra fraccion={Number(p.ganancia) / mayor} color="color-mix(in srgb, var(--toul-text) 32%, transparent)" alto={3} retraso={i * 60} />
-                            </div>
+                            <Link href={`/products/${p.id}`} className="rp-item-enlace">
+                                <div className="rp-item-cabeza">
+                                    <span className="rp-pos">{i + 1}</span>
+                                    <span className="rp-item-texto">
+                                        <span className="rp-item-nombre">{p.nombre}</span>
+                                        <span className="rp-item-sub">{Math.round(Number(p.margen))}% de margen</span>
+                                    </span>
+                                    <span className="rp-item-monto">{formatPrecio(Number(p.ganancia))}</span>
+                                </div>
+                                <div style={{ paddingLeft: 24 }}>
+                                    <Barra fraccion={Number(p.ganancia) / mayor} color="color-mix(in srgb, var(--toul-text) 32%, transparent)" alto={3} retraso={i * 60} />
+                                </div>
+                            </Link>
                         </li>
                     ))}
                 </ol>
@@ -691,8 +769,8 @@ function ComoTePagan({ filas, total, cargando }: { filas: ReporteSQL['metodos'] 
                         {tramos.map(t => (
                             <li key={t.nombre} className="rp-metodo">
                                 <i className="rp-punto" style={{ background: t.color }} />
-                                <span className="rp-metodo-nombre">{t.nombre}</span>
-                                <span className="rp-metodo-pct">{Math.round(t.largo)}%</span>
+                                <span className="rp-metodo-nombre">{nombreMetodo(t.nombre)}</span>
+                                <span className="rp-metodo-pct">{textoPorcentaje(t.monto, suma)}</span>
                                 <span className="rp-metodo-monto">{formatPrecio(t.monto)}</span>
                             </li>
                         ))}

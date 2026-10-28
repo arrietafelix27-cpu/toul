@@ -10,6 +10,7 @@ import { formatCOP } from '@/lib/utils'
 import { explainError } from '@/lib/errors'
 import { useStore } from '@/lib/hooks/useData'
 import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
+import { nombreMetodo } from '@/lib/format/text'
 import { Sheet } from '@/components/isla/Sheet'
 import { Thumb } from '@/components/ui/Thumb'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
@@ -237,7 +238,7 @@ export function DevolucionSheet({ open, onClose, saleId = null, isAdmin, onDone 
         return delPago ?? methods[0]?.id ?? null
     }, [venta, methods])
     const metodoElegido = metodo ?? metodoPorDefecto
-    const nombreMetodo = methods.find(m => m.id === metodoElegido)?.name
+    const metodoDevolucion = methods.find(m => m.id === metodoElegido)?.name
 
     const cambiar = useCallback((itemId: string, delta: number, max: number) => {
         setCantidades(prev => ({ ...prev, [itemId]: Math.min(Math.max((prev[itemId] ?? 0) + delta, 0), max) }))
@@ -314,7 +315,7 @@ export function DevolucionSheet({ open, onClose, saleId = null, isAdmin, onDone 
                         )}
                         {calculo.plata > 0 && (
                             <div className="dv-fila">
-                                <span style={{ fontSize: 14, color: 'var(--toul-text-muted)' }}>Le devuelves{nombreMetodo ? ` en ${nombreMetodo}` : ''}</span>
+                                <span style={{ fontSize: 14, color: 'var(--toul-text-muted)' }}>Le devuelves{metodoDevolucion ? ` en ${nombreMetodo(metodoDevolucion)}` : ''}</span>
                                 <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }}>
                                     {formatCOP(calculo.plata)}
                                 </span>
@@ -443,7 +444,7 @@ export function DevolucionSheet({ open, onClose, saleId = null, isAdmin, onDone 
                                             {methods.map(m => (
                                                 <button key={m.id} type="button" className="dv-chip" data-activo={metodoElegido === m.id}
                                                     onClick={() => setMetodo(m.id)}>
-                                                    {m.name}
+                                                    {nombreMetodo(m.name)}
                                                 </button>
                                             ))}
                                         </div>

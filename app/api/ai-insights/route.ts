@@ -2,6 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { enColombia } from '@/lib/periodos'
+import { resumir } from '@/lib/reports/calculos'
+import { REPORTE_VACIO, type ReporteSQL } from '@/lib/reports/types'
+import { capitalizeFirst } from '@/lib/format/text'
+import { nombreCategoria } from '@/lib/types'
 
 // Cache duration: 1 hour (was 12h — too stale)
 const CACHE_TTL = 1 * 60 * 60 * 1000
@@ -40,42 +44,41 @@ export async function POST(request: Request) {
     // ── Gather rich data ──────────────────────────────────────────────────────
     const now = new Date()
     const last30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-    const last7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const last60 = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString()
 
     const [
         { data: products },
         { data: salesRaw },
-        { data: salesPrevRaw },
-        { data: expenses },
         { data: saleItems },
-        { data: payments },
+        { data: reporte30 },
+        { data: reporteAntes },
         { data: inventario },
     ] = await Promise.all([
         supabase.from('products').select('id, name, stock, cpp, sale_price, is_active, created_at').eq('store_id', storeId).eq('is_active', true),
         supabase.from('sales').select('id, total, created_at, payment_method').eq('store_id', storeId).gte('created_at', last30),
-        supabase.from('sales').select('total').eq('store_id', storeId).gte('created_at', last60).lt('created_at', last30),
-        supabase.from('expenses').select('amount, category, description, created_at').eq('store_id', storeId).gte('created_at', last30),
         supabase.from('sale_items').select('product_id, quantity, unit_price, unit_cost, sales!inner(created_at, store_id)').eq('sales.store_id', storeId).gte('sales.created_at', last30),
-        supabase.from('payments').select('method, amount, type').eq('store_id', storeId).gte('created_at', last30),
+        // Ventas, ganancia, gastos, métodos y productos: la misma función de Reportes
+        supabase.rpc('toul_reporte', { p_desde: last30, p_hasta: now.toISOString() }),
+        supabase.rpc('toul_reporte', { p_desde: last60, p_hasta: last30 }),
         // El valor del inventario cuenta cada presentación, igual que en Inventario
         supabase.rpc('toul_inventory_overview', { p_limit: 1 }),
     ])
 
     // ── Compute derived metrics ───────────────────────────────────────────────
     const sales = salesRaw || []
-    const prevSales = salesPrevRaw || []
     const items = saleItems || []
     const prods = products || []
-    const exps = expenses || []
-    const pays = payments || []
+    const rep30 = (reporte30 ?? null) as ReporteSQL | null
+    const r30 = resumir(rep30 ?? REPORTE_VACIO)
+    const rAntes = resumir((reporteAntes ?? REPORTE_VACIO) as ReporteSQL)
 
-    const totalRevenue = sales.reduce((s, v) => s + v.total, 0)
-    const prevRevenue = prevSales.reduce((s, v) => s + v.total, 0)
+    // Lo mismo que muestra Reportes: vendiste ya sin devoluciones
+    const totalRevenue = r30.vendiste
+    const prevRevenue = rAntes.vendiste
     const revGrowth = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue * 100).toFixed(1) : null
-    const totalExpenses = exps.reduce((s, e) => s + e.amount, 0)
+    const totalExpenses = r30.gastos
     const inventoryValue = Number((inventario as { value?: number } | null)?.value ?? 0)
-    const avgTicket = sales.length > 0 ? totalRevenue / sales.length : 0
+    const avgTicket = r30.ticket ?? 0
 
     // Product analytics
     const prodMap: Record<string, { name: string; revenue: number; units: number; cost: number; stock: number; cpp: number; lastSale?: string }> = {}
@@ -88,17 +91,31 @@ export async function POST(request: Request) {
             prodMap[item.product_id].lastSale = (item.sales as any)?.created_at
         }
     }
-    const prodList = Object.entries(prodMap).map(([id, p]) => ({
+    const inventarioPorProducto = Object.entries(prodMap).map(([id, p]) => ({
         id, ...p,
         profit: p.revenue - p.cost,
         margin: p.revenue > 0 ? ((p.revenue - p.cost) / p.revenue * 100) : 0,
         trappedCapital: p.stock * p.cpp,
+    }))
+    // Lo que vendió y dejó cada producto sale de Reportes (ya restadas las
+    // devoluciones y repartidos los descuentos); el stock, del catálogo
+    const prodList = (rep30?.productos ?? []).map(p => ({
+        id: p.id,
+        name: p.nombre,
+        revenue: Number(p.ventas),
+        profit: Number(p.ganancia),
+        margin: Number(p.margen),
+        units: prodMap[p.id]?.units ?? 0,
+        stock: prodMap[p.id]?.stock ?? 0,
+        cpp: prodMap[p.id]?.cpp ?? 0,
+        cost: Number(p.ventas) - Number(p.ganancia),
+        trappedCapital: (prodMap[p.id]?.stock ?? 0) * (prodMap[p.id]?.cpp ?? 0),
     })).sort((a, b) => b.revenue - a.revenue)
 
     const starProduct = prodList[0]
     const highMarginProduct = [...prodList].sort((a, b) => b.margin - a.margin)[0]
-    const highTrapped = [...prodList].sort((a, b) => b.trappedCapital - a.trappedCapital)[0]
-    const lowRotation = prodList.filter(p => p.units === 0 && p.stock > 0).sort((a, b) => b.trappedCapital - a.trappedCapital)[0]
+    const highTrapped = [...inventarioPorProducto].sort((a, b) => b.trappedCapital - a.trappedCapital)[0]
+    const lowRotation = inventarioPorProducto.filter(p => p.units === 0 && p.stock > 0).sort((a, b) => b.trappedCapital - a.trappedCapital)[0]
     const lowStockProds = prods.filter(p => p.stock > 0 && p.stock <= 5)
     const outOfStock = prods.filter(p => p.stock === 0)
 
@@ -115,22 +132,19 @@ export async function POST(request: Request) {
 
     // Sales by hour
     const hourMap: Record<number, number> = {}
-    for (const s of sales) { const h = new Date(s.created_at).getHours(); hourMap[h] = (hourMap[h] || 0) + 1 }
+    // La hora en Colombia: el servidor está en UTC
+    for (const s of sales) { const h = enColombia(s.created_at).hora; hourMap[h] = (hourMap[h] || 0) + 1 }
     const bestHourNum = Object.entries(hourMap).sort((a, b) => Number(b[1]) - Number(a[1]))[0]
     const bestHour = bestHourNum ? Number(bestHourNum[0]) : null
 
-    // Payment methods
-    const methodMap: Record<string, number> = {}
-    for (const s of sales) { methodMap[s.payment_method] = (methodMap[s.payment_method] || 0) + s.total }
-    const topMethod = Object.entries(methodMap).sort((a, b) => b[1] - a[1])[0]
-
-    // Expense categories
-    const expCatMap: Record<string, number> = {}
-    for (const e of exps) expCatMap[e.category] = (expCatMap[e.category] || 0) + e.amount
-    const topExpenseCat = Object.entries(expCatMap).sort((a, b) => b[1] - a[1])[0]
+    // Cómo te pagan y en qué gastaste: lo mismo de Reportes
+    const topMethod = rep30?.metodos[0] ? [capitalizeFirst(rep30.metodos[0].nombre), Number(rep30.metodos[0].monto)] as [string, number] : undefined
+    const topExpenseCat = rep30?.gastosPorCategoria[0]
+        ? [nombreCategoria(rep30.gastosPorCategoria[0].categoria), Number(rep30.gastosPorCategoria[0].monto)] as [string, number]
+        : undefined
 
     // Check if profit is shrinking despite revenue growth
-    const grossProfit = prodList.reduce((s, p) => s + p.profit, 0)
+    const grossProfit = r30.gananciaVentas
     const marginPressure = totalRevenue > 0 && grossProfit / totalRevenue < 0.3 // <30% gross margin
 
     /* ══════════════════════════════════════════════════════════════

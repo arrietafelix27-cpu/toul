@@ -67,28 +67,22 @@ export default function ProvidersPage() {
             let q = supabase.from('providers').select('*').eq('store_id', storeId!).order('name')
             if (busca) q = q.ilike('name', `%${busca}%`)
 
-            // Las deudas vivas: de ahí sale cuánto se vence y cuándo
-            const [provRes, deudasRes] = await Promise.all([
+            // Lo que le debes a cada uno sale de toul_payables: el mismo
+            // cálculo que usa el Inicio
+            const [provRes, debesRes] = await Promise.all([
                 q.limit(limite + 1),
-                supabase.from('provider_debts')
-                    .select('provider_id, remaining_amount, due_date')
-                    .eq('store_id', storeId!).neq('status', 'paid').gt('remaining_amount', 0),
+                supabase.rpc('toul_payables'),
             ])
             if (provRes.error) throw provRes.error
+            if (debesRes.error) throw debesRes.error
 
             const filas = (provRes.data ?? []) as Provider[]
             setHayMas(filas.length > limite)
 
+            type FilaDebes = { id: string; saldo: number; vence: string | null; vencidas: number }
             const porProveedor = new Map<string, { falta: number; vence: string | null; vencidas: number }>()
-            for (const d of deudasRes.data ?? []) {
-                if (!d.provider_id) continue
-                const actual = porProveedor.get(d.provider_id) ?? { falta: 0, vence: null, vencidas: 0 }
-                actual.falta += Number(d.remaining_amount)
-                if (d.due_date) {
-                    if (!actual.vence || new Date(d.due_date) < new Date(actual.vence)) actual.vence = d.due_date
-                    if (vencidoHace(d.due_date) > 0) actual.vencidas++
-                }
-                porProveedor.set(d.provider_id, actual)
+            for (const d of ((debesRes.data as { proveedores?: FilaDebes[] } | null)?.proveedores ?? [])) {
+                porProveedor.set(d.id, { falta: Number(d.saldo), vence: d.vence, vencidas: Number(d.vencidas) })
             }
 
             return { proveedores: filas.slice(0, limite), deudas: porProveedor }

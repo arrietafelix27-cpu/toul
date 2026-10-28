@@ -140,31 +140,37 @@ export function conOtros<T extends { monto: number }>(filas: T[], max: number, o
     return [...filas.slice(0, max - 1), otros(resto)]
 }
 
-/** Lo que muestra Reportes, sacado de lo que devuelve toul_reporte */
+/** Lo que muestra Reportes (y el Inicio), sacado de lo que devuelve toul_reporte */
 export interface ResumenReporte {
+    /** Vendiste: lo vendido menos lo devuelto. Es el mismo en toda la app */
     vendiste: number
+    /** Lo vendido antes de devoluciones: De contado + A crédito */
+    ventasAntes: number
     contado: number
     credito: number
+    /** Lo devuelto, a precio de venta */
+    devoluciones: number
     abonos: number
     /** De contado + abonos */
     entro: number
     gastos: number
     mercancia: number
+    /** La plata que salió por devoluciones */
     devuelto: number
     /** Gastos + mercancía que pagaste + devoluciones */
     salio: number
-    /** Lo vendido menos lo devuelto */
-    ventasNetas: number
+    /** Lo que costó la mercancía vendida, menos la devuelta */
     costoNeto: number
-    /** Ganancia en ventas: ventas netas − costo neto */
+    /** Ganancia en ventas: vendiste − costo */
     gananciaVentas: number
     /** Ganancia en ventas − gastos */
     ganaste: number
     cantidad: number
     /** % de lo vendido que te quedó como ganancia en ventas */
     margen: number | null
+    /** Vendiste ÷ número de ventas */
     ticket: number | null
-    /** % de lo vendido que quedó fiado */
+    /** % de lo vendido (antes de devoluciones) que quedó fiado */
     pctCredito: number | null
 }
 
@@ -176,7 +182,7 @@ export function resumir(r: {
     mercanciaPagada: number
 }): ResumenReporte {
     const n = (v: unknown) => Number(v) || 0
-    const vendiste = n(r.ventas.total)
+    const ventasAntes = n(r.ventas.total)
     const contado = n(r.ventas.contado)
     const credito = n(r.ventas.credito)
     const cantidad = n(r.ventas.cantidad)
@@ -184,48 +190,28 @@ export function resumir(r: {
     const gastos = n(r.gastos)
     const mercancia = n(r.mercanciaPagada)
     const devuelto = n(r.devoluciones.reembolsado)
-    const ventasNetas = vendiste - n(r.devoluciones.total)
+    const devoluciones = n(r.devoluciones.total)
+    const vendiste = ventasAntes - devoluciones
     const costoNeto = n(r.ventas.costo) - n(r.devoluciones.costo)
-    const gananciaVentas = ventasNetas - costoNeto
+    const gananciaVentas = vendiste - costoNeto
     return {
-        vendiste, contado, credito, abonos,
+        vendiste, ventasAntes, contado, credito, devoluciones, abonos,
         entro: contado + abonos,
         gastos, mercancia, devuelto,
         salio: gastos + mercancia + devuelto,
-        ventasNetas, costoNeto, gananciaVentas,
+        costoNeto, gananciaVentas,
         ganaste: gananciaVentas - gastos,
         cantidad,
-        margen: ventasNetas > 0 ? Math.round((gananciaVentas / ventasNetas) * 100) : null,
+        margen: vendiste > 0 ? Math.round((gananciaVentas / vendiste) * 100) : null,
         ticket: cantidad > 0 ? Math.round(vendiste / cantidad) : null,
-        pctCredito: vendiste > 0 ? Math.round((credito / vendiste) * 100) : null,
+        pctCredito: ventasAntes > 0 ? Math.round((credito / ventasAntes) * 100) : null,
     }
 }
 
-/** Las filas que trae el Inicio para un periodo */
-export interface FilasInicio {
-    ventas: { total: number; sale_items?: { unit_cost: number | null; quantity: number }[] | null }[]
-    gastos: { amount: number }[]
-    devoluciones: { total: number; cost_total: number }[]
-}
-
-/** Vendiste, ganancia en ventas y gastos del Inicio. Arma lo mismo que
- *  devuelve toul_reporte (cada suma redondeada igual que allá) y pasa por
- *  `resumir`: así el Inicio y Reportes no pueden dar números distintos
- *  para el mismo periodo. */
-export function metricasInicio({ ventas, gastos, devoluciones }: FilasInicio): ResumenReporte {
-    const n = (v: unknown) => Number(v) || 0
-    const suma = <T,>(filas: T[], valor: (f: T) => number) => Math.round(filas.reduce((s, f) => s + valor(f), 0))
-    return resumir({
-        ventas: {
-            total: suma(ventas, v => n(v.total)),
-            cantidad: ventas.length,
-            contado: 0,
-            credito: 0,
-            costo: suma(ventas, v => (v.sale_items ?? []).reduce((a, i) => a + n(i.unit_cost) * n(i.quantity), 0)),
-        },
-        devoluciones: { total: suma(devoluciones, d => n(d.total)), costo: suma(devoluciones, d => n(d.cost_total)), reembolsado: 0 },
-        abonos: 0,
-        gastos: suma(gastos, g => n(g.amount)),
-        mercanciaPagada: 0,
-    })
+/** "71%", y "menos de 1%" cuando es algo pero no alcanza al 1% (redondeado diría 0%) */
+export function textoPorcentaje(parte: number, total: number): string {
+    if (total <= 0) return '0%'
+    const exacto = (parte / total) * 100
+    if (exacto > 0 && exacto < 1) return 'menos de 1%'
+    return `${Math.round(exacto)}%`
 }

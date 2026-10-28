@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowUpRight, Ban, Package, Printer, Undo2, UserRound, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
+import { nombreMetodo } from '@/lib/format/text'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
 import { panelVariants, backdropVariants } from '@/lib/motion'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
@@ -68,8 +69,8 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, onDevolver
         return map
     }, { revalidateOnFocus: false })
 
-    const methodLabel = (raw: string) =>
-        methodNames?.[raw?.toLowerCase()] ?? (raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : 'Pago')
+    // El nombre como está en Ajustes, con mayúscula inicial al mostrarlo
+    const methodLabel = (raw: string) => nombreMetodo(methodNames?.[raw?.toLowerCase()] ?? raw)
 
     async function imprimir(saleId: string) {
         setPrinting(true)
