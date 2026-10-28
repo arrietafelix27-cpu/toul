@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { enColombia } from '@/lib/periodos'
 
 // Cache duration: 1 hour (was 12h — too stale)
 const CACHE_TTL = 1 * 60 * 60 * 1000
@@ -104,7 +105,8 @@ export async function POST(request: Request) {
     // Sales by day of week
     const dayMap: Record<number, number> = {}
     for (const s of sales) {
-        const d = new Date(s.created_at).getDay()
+        // El día de la semana en Colombia: el servidor está en UTC
+        const d = enColombia(s.created_at).semana
         dayMap[d] = (dayMap[d] || 0) + s.total
     }
     const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']

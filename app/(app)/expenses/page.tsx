@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { Plus, Receipt, Megaphone, Truck, ShoppingBag, Zap, Package, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange } from '@/lib/utils'
+import { ZONA_COLOMBIA, diasEntre } from '@/lib/periodos'
 import { useStore } from '@/lib/hooks/useData'
 import { EXPENSE_CATEGORIES } from '@/lib/types'
 import { explainError } from '@/lib/errors'
@@ -49,13 +50,10 @@ const PERIODS: { value: Period; label: string }[] = [
     { value: 'all', label: 'Todo' },
 ]
 
+/** Los mismos periodos del Inicio y Reportes, en hora de Colombia */
 function since(period: Period): string | null {
-    const now = new Date()
     if (period === 'all') return null
-    // De lunes a hoy, igual que en el Inicio y en Reportes
-    if (period === 'week') return getDateRange('week').from
-    if (period === 'year') return new Date(now.getFullYear(), 0, 1).toISOString()
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    return getDateRange(period).from
 }
 
 interface ExpenseRow {
@@ -66,14 +64,12 @@ interface ExpenseRow {
     created_at: string
 }
 
+/** El día de cada gasto, en hora de Colombia */
 const dayLabel = (iso: string) => {
-    const date = new Date(iso)
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
-    const day = new Date(date); day.setHours(0, 0, 0, 0)
-    if (day.getTime() === today.getTime()) return 'Hoy'
-    if (day.getTime() === yesterday.getTime()) return 'Ayer'
-    return date.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
+    const atras = diasEntre(iso, new Date())
+    if (atras === 0) return 'Hoy'
+    if (atras === 1) return 'Ayer'
+    return new Date(iso).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: ZONA_COLOMBIA })
 }
 
 export default function ExpensesPage() {
@@ -329,7 +325,7 @@ export default function ExpensesPage() {
                                                     {expense.description || label}
                                                 </span>
                                                 <span style={{ display: 'block', fontSize: 13, color: 'var(--toul-text-dim)' }}>
-                                                    {label} · {new Date(expense.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                                                    {label} · {new Date(expense.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: ZONA_COLOMBIA })}
                                                 </span>
                                             </span>
                                             <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-error)', whiteSpace: 'nowrap' }}>

@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { enColombia } from '@/lib/periodos'
 
 // ─── Business Snapshot Builder ──────────────────────────────────────────────
 // Pre-fetches ALL business data and builds a structured context string
@@ -134,7 +135,8 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
 
     // Sales by day of week
     const dayMap: Record<number, number> = {}
-    for (const s of s30) { const d = new Date(s.created_at).getDay(); dayMap[d] = (dayMap[d] || 0) + s.total }
+    // El día de la semana en Colombia: el servidor está en UTC
+    for (const s of s30) { const d = enColombia(s.created_at).semana; dayMap[d] = (dayMap[d] || 0) + s.total }
     const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
     const bestDayEntry = Object.entries(dayMap).sort((a, b) => Number(b[1]) - Number(a[1]))[0]
     const bestDay = bestDayEntry ? dayNames[Number(bestDayEntry[0])] : 'sin datos'

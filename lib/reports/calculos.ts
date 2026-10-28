@@ -34,13 +34,22 @@ export function porcentajeTendencia({ ahora, antes, ventasAntes }: {
 }
 
 const DIA = 86_400_000
+/* Colombia siempre es UTC−5. Va copiado de lib/periodos porque este
+   archivo no puede importar nada (las pruebas lo corren con node) */
+const DESFASE_COLOMBIA = 5 * 3_600_000
+/** Año, mes y día que marca un reloj en Colombia, como una fecha UTC */
+const diaEnColombia = (t: Date) => {
+    const x = new Date(t.getTime() - DESFASE_COLOMBIA)
+    return { ano: x.getUTCFullYear(), mes: x.getUTCMonth(), dia: x.getUTCDate(), utc: Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()) }
+}
 
-/** Días del periodo en curso: la semana, el mes o el año completos */
+/** Días del periodo en curso: la semana, el mes o el año completos, en Colombia */
 function diasDelPeriodo(periodo: PeriodoReporte, desde: Date): number | null {
+    const d = diaEnColombia(desde)
     if (periodo === 'week') return 7
-    if (periodo === 'month') return new Date(desde.getFullYear(), desde.getMonth() + 1, 0).getDate()
+    if (periodo === 'month') return new Date(Date.UTC(d.ano, d.mes + 1, 0)).getUTCDate()
     if (periodo === 'year') {
-        const y = desde.getFullYear()
+        const y = d.ano
         return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365
     }
     return null
@@ -48,7 +57,8 @@ function diasDelPeriodo(periodo: PeriodoReporte, desde: Date): number | null {
 
 /** A este ritmo, cuánto ganarías al cerrar el periodo: lo ganado ÷ días
  *  que van × días del periodo. Solo para la semana, el mes o el año en
- *  curso, con al menos 3 días andados, y si vas ganando. */
+ *  curso, con al menos 3 días andados, y si vas ganando. Los días se
+ *  cuentan en hora de Colombia. */
 export function proyeccion({ periodo, desde, ahora, ganado }: {
     periodo: PeriodoReporte
     /** Dónde arranca el periodo (lunes, día 1, 1 de enero) */
@@ -59,10 +69,8 @@ export function proyeccion({ periodo, desde, ahora, ganado }: {
     const total = diasDelPeriodo(periodo, desde)
     if (total === null) return null
     if (ganado <= 0) return null
-    const inicio = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate())
-    const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate())
     // El día de hoy cuenta como andado
-    const van = Math.round((hoy.getTime() - inicio.getTime()) / DIA) + 1
+    const van = Math.round((diaEnColombia(ahora).utc - diaEnColombia(desde).utc) / DIA) + 1
     if (van < 3 || van > total) return null
     return Math.round((ganado / van) * total)
 }
@@ -191,4 +199,33 @@ export function resumir(r: {
         ticket: cantidad > 0 ? Math.round(vendiste / cantidad) : null,
         pctCredito: vendiste > 0 ? Math.round((credito / vendiste) * 100) : null,
     }
+}
+
+/** Las filas que trae el Inicio para un periodo */
+export interface FilasInicio {
+    ventas: { total: number; sale_items?: { unit_cost: number | null; quantity: number }[] | null }[]
+    gastos: { amount: number }[]
+    devoluciones: { total: number; cost_total: number }[]
+}
+
+/** Vendiste, ganancia en ventas y gastos del Inicio. Arma lo mismo que
+ *  devuelve toul_reporte (cada suma redondeada igual que allá) y pasa por
+ *  `resumir`: así el Inicio y Reportes no pueden dar números distintos
+ *  para el mismo periodo. */
+export function metricasInicio({ ventas, gastos, devoluciones }: FilasInicio): ResumenReporte {
+    const n = (v: unknown) => Number(v) || 0
+    const suma = <T,>(filas: T[], valor: (f: T) => number) => Math.round(filas.reduce((s, f) => s + valor(f), 0))
+    return resumir({
+        ventas: {
+            total: suma(ventas, v => n(v.total)),
+            cantidad: ventas.length,
+            contado: 0,
+            credito: 0,
+            costo: suma(ventas, v => (v.sale_items ?? []).reduce((a, i) => a + n(i.unit_cost) * n(i.quantity), 0)),
+        },
+        devoluciones: { total: suma(devoluciones, d => n(d.total)), costo: suma(devoluciones, d => n(d.cost_total)), reembolsado: 0 },
+        abonos: 0,
+        gastos: suma(gastos, g => n(g.amount)),
+        mercanciaPagada: 0,
+    })
 }

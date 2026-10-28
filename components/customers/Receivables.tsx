@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { MetodoAbono } from '@/components/customers/MetodoAbono'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
+import { diaColombia } from '@/lib/periodos'
 
 const supabase = createClient()
 
@@ -94,9 +95,7 @@ function fechaCorta(iso: string | null) {
 
 /** Un día en formato de input, en hora de Colombia */
 function diaISO(sumar = 0) {
-    const d = new Date(Date.now() - 5 * 3600_000)
-    d.setDate(d.getDate() + sumar)
-    return d.toISOString().slice(0, 10)
+    return diaColombia(Date.now() + sumar * 86_400_000)
 }
 
 const CSS = `

@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange } from '@/lib/utils'
+import { ZONA_COLOMBIA } from '@/lib/periodos'
 import { useStore } from '@/lib/hooks/useData'
 import { EASE_OUT_EMIL } from '@/components/ui'
 
@@ -66,14 +67,10 @@ const FLOWS: { value: Flow; label: string }[] = [
     { value: 'out', label: 'Salidas' },
 ]
 
+/** Los mismos periodos del Inicio y Reportes, en hora de Colombia */
 function since(period: Period): string | null {
-    const now = new Date()
     if (period === 'total') return null
-    if (period === 'today') { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.toISOString() }
-    // De lunes a hoy, igual que en el Inicio y en Reportes
-    if (period === 'week') return getDateRange('week').from
-    const d = new Date(now.getFullYear(), now.getMonth(), 1)
-    return d.toISOString()
+    return getDateRange(period).from
 }
 
 interface Movement {
@@ -185,7 +182,7 @@ export default function MovimientosPage() {
                             {/* PC */}
                             <div className="mv-pc">
                                 <span style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>
-                                    {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                    {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ZONA_COLOMBIA })}
                                 </span>
                                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)' }}>{m.notes || LABELS[m.type] || 'Movimiento'}</span>
                                 <span style={{ fontSize: 13, color: 'var(--toul-text-dim)' }}>{LABELS[m.type] || 'Movimiento'}</span>
@@ -214,7 +211,7 @@ export default function MovimientosPage() {
                                     <span style={{ display: 'block', fontSize: 13, color: 'var(--toul-text-dim)' }}>
                                         {/* "Venta #ba77…" y abajo otra vez "Venta": el tipo solo va si el título no lo dice ya */}
                                         {LABELS[m.type] && primeraPalabra(m.notes || '') === primeraPalabra(LABELS[m.type]) ? '' : `${LABELS[m.type] || 'Movimiento'} · `}
-                                        {m.method} · {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        {m.method} · {new Date(m.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ZONA_COLOMBIA })}
                                     </span>
                                 </span>
                                 <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', flexShrink: 0, color: isOut ? 'var(--toul-error)' : 'var(--toul-accent)' }}>

@@ -13,6 +13,7 @@ import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { explainError } from '@/lib/errors'
 import { panelVariants, backdropVariants } from '@/lib/motion'
+import { diasEntre, instanteDeDia } from '@/lib/periodos'
 
 const supabase = createClient()
 
@@ -64,10 +65,8 @@ const fechaCorta = (iso: string) =>
 
 /** Días que lleva vencido un plazo. Negativo si todavía no llega. */
 function vencidoHace(iso: string) {
-    const hoy = new Date(Date.now() - 5 * 3600_000)
-    hoy.setHours(0, 0, 0, 0)
-    const d = new Date(iso); d.setHours(0, 0, 0, 0)
-    return Math.round((hoy.getTime() - d.getTime()) / 86400000)
+    // El plazo es un día del calendario; "hoy" es el de Colombia
+    return diasEntre(instanteDeDia(iso.slice(0, 10)), new Date())
 }
 
 const CSS = PANEL_CSS + `

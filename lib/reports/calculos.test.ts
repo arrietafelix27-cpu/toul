@@ -3,6 +3,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { conOtros, deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir } from './calculos.ts'
 
+/** Una fecha y hora de Colombia (UTC−5), sin depender de la zona del equipo que corre la prueba */
+const co = (ano: number, mes: number, dia: number, hora = 0, minuto = 0) => new Date(Date.UTC(ano, mes, dia, hora, minuto) + 5 * 3_600_000)
+
 test('De cada $100 suma exactamente 100', () => {
     const casos = [
         { ventas: 3_000_000, costo: 1_320_000, gastos: 60_000 },
@@ -55,26 +58,33 @@ test('La tendencia normal sube y baja', () => {
 })
 
 test('La proyección no aparece para Hoy ni para fechas pasadas', () => {
-    const ahora = new Date(2026, 9, 27, 15)
-    assert.equal(proyeccion({ periodo: 'today', desde: new Date(2026, 9, 27), ahora, ganado: 500_000 }), null)
-    assert.equal(proyeccion({ periodo: 'custom', desde: new Date(2026, 8, 1), ahora, ganado: 500_000 }), null)
-    assert.equal(proyeccion({ periodo: 'total', desde: new Date(2025, 0, 1), ahora, ganado: 500_000 }), null)
+    const ahora = co(2026, 9, 27, 15)
+    assert.equal(proyeccion({ periodo: 'today', desde: co(2026, 9, 27), ahora, ganado: 500_000 }), null)
+    assert.equal(proyeccion({ periodo: 'custom', desde: co(2026, 8, 1), ahora, ganado: 500_000 }), null)
+    assert.equal(proyeccion({ periodo: 'total', desde: co(2025, 0, 1), ahora, ganado: 500_000 }), null)
 })
 
 test('La proyección necesita 3 días andados', () => {
-    assert.equal(proyeccion({ periodo: 'month', desde: new Date(2026, 9, 1), ahora: new Date(2026, 9, 2, 20), ganado: 100_000 }), null)
-    assert.equal(proyeccion({ periodo: 'month', desde: new Date(2026, 9, 1), ahora: new Date(2026, 9, 3, 9), ganado: 300_000 }), 3_100_000)
+    assert.equal(proyeccion({ periodo: 'month', desde: co(2026, 9, 1), ahora: co(2026, 9, 2, 20), ganado: 100_000 }), null)
+    assert.equal(proyeccion({ periodo: 'month', desde: co(2026, 9, 1), ahora: co(2026, 9, 3, 9), ganado: 300_000 }), 3_100_000)
 })
 
 test('La proyección del mes, la semana y el año', () => {
     // 27 días de octubre (31) con $1.626.700 → cerca de $1,9 M
-    const mes = proyeccion({ periodo: 'month', desde: new Date(2026, 9, 1), ahora: new Date(2026, 9, 27, 18), ganado: 1_626_700 })
+    const mes = proyeccion({ periodo: 'month', desde: co(2026, 9, 1), ahora: co(2026, 9, 27, 18), ganado: 1_626_700 })
     assert.equal(mes, Math.round((1_626_700 / 27) * 31))
     assert.equal(formatoCorto(mes ?? 0), '$1,9 M')
     // Lunes 26 a miércoles 28: 3 días
-    assert.equal(proyeccion({ periodo: 'week', desde: new Date(2026, 9, 26), ahora: new Date(2026, 9, 28, 10), ganado: 300_000 }), 700_000)
-    assert.equal(proyeccion({ periodo: 'year', desde: new Date(2026, 0, 1), ahora: new Date(2026, 0, 3, 10), ganado: 30_000 }), 3_650_000)
-    assert.equal(proyeccion({ periodo: 'month', desde: new Date(2026, 9, 1), ahora: new Date(2026, 9, 27), ganado: -10_000 }), null)
+    assert.equal(proyeccion({ periodo: 'week', desde: co(2026, 9, 26), ahora: co(2026, 9, 28, 10), ganado: 300_000 }), 700_000)
+    assert.equal(proyeccion({ periodo: 'year', desde: co(2026, 0, 1), ahora: co(2026, 0, 3, 10), ganado: 30_000 }), 3_650_000)
+    assert.equal(proyeccion({ periodo: 'month', desde: co(2026, 9, 1), ahora: co(2026, 9, 27), ganado: -10_000 }), null)
+})
+
+test('La proyección cuenta los días en hora de Colombia', () => {
+    // 31 oct 23:30 en Colombia ya es 1 nov en UTC: igual va el día 31 de 31
+    assert.equal(proyeccion({ periodo: 'month', desde: co(2026, 9, 1), ahora: co(2026, 9, 31, 23, 30), ganado: 310_000 }), 310_000)
+    // 1 nov 00:15: octubre ya cerró, no hay nada que proyectar
+    assert.equal(proyeccion({ periodo: 'month', desde: co(2026, 9, 1), ahora: co(2026, 10, 1, 0, 15), ganado: 310_000 }), null)
 })
 
 test('Formato corto', () => {

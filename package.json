@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:db": "node supabase/tests/run.mjs",
-    "test:calculos": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/reports/calculos.test.ts"
+    "test:calculos": "for z in America/Bogota UTC Asia/Tokyo America/Los_Angeles; do TZ=$z node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/reports/calculos.test.ts lib/periodos.test.ts || exit 1; done"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.41",

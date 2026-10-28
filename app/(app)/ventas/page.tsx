@@ -3,6 +3,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange } from '@/lib/utils'
+import { ZONA_COLOMBIA, instanteDeDia } from '@/lib/periodos'
 import { Clock, Ban, Search, SlidersHorizontal, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
@@ -22,19 +23,25 @@ import { DevolucionSheet } from '@/components/ventas/DevolucionSheet'
 
 type Period = 'today' | 'week' | 'month' | 'total' | 'custom'
 
+/** Los mismos periodos del Inicio y Reportes, en hora de Colombia. Las
+ *  fechas elegidas van del primer al último instante de esos días allá
+ *  (antes se leían en UTC y se perdían las ventas de 7 p. m. a medianoche) */
 function getRange(period: Period, from: string, to: string) {
-    const now = new Date()
-    if (period === 'custom') return { from: from || null, to: to ? to + 'T23:59:59' : null }
+    if (period === 'custom') return {
+        from: from ? instanteDeDia(from).toISOString() : null,
+        to: to ? instanteDeDia(to, true).toISOString() : null,
+    }
     if (period === 'total') return { from: null, to: null }
-    if (period === 'today') { const s = new Date(now); s.setHours(0, 0, 0, 0); return { from: s.toISOString(), to: now.toISOString() } }
-    // De lunes a hoy, igual que en el Inicio y en Reportes
-    if (period === 'week') return getDateRange('week')
-    if (period === 'month') { const s = new Date(now.getFullYear(), now.getMonth(), 1); return { from: s.toISOString(), to: now.toISOString() } }
-    return { from: null, to: null }
+    return getDateRange(period)
 }
 
 function formatDateTime(iso: string) {
-    return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+    return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ZONA_COLOMBIA })
+}
+
+/** Lo que dejó una venta: lo que pagaron (ya con el descuento) menos lo que costó la mercancía */
+function utilidad(venta: { total: number; sale_items?: { quantity: number; unit_cost: number }[] | null }) {
+    return Number(venta.total) - (venta.sale_items ?? []).reduce((a, i) => a + Number(i.unit_cost) * Number(i.quantity), 0)
 }
 
 const PAGE_SIZE = 40
@@ -268,7 +275,7 @@ export default function VentasPage() {
             const gananciaDevuelta = devueltas.reduce((sum, d) => sum + Number(d.total) - Number(d.cost_total), 0)
             return {
                 revenue: Math.round(list.reduce((sum, v) => sum + Number(v.total), 0) - devuelto),
-                profit: Math.round(list.reduce((sum, v) => sum + (v.sale_items ?? []).reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0) - gananciaDevuelta),
+                profit: Math.round(list.reduce((sum, v) => sum + utilidad(v), 0) - gananciaDevuelta),
                 count: list.length,
             }
         },
@@ -299,7 +306,7 @@ export default function VentasPage() {
             const gananciaDevuelta = filtered.reduce((s, v) => s + (devueltoPorVenta?.get(v.id)?.ganancia ?? 0), 0)
             return {
                 revenue: Math.round(filtered.reduce((s, v) => s + v.total, 0) - devuelto),
-                profit: Math.round(filtered.reduce((s, v) => s + v.sale_items.reduce((a, i) => a + (i.unit_price - i.unit_cost) * i.quantity, 0), 0) - gananciaDevuelta),
+                profit: Math.round(filtered.reduce((s, v) => s + utilidad(v), 0) - gananciaDevuelta),
                 count: filtered.length,
             }
         }
@@ -534,7 +541,7 @@ export default function VentasPage() {
                             <span className="vt-num">Total</span><span className="vt-num">Utilidad</span>
                         </div>
                         {filtered.map(sale => {
-                            const profit = Math.round(sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0))
+                            const profit = Math.round(utilidad(sale))
                             const summary = sale.sale_items.slice(0, 2).map(i => (i.products as { name?: string } | null)?.name || 'Producto').join(', ')
                             const more = sale.sale_items.length > 2 ? ` +${sale.sale_items.length - 2}` : ''
                             const vendedor = sale.seller_name && sale.seller_name !== 'Administrador' ? sale.seller_name : null
@@ -573,7 +580,7 @@ export default function VentasPage() {
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                         className="flex flex-col gap-2 lg:hidden">
                         {filtered.map(sale => {
-                            const profit = sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0)
+                            const profit = Math.round(utilidad(sale))
                             const summary = sale.sale_items.slice(0, 2).map(i => (i.products as any)?.name || 'Producto').join(', ')
                             const more = sale.sale_items.length > 2 ? ` +${sale.sale_items.length - 2}` : ''
                             return (

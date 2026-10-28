@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatPrecio } from '@/lib/utils'
-import { contraQue, textoRango, type Periodo, type Tramo } from '@/lib/periodos'
+import { ZONA_COLOMBIA, contraQue, enColombia, formatoColombia, textoRango, type Periodo, type Tramo } from '@/lib/periodos'
 import { deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir } from '@/lib/reports/calculos'
 import type { MesReporte, ReporteSQL } from '@/lib/reports/types'
 
@@ -24,15 +24,17 @@ interface Base {
 function titulo(periodo: Periodo, tramo: Tramo): string {
     const desde = tramo.from ? new Date(tramo.from) : new Date()
     const hasta = tramo.to ? new Date(tramo.to) : new Date()
-    if (periodo === 'month') return `Reporte ${desde.toLocaleDateString('es-CO', { month: 'long' })} ${desde.getFullYear()}`
-    if (periodo === 'year') return `Reporte ${desde.getFullYear()}`
-    if (periodo === 'week') return `Reporte semana del ${textoRango(desde, desde)} ${desde.getFullYear()}`
-    return `Reporte ${textoRango(desde, hasta)} ${hasta.getFullYear()}`.replace('–', '-')
+    // Todo en hora de Colombia, sin importar la zona del equipo
+    const ano = (t: Date) => enColombia(t).ano
+    if (periodo === 'month') return `Reporte ${formatoColombia(desde, { month: 'long' })} ${ano(desde)}`
+    if (periodo === 'year') return `Reporte ${ano(desde)}`
+    if (periodo === 'week') return `Reporte semana del ${textoRango(desde, desde)} ${ano(desde)}`
+    return `Reporte ${textoRango(desde, hasta)} ${ano(hasta)}`.replace('–', '-')
 }
 
 function rangoTexto(tramo: Tramo): string {
     const f = (iso: string | null) => (iso ? new Date(iso) : new Date())
-        .toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '')
+        .toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: ZONA_COLOMBIA }).replace('.', '')
     return `Del ${f(tramo.from)} al ${f(tramo.to)}`
 }
 
@@ -119,21 +121,22 @@ export async function descargarExcel(b: Base & { supabase: SupabaseClient; store
     const detalle = [
         cabeza.map(c => ({ value: c, ...negrita })),
         ...ventas.map(v => {
-            const fecha = new Date(v.created_at)
-            const costo = Math.round(v.sale_items.reduce((s, i) => s + Number(i.unit_cost) * Number(i.quantity), 0))
+            // La misma cuenta que el resumen (toul_reporte_ventas): sin
+            // redondear cada venta, para que la suma de la columna dé lo mismo
+            const costo = v.sale_items.reduce((s, i) => s + Number(i.unit_cost) * Number(i.quantity), 0)
             const pagado = v.sale_payments.reduce((s, p) => s + Number(p.amount), 0)
-            const contado = v.is_credit ? Math.min(pagado, Number(v.total)) : Number(v.total)
+            const contado = v.is_credit ? Math.min(Math.max(pagado, 0), Number(v.total)) : Number(v.total)
             return [
-                // Excel no sabe de zonas horarias: se escribe la hora de aquí
-                { value: new Date(fecha.getTime() - fecha.getTimezoneOffset() * 60_000), type: Date, format: 'dd/mm/yyyy hh:mm' },
+                // Excel no sabe de zonas horarias: se escribe la hora de Colombia (UTC−5)
+                { value: new Date(new Date(v.created_at).getTime() - 5 * 3_600_000), type: Date, format: 'dd/mm/yyyy hh:mm' },
                 { value: v.customer_name ?? '' },
                 { value: v.seller_name ?? '' },
                 { value: v.sale_items.map(i => `${i.quantity}× ${i.products?.name ?? i.combos?.name ?? 'Producto'}`).join(', ') },
                 { value: Number(v.total), type: Number, format: plata },
                 { value: costo, type: Number, format: plata },
                 { value: Number(v.total) - costo, type: Number, format: plata },
-                { value: Math.round(contado), type: Number, format: plata },
-                { value: Math.round(Number(v.total) - contado), type: Number, format: plata },
+                { value: contado, type: Number, format: plata },
+                { value: Number(v.total) - contado, type: Number, format: plata },
                 { value: v.sale_payments.map(p => `${p.payment_methods?.name ?? 'Pago'} ${formatPrecio(Number(p.amount))}`).join(', ') },
             ]
         }),
@@ -199,7 +202,7 @@ export async function descargarPDF(b: Base) {
     const desde = b.tramo.from ? new Date(b.tramo.from) : null
     const ritmo = desde ? proyeccion({ periodo: b.periodo, desde, ahora: new Date(), ganado: r.ganaste }) : null
     if (ritmo !== null && desde) {
-        const cierra = b.periodo === 'week' ? 'la semana' : b.periodo === 'year' ? String(desde.getFullYear()) : desde.toLocaleDateString('es-CO', { month: 'long' })
+        const cierra = b.periodo === 'week' ? 'la semana' : b.periodo === 'year' ? String(enColombia(desde).ano) : formatoColombia(desde, { month: 'long' })
         texto(`A este ritmo cierras ${cierra} ganando cerca de ${formatoCorto(ritmo)}`, margen, y, 10, PAPEL.gris)
         y += 6
     }
@@ -298,7 +301,7 @@ export async function descargarPDF(b: Base) {
             caja(cx - barra * 0.18, y + alto - hg, barra * 0.36, hg, actual ? PAPEL.verde : '#8fd3a4')
             if (actual) texto(formatoCorto(m.ventas), cx, y + alto - hv - 1.8, 8, PAPEL.texto, true, 'center')
             const [ano, mes] = m.mes.split('-').map(Number)
-            const nombreMes = new Date(ano, mes - 1, 1).toLocaleDateString('es-CO', { month: 'short' }).replace('.', '')
+            const nombreMes = new Date(Date.UTC(ano, mes - 1, 15)).toLocaleDateString('es-CO', { month: 'short', timeZone: ZONA_COLOMBIA }).replace('.', '')
             texto(nombreMes, cx, y + alto + 5, 8, actual ? PAPEL.texto : PAPEL.gris, actual, 'center')
         })
         y += alto + 8
@@ -332,7 +335,7 @@ export async function descargarPDF(b: Base) {
     lista(margen + (col3 + gap) * 2, 'Cómo te pagan',
         b.actual.metodos.map(m => [m.nombre, total > 0 ? `${Math.round((Number(m.monto) / total) * 100)}%` : '', Number(m.monto)]))
 
-    const ahora = new Date().toLocaleString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+    const ahora = new Date().toLocaleString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: ZONA_COLOMBIA })
     texto(`Generado con TOUL el ${ahora}`, margen, 289, 8, PAPEL.gris)
     doc.save(`TOUL - ${nombre}.pdf`)
 }

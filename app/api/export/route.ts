@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { ZONA_COLOMBIA, diaColombia } from '@/lib/periodos'
 
 /**
  * GET /api/export?tipo=ventas|productos|clientes|gastos|compras
@@ -27,8 +28,9 @@ function aCSV(filas: Fila[], columnas: { campo: string; titulo: string }[]): str
     return '﻿' + [cabecera, ...cuerpo].join('\r\n')
 }
 
+/** En hora de Colombia: el servidor está en UTC y daría 5 horas de más */
 const fecha = (iso: unknown) =>
-    iso ? new Date(String(iso)).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : ''
+    iso ? new Date(String(iso)).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short', timeZone: ZONA_COLOMBIA }) : ''
 
 export async function GET(request: Request) {
     const supabase = await createClient()
@@ -84,13 +86,20 @@ export async function GET(request: Request) {
         ])
 
     } else if (tipo === 'clientes') {
-        const { data } = await supabase.from('customers')
-            .select('name, phone, notes, total_debt, created_at')
-            .eq('store_id', store.id).order('name')
+        // Lo que debe cada uno sale de los movimientos, igual que en Cuentas
+        // por cobrar: el número guardado en el cliente es una copia
+        const [{ data }, { data: cartera }] = await Promise.all([
+            supabase.from('customers')
+                .select('id, name, phone, notes, created_at')
+                .eq('store_id', store.id).order('name'),
+            supabase.rpc('toul_receivables'),
+        ])
+        const saldos = new Map(((cartera as { clientes?: { id: string; saldo: number }[] } | null)?.clientes ?? [])
+            .map(c => [c.id, Math.round(Number(c.saldo))]))
         csv = aCSV((data ?? []).map(c => ({
             nombre: c.name,
             telefono: c.phone ?? '',
-            debe: Math.round(Number(c.total_debt) || 0),
+            debe: saldos.get(c.id) ?? 0,
             nota: c.notes ?? '',
             desde: fecha(c.created_at),
         })), [
@@ -141,7 +150,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'No sabemos exportar eso' }, { status: 400 })
     }
 
-    const hoy = new Date().toISOString().slice(0, 10)
+    // El servidor está en UTC: la fecha del nombre va en hora de Colombia
+    const hoy = diaColombia(new Date())
     const nombre = `toul-${tipo}-${hoy}.csv`
 
     return new NextResponse(csv, {

@@ -13,6 +13,7 @@ import { PurchaseDetail, type PurchaseDetailData } from '@/components/inventory/
 import { ProviderPaymentModal } from '@/components/providers/ProviderPaymentModal'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
 import toast from 'react-hot-toast'
+import { diasEntre, instanteDeDia } from '@/lib/periodos'
 
 const supabase = createClient()
 
@@ -68,9 +69,8 @@ const fecha = (iso: string) =>
     new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
 
 function vencidoHace(iso: string) {
-    const hoy = new Date(Date.now() - 5 * 3600_000); hoy.setHours(0, 0, 0, 0)
-    const d = new Date(iso); d.setHours(0, 0, 0, 0)
-    return Math.round((hoy.getTime() - d.getTime()) / 86400000)
+    // El plazo es un día del calendario; "hoy" es el de Colombia
+    return diasEntre(instanteDeDia(iso.slice(0, 10)), new Date())
 }
 
 const dias = (n: number) => `${n} ${n === 1 ? 'día' : 'días'}`

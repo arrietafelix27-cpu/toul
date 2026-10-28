@@ -3,7 +3,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { createClient } from '@/lib/supabase/client'
-import { formatPrecio, getDateRange } from '@/lib/utils'
+import { formatPrecio } from '@/lib/utils'
+import { ZONA_COLOMBIA, enColombia, getDateRange, inicioDiaColombia } from '@/lib/periodos'
 import { inicio } from '@/lib/motion'
 import type { Periodo, Rango } from './Desplegable'
 
@@ -77,10 +78,12 @@ async function movimientos(storeId: string, from: string, to: string) {
     ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 }
 
-const inicioHora = (t: number) => { const d = new Date(t); d.setMinutes(0, 0, 0); return d.getTime() }
-const inicioDia = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime() }
-// Por fecha y no sumando 24 h: así un día siempre empieza a medianoche
-const diaSiguiente = (t: number) => { const d = new Date(t); d.setDate(d.getDate() + 1); return d.getTime() }
+// Horas y días de Colombia, sin importar la zona horaria del equipo.
+// Colombia es UTC−5 todo el año: una hora en punto allá lo es en UTC
+// y un día siempre dura 24 horas
+const inicioHora = (t: number) => Math.floor(t / HORA) * HORA
+const inicioDia = (t: number) => inicioDiaColombia(t).getTime()
+const diaSiguiente = (t: number) => t + DIA
 
 async function cargarSerie(storeId: string, period: Periodo, rango: Rango): Promise<Serie> {
     const ahora = Date.now()
@@ -120,12 +123,11 @@ async function cargarSerie(storeId: string, period: Periodo, rango: Rango): Prom
     return { puntos, modo, variosDias: modo === 'hora' && fin - arranque > 20 * HORA }
 }
 
-const hora = (t: number) => {
-    const d = new Date(t)
-    return d.toLocaleTimeString('es-CO', d.getMinutes() ? { hour: 'numeric', minute: '2-digit' } : { hour: 'numeric' })
-}
-const diaCorto = (t: number) => new Date(t).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }).replace('.', '')
-const diaSemana = (t: number) => new Date(t).toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', '')
+const hora = (t: number) => new Date(t).toLocaleTimeString('es-CO', enColombia(t).minuto
+    ? { hour: 'numeric', minute: '2-digit', timeZone: ZONA_COLOMBIA }
+    : { hour: 'numeric', timeZone: ZONA_COLOMBIA })
+const diaCorto = (t: number) => new Date(t).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: ZONA_COLOMBIA }).replace('.', '')
+const diaSemana = (t: number) => new Date(t).toLocaleDateString('es-CO', { weekday: 'short', timeZone: ZONA_COLOMBIA }).replace('.', '')
 
 /** Lo que dicen las marcas de abajo */
 function textoMarca(t: number, serie: Serie) {
@@ -136,7 +138,7 @@ function textoMarca(t: number, serie: Serie) {
 /** Lo que dice el globo: el intervalo completo, sin adivinar */
 function textoGlobo(t: number, serie: Serie) {
     if (serie.modo === 'dia') {
-        return new Date(t).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' }).replace('.', '')
+        return new Date(t).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short', timeZone: ZONA_COLOMBIA }).replace('.', '')
     }
     const tramo = `${hora(t)} – ${hora(t + HORA)}`
     return serie.variosDias ? `${diaSemana(t)} ${diaCorto(t)}, ${tramo}` : tramo

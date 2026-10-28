@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, ChevronLeft } from 'lucide-react'
 import { Sheet } from '@/components/isla/Sheet'
 import { ease } from '@/lib/motion'
-import { textoRango, type Periodo, type Rango } from '@/lib/periodos'
+import { diaColombia, instanteDeDia, textoRango, type Periodo, type Rango } from '@/lib/periodos'
 
 /* ══════════════════════════════════════════════════════════════
    El menú del Inicio.
@@ -230,9 +230,6 @@ export function tituloPeriodo(period: Periodo, rango: Rango): string {
     return textoRango(new Date(rango.from), new Date(rango.to))
 }
 
-/** 2026-10-26, en la hora del equipo (toISOString daría la fecha de Londres) */
-const diaLocal = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod, rango, setRango, conAno = false, lado }: {
     variante: Variante
@@ -250,14 +247,14 @@ export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod,
     const [conFechas, setConFechas] = useState(false)
     const [desde, setDesde] = useState('')
     const [hasta, setHasta] = useState('')
-    const hoy = diaLocal(new Date())
+    const hoy = diaColombia(new Date())
 
     // Cada vez que se abre, arranca en la lista
     const alAbrir = useCallback(() => setConFechas(false), [])
 
     function elegirFechas() {
-        setDesde(rango ? diaLocal(new Date(rango.from)) : hoy)
-        setHasta(rango ? diaLocal(new Date(rango.to)) : hoy)
+        setDesde(rango ? diaColombia(rango.from) : hoy)
+        setHasta(rango ? diaColombia(rango.to) : hoy)
         setConFechas(true)
     }
 
@@ -265,9 +262,11 @@ export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod,
         if (!desde || !hasta) return
         // Si las pusieron al revés, se entiende igual
         const [inicio, fin] = desde <= hasta ? [desde, hasta] : [hasta, desde]
+        // Del primer al último instante de esos días en Colombia, sin
+        // importar la zona horaria del equipo
         setRango({
-            from: new Date(`${inicio}T00:00:00`).toISOString(),
-            to: new Date(`${fin}T23:59:59`).toISOString(),
+            from: instanteDeDia(inicio).toISOString(),
+            to: instanteDeDia(fin, true).toISOString(),
         })
         setPeriod('custom')
         cerrar()

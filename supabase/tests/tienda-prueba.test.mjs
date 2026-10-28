@@ -1,0 +1,306 @@
+// Tienda de prueba con resultados calculados a mano (por Félix, 2026-10-28).
+//
+// Arma la tienda con las funciones reales (ventas, compras, abonos,
+// anulación), llama a lo mismo que llaman el Inicio y Reportes con rangos
+// explícitos y compara con sus valores exactos.
+//
+// REGLA: los valores esperados NO se cambian para que la prueba pase. Si
+// algo no coincide, hay un error en el código o en las cuentas, y hay que
+// decir cuál.
+//
+// Solo corre en la base de pruebas en memoria (PGlite), nunca en producción.
+import { deCada100, metricasInicio, porcentajeTendencia, resumir } from '../../lib/reports/calculos.ts'
+import { getDateRange, instanteDeDia, rangoAnterior, rangoPeriodo } from '../../lib/periodos.ts'
+
+const O = '11111111-1111-1111-1111-111111111111'
+const STORE = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+let fails = 0
+const peso = (n) => '$' + Math.round(Number(n)).toLocaleString('es-CO')
+/** Compara un número con lo que calculó Félix */
+const igual = (que, esperado, obtenido, formato = peso) => {
+  const ok = Number(esperado) === Number(obtenido)
+  console.log(`  ${ok ? '✓' : '✗'} ${que}: esperado ${formato(esperado)}, dio ${formato(obtenido)}`)
+  if (!ok) fails++
+}
+const si = (que, condicion, detalle = '') => {
+  console.log(`  ${condicion ? '✓' : '✗'} ${que}${detalle ? ` (${detalle})` : ''}`)
+  if (!condicion) fails++
+}
+const pct = (n) => `${n}%`
+const tal = (n) => String(n)
+
+/** Una hora de Colombia */
+const co = (texto) => `${texto}-05`
+
+export default async function (db) {
+  const q = async (sql, p) => (await db.query(sql, p)).rows
+  const one = async (sql, p) => (await q(sql, p))[0]
+  const as = async (uid, fn) => {
+    await db.exec(`SELECT set_config('request.jwt.claim.sub', '${uid}', false); SET ROLE authenticated;`)
+    try { return await fn() } finally { await db.exec(`RESET ROLE;`) }
+  }
+  const comoDueno = (fn) => as(O, fn)
+  const r = async (sql, p) => (await comoDueno(() => one(sql, p))).r
+
+  // Pone la hora real a todo lo que dejó una operación
+  const fecharVenta = async (id, cuando) => {
+    await q(`UPDATE sales SET created_at = $2 WHERE id = $1`, [id, cuando])
+    await q(`UPDATE credits SET created_at = $2 WHERE sale_id = $1`, [id, cuando])
+    await q(`UPDATE sale_payments SET created_at = $2 WHERE sale_id = $1`, [id, cuando])
+    await q(`UPDATE payments SET created_at = $2 WHERE reference_id = $1`, [id, cuando])
+    await q(`UPDATE inventory_adjustments SET created_at = $2 WHERE reference_id = $1`, [id, cuando])
+  }
+  const fecharCompra = async (id, cuando) => {
+    await q(`UPDATE purchases SET created_at = $2 WHERE id = $1`, [id, cuando])
+    await q(`UPDATE purchase_payments SET created_at = $2 WHERE purchase_id = $1`, [id, cuando])
+    await q(`UPDATE provider_debts SET created_at = $2 WHERE purchase_id = $1`, [id, cuando])
+    await q(`UPDATE payments SET created_at = $2 WHERE reference_id = $1`, [id, cuando])
+  }
+
+  // ── La tienda ──
+  await q(`INSERT INTO auth.users(id,email) VALUES ($1,'felix@x.com')`, [O])
+  await q(`INSERT INTO stores(id,owner_id,name) VALUES ($1,$2,'Tienda de prueba')`, [STORE, O])
+  const [A] = await q(`INSERT INTO products(store_id,name,sale_price,cost_price,cpp) VALUES ($1,'Perfume A',100000,60000,0) RETURNING id`, [STORE])
+  const [B] = await q(`INSERT INTO products(store_id,name,sale_price,cost_price,cpp) VALUES ($1,'Perfume B',80000,30000,0) RETURNING id`, [STORE])
+  const [efe] = await q(`INSERT INTO payment_methods(store_id,name) VALUES ($1,'Efectivo') RETURNING id`, [STORE])
+  const [neq] = await q(`INSERT INTO payment_methods(store_id,name) VALUES ($1,'Nequi') RETURNING id`, [STORE])
+  const [prov] = await q(`INSERT INTO providers(store_id,name) VALUES ($1,'Aromas') RETURNING id`, [STORE])
+
+  const vender = async (cuando, producto, cantidad, precio, { credito = false, cliente = null, pagos = [] } = {}) => {
+    const total = cantidad * precio
+    const id = await r(`SELECT (process_sale($1::jsonb))->>'saleId' r`, [JSON.stringify({
+      cart: [{ product: { id: producto.id, name: 'x' }, quantity: cantidad, unitPrice: precio }],
+      payments: pagos, subtotal: total, total,
+      isCredit: credito, customerName: cliente,
+      initialPayment: pagos.reduce((s, p) => s + p.amount, 0),
+    })])
+    await fecharVenta(id, co(cuando))
+    return id
+  }
+  const efectivo = (amount) => [{ methodId: efe.id, methodName: 'Efectivo', amount }]
+  const nequi = (amount) => [{ methodId: neq.id, methodName: 'Nequi', amount }]
+  const cliente = async (nombre) => (await one(`SELECT id FROM customers WHERE store_id=$1 AND name=$2`, [STORE, nombre])).id
+  const abonar = async (cuando, nombre, monto, metodo) => {
+    const res = await r(`SELECT toul_registrar_abono($1,$2,$3,NULL) r`, [await cliente(nombre), monto, metodo.id])
+    await q(`UPDATE credits SET created_at = $2 WHERE id = $1`, [res.creditId, co(cuando)])
+    await q(`UPDATE payments SET created_at = $2 WHERE reference_id = $1`, [res.creditId, co(cuando)])
+  }
+
+  console.log('\n— Las 14 operaciones')
+  // 1. 15 sep: compra de contado de 10 Perfume A por $600.000
+  const c1 = await r(`SELECT (process_purchase($1::jsonb))->>'purchaseId' r`, [JSON.stringify({
+    isCredit: false, items: [{ productId: A.id, quantity: 10, unitCost: 60000 }] })])
+  await fecharCompra(c1, co('2026-09-15 10:00'))
+  // 2. 20 sep: venta a crédito a Carla, 1 A por $100.000, sin abono
+  await vender('2026-09-20 10:00', A, 1, 100000, { credito: true, cliente: 'Carla' })
+  // 3. 1 oct: compra a crédito de 10 B por $300.000 con pago inicial de $100.000
+  const c3 = await r(`SELECT (process_purchase($1::jsonb))->>'purchaseId' r`, [JSON.stringify({
+    isCredit: true, providerId: prov.id, paidNow: 100000, items: [{ productId: B.id, quantity: 10, unitCost: 30000 }] })])
+  await fecharCompra(c3, co('2026-10-01 10:00'))
+  // 4–7. Ventas de octubre
+  await vender('2026-10-05 10:00', A, 2, 100000, { pagos: efectivo(200000) })
+  await vender('2026-10-06 10:00', B, 1, 80000, { pagos: nequi(80000) })
+  await vender('2026-10-10 10:00', A, 2, 100000, { credito: true, cliente: 'Ana', pagos: efectivo(50000) })
+  await vender('2026-10-12 10:00', B, 1, 80000, { credito: true, cliente: 'Beto' })
+  // 8–9. Abonos
+  await abonar('2026-10-15 10:00', 'Ana', 70000, neq)
+  await abonar('2026-10-18 10:00', 'Carla', 40000, efe)
+  // 10. Gastos (lo mismo que hace /api/expenses)
+  for (const [cuando, categoria, monto] of [['2026-10-20 10:00', 'transporte', 25000], ['2026-10-21 10:00', 'publicidad', 15000]]) {
+    const [g] = await q(`INSERT INTO expenses(store_id,category,description,amount,created_at) VALUES ($1,$2,$2,$3,$4) RETURNING id`, [STORE, categoria, monto, co(cuando)])
+    await q(`INSERT INTO payments(store_id,type,method,amount,reference_id,notes,created_at) VALUES ($1,'expense','General',$2,$3,'Gasto',$4)`, [STORE, monto, g.id, co(cuando)])
+  }
+  // 11. Pago al proveedor por $120.000 (lo mismo que hace /api/providers/payment)
+  await q(`UPDATE providers SET total_debt = total_debt - 120000 WHERE id = $1`, [prov.id])
+  await q(`UPDATE provider_debts SET remaining_amount = remaining_amount - 120000 WHERE provider_id = $1`, [prov.id])
+  await q(`INSERT INTO payments(store_id,type,method,amount,reference_id,notes,created_at) VALUES ($1,'provider_payment','General',120000,$2,'Abono a proveedor',$3)`, [STORE, prov.id, co('2026-10-22 10:00')])
+  // 12. 25 oct: venta de contado de 1 B por $80.000 que se anula el mismo día
+  const anulada = await vender('2026-10-25 10:00', B, 1, 80000, { pagos: efectivo(80000) })
+  await comoDueno(() => q(`SELECT toul_void_sale($1,'Prueba: se anula el mismo día')`, [anulada]))
+  await q(`UPDATE payments SET created_at = $2 WHERE reference_id = $1`, [anulada, co('2026-10-25 11:00')])
+  // 13–14. En el borde de los meses
+  await vender('2026-10-31 23:30', B, 1, 80000, { pagos: efectivo(80000) })
+  await vender('2026-11-01 00:15', A, 1, 100000, { pagos: efectivo(100000) })
+  si('las 14 operaciones quedaron registradas', true)
+
+  // ── Octubre completo, con el rango explícito ──
+  const octubre = { from: instanteDeDia('2026-10-01').toISOString(), to: instanteDeDia('2026-10-31', true).toISOString() }
+  const rep = await r(`SELECT toul_reporte($1,$2) r`, [octubre.from, octubre.to])
+  const res = resumir(rep)
+
+  console.log('\n— Octubre completo (1 al 31): lo que vendiste y ganaste')
+  igual('Vendiste', 640000, res.vendiste)
+  igual('Número de ventas', 5, res.cantidad, tal)
+  igual('Ticket promedio', 128000, res.ticket)
+  igual('Costo de lo vendido', 330000, res.costoNeto)
+  igual('Ganancia en ventas', 310000, res.gananciaVentas)
+  igual('Margen promedio', 48, res.margen, pct)
+  igual('Gastos', 40000, res.gastos)
+  igual('Ganaste', 270000, res.ganaste)
+
+  console.log('\n— Octubre: tu plata')
+  igual('De contado', 410000, res.contado)
+  igual('A crédito', 230000, res.credito)
+  igual('Vendiste a crédito', 36, res.pctCredito, pct)
+  igual('Abonos que te hicieron', 110000, res.abonos)
+  igual('Plata que entró', 520000, res.entro)
+  igual('Mercancía que pagaste', 220000, res.mercancia)
+  igual('Plata que salió', 260000, res.salio)
+
+  console.log('\n— Octubre: cómo te pagan')
+  const metodo = (nombre) => Number(rep.metodos.find(m => m.nombre === nombre)?.monto ?? 0)
+  const totalDona = rep.metodos.reduce((s, m) => s + Number(m.monto), 0)
+  // El mismo % que muestra la pantalla
+  const pctDe = (nombre) => Math.round((metodo(nombre) / totalDona) * 100)
+  igual('Efectivo', 370000, metodo('Efectivo'))
+  igual('Efectivo, porcentaje', 71, pctDe('Efectivo'), pct)
+  igual('Nequi', 150000, metodo('Nequi'))
+  igual('Nequi, porcentaje', 29, pctDe('Nequi'), pct)
+  igual('Métodos en la dona', 2, rep.metodos.length, tal)
+
+  console.log('\n— Octubre: de cada $100 que vendiste')
+  const cien = deCada100({ ventas: res.ventasNetas, costo: res.costoNeto, gastos: res.gastos })
+  igual('Se fue en mercancía', 52, cien?.mercancia, (n) => `$${n}`)
+  igual('Se fue en gastos', 6, cien?.gastos, (n) => `$${n}`)
+  igual('Te quedó', 42, cien?.quedo, (n) => `$${n}`)
+
+  console.log('\n— Octubre: en qué gastaste')
+  const gasto = (cat) => Number(rep.gastosPorCategoria.find(g => g.categoria === cat)?.monto ?? 0)
+  igual('Transporte', 25000, gasto('transporte'))
+  igual('Publicidad', 15000, gasto('publicidad'))
+  si('Transporte va primero', rep.gastosPorCategoria[0]?.categoria === 'transporte')
+
+  console.log('\n— Octubre: qué te dejó más')
+  const prod = (nombre) => rep.productos.find(p => p.nombre === nombre) ?? {}
+  igual('Perfume A, ganancia', 160000, prod('Perfume A').ganancia)
+  igual('Perfume A, margen', 40, prod('Perfume A').margen, pct)
+  igual('Perfume B, ganancia', 150000, prod('Perfume B').ganancia)
+  igual('Perfume B, margen', 63, prod('Perfume B').margen, pct)
+  si('Perfume A va primero', rep.productos[0]?.nombre === 'Perfume A')
+
+  console.log('\n— Octubre contra septiembre completo')
+  const antes = rangoAnterior('custom', octubre)
+  si('el periodo anterior es septiembre completo', antes.from === instanteDeDia('2026-09-01').toISOString() && antes.to === instanteDeDia('2026-09-30', true).toISOString(),
+    `${antes.from} → ${antes.to}`)
+  const sep = resumir(await r(`SELECT toul_reporte($1,$2) r`, [antes.from, antes.to]))
+  igual('Septiembre: Ganaste', 40000, sep.ganaste)
+  igual('Tendencia', 575, porcentajeTendencia({ ahora: res.ganaste, antes: sep.ganaste, ventasAntes: sep.cantidad }), (n) => `+${n}%`)
+
+  console.log('\n— La anulada y el borde de los meses')
+  const voids = await one(`SELECT count(*)::int n FROM sale_voids WHERE store_id=$1`, [STORE])
+  si('la venta del 25 oct quedó anulada', voids.n === 1)
+  si('y no aparece en ningún número: 5 ventas, no 6', res.cantidad === 5)
+  si('ni en la plata: Efectivo $370.000, no $450.000', metodo('Efectivo') === 370000)
+  const nov = resumir(await r(`SELECT toul_reporte($1,$2) r`, [instanteDeDia('2026-11-01').toISOString(), instanteDeDia('2026-11-30', true).toISOString()]))
+  igual('Noviembre: vendiste (solo la del 1 nov 00:15)', 100000, nov.vendiste)
+  // Lo que pide el Inicio en "Este mes" a las 23:45 del 31 y a las 00:20 del 1
+  const mesOct = rangoPeriodo('month', null, new Date(co('2026-10-31 23:45')))
+  const mesNov = rangoPeriodo('month', null, new Date(co('2026-11-01 00:20')))
+  si('"Este mes" a las 23:45 del 31 arranca el 1 de octubre', mesOct.from === octubre.from, mesOct.from)
+  si('"Este mes" a las 00:20 del 1 arranca el 1 de noviembre', mesNov.from === instanteDeDia('2026-11-01').toISOString(), mesNov.from)
+  const repMesOct = resumir(await r(`SELECT toul_reporte($1,$2) r`, [mesOct.from, mesOct.to]))
+  igual('"Este mes" a las 23:45 del 31: incluye la de las 23:30', 640000, repMesOct.vendiste)
+
+  console.log('\n— Mes a mes')
+  const meses = await r(`SELECT toul_reporte_meses(6, '2026-11-01') r`)
+  const mes = (iso) => meses.find(m => m.mes === iso) ?? {}
+  igual('Septiembre: ventas', 100000, mes('2026-09-01').ventas)
+  igual('Septiembre: ganancia', 40000, mes('2026-09-01').ganancia)
+  igual('Octubre: ventas', 640000, mes('2026-10-01').ventas)
+  igual('Octubre: ganancia', 270000, mes('2026-10-01').ganancia)
+  igual('Noviembre: ventas', 100000, mes('2026-11-01').ventas)
+  igual('Noviembre: ganancia', 40000, mes('2026-11-01').ganancia)
+  igual('Meses', 3, meses.length, tal)
+  // La base puede estar en otra zona horaria: el resultado no cambia
+  await db.exec(`SET TIME ZONE 'Asia/Tokyo'`)
+  const mesesTokio = await r(`SELECT toul_reporte_meses(6, '2026-11-01') r`)
+  await db.exec(`SET TIME ZONE 'UTC'`)
+  si('con la base en hora de Tokio, el mes a mes da lo mismo', JSON.stringify(mesesTokio) === JSON.stringify(meses))
+
+  console.log('\n— Después de todas las operaciones')
+  const cartera = await r(`SELECT toul_receivables() r`)
+  const debe = (nombre) => Number(cartera.clientes.find(c => c.nombre === nombre)?.saldo ?? 0)
+  igual('Te deben', 220000, cartera.total)
+  igual('Clientes que te deben', 3, cartera.clientes.length, tal)
+  igual('Ana', 80000, debe('Ana'))
+  igual('Beto', 80000, debe('Beto'))
+  igual('Carla', 60000, debe('Carla'))
+  const guardado = await one(`SELECT COALESCE(SUM(total_debt),0) s FROM customers WHERE store_id=$1`, [STORE])
+  igual('Te deben, según lo guardado en cada cliente', 220000, guardado.s)
+  // "Debes": el Inicio lee providers.total_debt y Proveedores lee provider_debts
+  const debesInicio = await one(`SELECT COALESCE(SUM(total_debt),0) s, count(*) FILTER (WHERE total_debt > 0)::int n FROM providers WHERE store_id=$1`, [STORE])
+  const debesProveedores = await one(`SELECT COALESCE(SUM(remaining_amount),0) s FROM provider_debts WHERE store_id=$1 AND status <> 'paid'`, [STORE])
+  igual('Debes (como lo lee el Inicio)', 80000, debesInicio.s)
+  igual('Debes (como lo lee Proveedores)', 80000, debesProveedores.s)
+  igual('Proveedores a los que les debes', 1, debesInicio.n, tal)
+  const inventario = await r(`SELECT toul_inventory_overview(1) r`)
+  igual('Plata en mercancía', 450000, inventario.value)
+  const stock = await q(`SELECT name, stock FROM products WHERE store_id=$1 ORDER BY name`, [STORE])
+  igual('Perfume A en stock', 4, stock[0].stock, tal)
+  igual('Perfume B en stock', 7, stock[1].stock, tal)
+
+  console.log('\n— El Inicio con el periodo octubre')
+  const filas = async (tabla, campos) => q(`SELECT ${campos} FROM ${tabla} WHERE store_id=$1 AND created_at >= $2 AND created_at <= $3`, [STORE, octubre.from, octubre.to])
+  // Las mismas columnas que pide app/(app)/page.tsx, pasadas por su misma función
+  const inicio = metricasInicio({
+    ventas: await filas('sales s', `s.total, COALESCE((SELECT json_agg(json_build_object('unit_cost', i.unit_cost, 'quantity', i.quantity)) FROM sale_items i WHERE i.sale_id = s.id), '[]') AS sale_items`),
+    gastos: await filas('expenses', 'amount'),
+    devoluciones: await filas('sale_returns', 'total, cost_total'),
+  })
+  igual('Inicio: Vendiste', res.ventasNetas, inicio.ventasNetas)
+  igual('Inicio: Ganancia en ventas', res.gananciaVentas, inicio.gananciaVentas)
+  igual('Inicio: Gastos', res.gastos, inicio.gastos)
+  igual('Inicio: Ganancia después de gastos', res.ganaste, inicio.ganaste)
+  igual('Inicio: Ganancia después de gastos, contra tu cuenta', 270000, inicio.ganaste)
+
+  // El Inicio y Reportes en "Hoy", "Esta semana" y "Este mes", vistos el 31 a las 23:45
+  for (const periodo of ['today', 'week', 'month']) {
+    const t = getDateRange(periodo, new Date(co('2026-10-31 23:45')))
+    const reporte = resumir(await r(`SELECT toul_reporte($1,$2) r`, [t.from, t.to]))
+    const filasT = async (tabla, campos) => q(`SELECT ${campos} FROM ${tabla} WHERE store_id=$1 AND created_at >= $2 AND created_at <= $3`, [STORE, t.from, t.to])
+    const ini = metricasInicio({
+      ventas: await filasT('sales s', `s.total, COALESCE((SELECT json_agg(json_build_object('unit_cost', i.unit_cost, 'quantity', i.quantity)) FROM sale_items i WHERE i.sale_id = s.id), '[]') AS sale_items`),
+      gastos: await filasT('expenses', 'amount'),
+      devoluciones: await filasT('sale_returns', 'total, cost_total'),
+    })
+    si(`${periodo}: el Inicio y Reportes dan lo mismo`, ini.ventasNetas === reporte.ventasNetas && ini.gananciaVentas === reporte.gananciaVentas && ini.ganaste === reporte.ganaste,
+      `vendiste ${peso(ini.ventasNetas)}, ganaste ${peso(ini.ganaste)}`)
+  }
+
+
+  console.log('\n— La auditoría (A4) sobre esta tienda')
+  const auditoria = await comoDueno(() => q(`SELECT * FROM toul_auditoria()`))
+  const fallan = auditoria.filter(f => !f.ok)
+  si(`la auditoría revisa ${auditoria.length} cosas y todas cuadran`, fallan.length === 0,
+    fallan.map(f => `${f.periodo} ${f.chequeo}: ${f.esperado} vs ${f.obtenido}`).join(' | '))
+  si('revisa septiembre y octubre (noviembre todavía no llega)', ['2026-09', '2026-10'].every(m => auditoria.some(f => f.periodo === m)))
+
+  console.log('\n— La auditoría encuentra lo que está mal')
+  await db.exec('BEGIN')
+  await q(`UPDATE customers SET total_debt = total_debt + 5000 WHERE store_id=$1 AND name='Ana'`, [STORE])
+  await q(`INSERT INTO inventory_adjustments(store_id,product_id,quantity,reason) VALUES ($1,$2,-9,'ajuste')`, [STORE, B.id])
+  await q(`DELETE FROM payments WHERE store_id=$1 AND type='sale_payment' AND amount=70000`, [STORE])
+  const mala = await comoDueno(() => q(`SELECT * FROM toul_auditoria()`))
+  await db.exec('ROLLBACK')
+  const falla = (texto) => mala.find(f => !f.ok && f.chequeo.includes(texto))
+  si('ve el cliente descuadrado', !!falla('guardado en cada cliente'), falla('guardado en cada cliente')?.detalle)
+  si('ve el stock negativo', !!falla('stock negativo'), falla('stock negativo')?.detalle)
+  si('ve el abono que no entró a la caja', !!falla('entraron a la caja'), falla('entraron a la caja')?.periodo)
+  si('y nada más', mala.filter(f => !f.ok).length === 3, mala.filter(f => !f.ok).map(f => f.chequeo).join(' | '))
+
+  console.log('\n— Todas las tiendas, solo desde el SQL Editor')
+  const O2 = '22222222-2222-2222-2222-222222222222'
+  await q(`INSERT INTO auth.users(id,email) VALUES ($1,'otra@x.com')`, [O2])
+  await q(`INSERT INTO stores(owner_id,name) VALUES ($1,'Otra tienda')`, [O2])
+  const negada = await comoDueno(() => q(`SELECT * FROM toul_auditoria_todas()`).then(() => null).catch(e => e.message))
+  si('un usuario de la app no puede ver todas las tiendas', negada !== null && /permission|permiso/i.test(negada), negada)
+  const todas = await q(`SELECT * FROM toul_auditoria_todas()`)
+  const tiendas = [...new Set(todas.map(f => f.tienda))]
+  si('desde el SQL Editor revisa las dos tiendas', tiendas.length === 2, tiendas.join(', '))
+  si('y todo cuadra en las dos', todas.every(f => f.ok), todas.filter(f => !f.ok).map(f => `${f.tienda}: ${f.chequeo}`).join(' | '))
+  const escribir = await q(`SELECT toul_auditoria_todas()`).then(() => null)
+  si('no deja rastro: las ventas siguen iguales', (await one(`SELECT count(*)::int n FROM sales WHERE store_id=$1`, [STORE])).n === 7, String(escribir))
+
+  console.log(fails === 0 ? '  TODO OK' : `  ${fails} FALLOS`)
+  return { fails }
+}

@@ -68,17 +68,15 @@ export default async function (db) {
   ok(caja?.method === 'Nequi' && Number(caja.amount) === 50000, 'y la caja lo recibe por Nequi, atado al abono')
   ok(Number((await one(`SELECT total_debt FROM customers WHERE id=$1`, [pedro])).total_debt) === 50000, 'la deuda del cliente queda en $50.000')
 
-  // Dos abonos de antes: uno sin método y otro que quedó como "General"
-  await q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'payment',6000)`, [STORE, pedro])
-  await q(`INSERT INTO credits(store_id,customer_id,type,amount,payment_method) VALUES ($1,$2,'payment',4000,'General')`, [STORE, pedro])
+  // Un abono de antes, sin método
+  await q(`INSERT INTO credits(store_id,customer_id,type,amount) VALUES ($1,$2,'payment',10000)`, [STORE, pedro])
 
   rep = await reporte()
   ok(Number(rep.abonos) === 60000, `abonos que te hicieron: $60.000 (dio ${rep.abonos})`)
   ok(Number(rep.ventas.contado) + Number(rep.abonos) === 360000, 'plata que entró = de contado + abonos = $360.000')
   ok(metodo(rep, 'Efectivo') === 200000, 'por Efectivo entraron $200.000')
   ok(metodo(rep, 'Nequi') === 150000, 'por Nequi $150.000: el abono inicial del fiado + el abono de Pedro')
-  ok(metodo(rep, 'Abonos') === 10000, 'los abonos viejos (sin método o "General") aparecen como "Abonos"')
-  ok(metodo(rep, 'General') === 0, 'y "General" no sale como si fuera un método')
+  ok(metodo(rep, 'Abonos') === 10000, 'el abono viejo sin método aparece como "Abonos"')
   ok(rep.metodos.reduce((s, m) => s + Number(m.monto), 0) === 360000, 'la dona suma lo mismo que la plata que entró')
 
   console.log('\n— Abonos: todo o nada, y nunca más de lo que debe')
@@ -91,13 +89,20 @@ export default async function (db) {
   ok((await err(() => as(S, () => q(`SELECT toul_registrar_abono($1,1000,$2,NULL)`, [pedro, neq.id])))) !== null,
     'la vendedora no puede registrar abonos')
   const abonosPedro = await q(`SELECT id FROM credits WHERE customer_id=$1 AND type='payment'`, [pedro])
-  ok(abonosPedro.length === 3, 'los intentos fallidos no dejan nada guardado')
+  ok(abonosPedro.length === 2, 'los intentos fallidos no dejan nada guardado')
 
   console.log('\n— Deshacer el abono nuevo saca justo su entrada de caja')
   await as(O, () => q(`SELECT toul_undo_payment($1)`, [abono.creditId]))
   ok((await q(`SELECT id FROM payments WHERE reference_id=$1`, [abono.creditId])).length === 0, 'la entrada de caja desaparece')
   ok(Number((await one(`SELECT total_debt FROM customers WHERE id=$1`, [pedro])).total_debt) === 90000,
     'la deuda vuelve a $90.000 (100.000 − el abono viejo de 10.000)')
+
+  // Un abono de antes del 14 oct: entraba a la caja como 'credit_payment'
+  const [viejoAbono] = await q(`INSERT INTO credits(store_id,customer_id,type,amount,payment_method) VALUES ($1,$2,'payment',3000,'General') RETURNING id, created_at`, [STORE, pedro])
+  await q(`INSERT INTO payments(store_id,type,method,amount,reference_id,notes,created_at) VALUES ($1,'credit_payment','General',3000,$2,'Abono cliente: Pedro',$3)`, [STORE, pedro, viejoAbono.created_at])
+  await as(O, () => q(`SELECT toul_undo_payment($1)`, [viejoAbono.id]))
+  ok((await q(`SELECT id FROM payments WHERE store_id=$1 AND type='credit_payment'`, [STORE])).length === 0,
+    'deshacer un abono de antes del 14 oct también saca su entrada de caja')
   const otra = await as(O, async () => (await one(`SELECT toul_registrar_abono($1,50000,$2,NULL) r`, [pedro, neq.id])).r)
 
   console.log('\n— Mercancía que pagaste: compra a crédito y abono posterior al proveedor')
@@ -136,6 +141,21 @@ export default async function (db) {
   // 400.000 − (300.000 − 60.000) − 80.000
   ok(Number(actual.ganancia) === 80000, `y $80.000 de ganancia después de gastos (dio ${actual.ganancia})`)
   ok(Number(meses[0].ventas) === 100000, 'el mes del fiado viejo tiene sus $100.000')
+
+  console.log('\n— Un descuento se reparte entre los productos de la venta')
+  const [crema] = await q(`INSERT INTO products(store_id,name,sale_price,cpp) VALUES ($1,'Crema',20000,8000) RETURNING id`, [STORE])
+  await q(`INSERT INTO inventory_adjustments(store_id,product_id,quantity,reason) VALUES ($1,$2,5,'initial')`, [STORE, crema.id])
+  await as(O, () => q(`SELECT process_sale($1::jsonb)`, [JSON.stringify({
+    cart: [...cart(1), { product: { id: crema.id, name: 'Crema' }, quantity: 1, unitPrice: 20000 }],
+    payments: [{ methodId: efe.id, methodName: 'Efectivo', amount: 108000 }],
+    subtotal: 120000, discount: 12000, total: 108000,
+  })]))
+  rep = await reporte()
+  const ganancia = (Number(rep.ventas.total) - Number(rep.devoluciones.total)) - (Number(rep.ventas.costo) - Number(rep.devoluciones.costo))
+  const sumaProductos = rep.productos.reduce((s, p) => s + Number(p.ganancia), 0)
+  ok(sumaProductos === ganancia, `lo que dejó cada producto suma la ganancia en ventas: ${sumaProductos} = ${ganancia}`)
+  const cremaFila = rep.productos.find(p => p.nombre === 'Crema')
+  ok(Number(cremaFila?.ganancia) === 10000 && Number(cremaFila?.margen) === 56, `la crema con 10% de descuento dejó $10.000 (56%), no $12.000 (dio ${cremaFila?.ganancia}, ${cremaFila?.margen}%)`)
 
   console.log('\n— Solo el administrador ve los reportes')
   ok((await err(() => as(S, () => q(`SELECT toul_reporte(now() - interval '1 day', now())`)))) !== null, 'la vendedora no puede')

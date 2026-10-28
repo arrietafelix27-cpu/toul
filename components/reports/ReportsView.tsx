@@ -9,7 +9,7 @@ import { ENTRADA_INICIO_CSS, entrada } from '@/lib/motion'
 import { formatPrecio } from '@/lib/utils'
 import { capitalizeFirst } from '@/lib/format/text'
 import { EXPENSE_CATEGORIES } from '@/lib/types'
-import { contraQue, type Periodo, type Rango, type Tramo } from '@/lib/periodos'
+import { ZONA_COLOMBIA, contraQue, enColombia, formatoColombia, type Periodo, type Rango, type Tramo } from '@/lib/periodos'
 import { conOtros, deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir, type ResumenReporte } from '@/lib/reports/calculos'
 import type { MesReporte, ReporteSQL } from '@/lib/reports/types'
 
@@ -201,14 +201,14 @@ function nombreCategoria(valor: string): string {
 
 function mesCorto(iso: string): string {
     const [y, m] = iso.split('-').map(Number)
-    return new Date(y, m - 1, 1).toLocaleDateString('es-CO', { month: 'short' }).replace('.', '')
+    return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('es-CO', { month: 'short', timeZone: ZONA_COLOMBIA }).replace('.', '')
 }
 
 /** "cierras octubre", "cierras la semana", "cierras 2026" */
 function cierre(periodo: Periodo, desde: Date): string {
     if (periodo === 'week') return 'cierras la semana'
-    if (periodo === 'year') return `cierras ${desde.getFullYear()}`
-    return `cierras ${desde.toLocaleDateString('es-CO', { month: 'long' })}`
+    if (periodo === 'year') return `cierras ${enColombia(desde).ano}`
+    return `cierras ${formatoColombia(desde, { month: 'long' })}`
 }
 
 export function ReportsView({

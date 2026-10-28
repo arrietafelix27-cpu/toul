@@ -12,6 +12,7 @@ import { PendingSales } from '@/components/isla/PendingSales'
 import { useOfflineSales } from '@/lib/isla/useOffline'
 import { EASE_OUT_EMIL } from '@/components/ui'
 import type { SaleVoid } from '@/lib/isla/types'
+import { getDateRange } from '@/lib/periodos'
 
 const CSS = `
 .cv-tile { border-radius: 16px; padding: 14px 16px; background: rgba(255,255,255,0.025);
@@ -33,7 +34,8 @@ export default function CajaVentasPage() {
     // Con turno abierto: ventas del turno. Sin turno: mis ventas de hoy.
     const key = ['caja-ventas', ctx.storeId, session?.id ?? 'today', ctx.userId]
     const { data, isLoading, mutate } = useSWR(key, async () => {
-        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+        // Hoy en hora de Colombia, sin importar la zona del equipo de la caja
+        const todayStart = new Date(getDateRange('today').from as string)
 
         let salesQuery = supabase.from('sales').select(SALE_LIST_SELECT).eq('store_id', ctx.storeId).order('created_at', { ascending: false })
         salesQuery = session ? salesQuery.eq('cash_session_id', session.id) : salesQuery.eq('seller_id', ctx.userId).gte('created_at', todayStart.toISOString())

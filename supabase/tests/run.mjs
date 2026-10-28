@@ -26,7 +26,7 @@ const MIGRATIONS = [
     'deploy_devoluciones.sql', 'deploy_reportes.sql',
 ]
 
-const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs', 'inventario.test.mjs', 'compras-proveedor.test.mjs', 'precision.test.mjs', 'clientes.test.mjs', 'cartera.test.mjs', 'compras-detalle.test.mjs', 'guardado-atomico.test.mjs', 'deshacer.test.mjs', 'errores.test.mjs', 'devoluciones.test.mjs', 'reportes.test.mjs']
+const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs', 'inventario.test.mjs', 'compras-proveedor.test.mjs', 'precision.test.mjs', 'clientes.test.mjs', 'cartera.test.mjs', 'compras-detalle.test.mjs', 'guardado-atomico.test.mjs', 'deshacer.test.mjs', 'errores.test.mjs', 'devoluciones.test.mjs', 'reportes.test.mjs', 'tienda-prueba.test.mjs']
 
 async function runSuite(file) {
     const db = new PGlite()

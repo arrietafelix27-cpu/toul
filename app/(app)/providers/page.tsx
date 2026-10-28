@@ -14,6 +14,7 @@ import { Thumb } from '@/components/ui/Thumb'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
 import type { Provider } from '@/lib/types'
+import { diasEntre, instanteDeDia } from '@/lib/periodos'
 
 const supabase = createClient()
 const PAGE_SIZE = 50
@@ -45,9 +46,8 @@ const CSS = PANEL_CSS + `
 
 /** Días que lleva vencido un plazo. Negativo si todavía no llega. */
 function vencidoHace(iso: string) {
-    const hoy = new Date(Date.now() - 5 * 3600_000); hoy.setHours(0, 0, 0, 0)
-    const d = new Date(iso); d.setHours(0, 0, 0, 0)
-    return Math.round((hoy.getTime() - d.getTime()) / 86400000)
+    // El plazo es un día del calendario; "hoy" es el de Colombia
+    return diasEntre(instanteDeDia(iso.slice(0, 10)), new Date())
 }
 
 const dias = (n: number) => `${n} ${n === 1 ? 'día' : 'días'}`

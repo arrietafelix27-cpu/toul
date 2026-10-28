@@ -3,13 +3,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatCOP } from '@/lib/utils'
 import type { ReceiptData } from './types'
+import { ZONA_COLOMBIA } from '@/lib/periodos'
 
 const escape = (value: string) =>
     value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 
 function receiptHtml(r: ReceiptData): string {
     const date = new Date(r.createdAt).toLocaleString('es-CO', {
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: ZONA_COLOMBIA,
     })
     const line = (left: string, right: string, strong = false) =>
         `<div class="row${strong ? ' strong' : ''}"><span>${left}</span><span>${right}</span></div>`
@@ -150,7 +151,7 @@ export async function loadReceiptData(supabase: SupabaseClient, saleId: string):
 
 /** Imprime el cierre de turno (comprobante físico para el administrador). */
 export function printCashClose(meta: { storeName: string; openedBy: string; openedAt: string; closedAt: string }, s: import('./types').CashSessionSummary) {
-    const fmt = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    const fmt = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: ZONA_COLOMBIA })
     const line = (l: string, r: string, strong = false) => `<div class="row${strong ? ' strong' : ''}"><span>${l}</span><span>${r}</span></div>`
     const diff = Math.round(s.difference ?? 0)
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Cierre</title><style>

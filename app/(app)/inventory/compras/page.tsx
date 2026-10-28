@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { PurchaseDetail, type PurchaseDetailData } from '@/components/inventory/PurchaseDetail'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
+import { diasEntre, instanteDeDia } from '@/lib/periodos'
 
 const supabase = createClient()
 
@@ -86,9 +87,8 @@ const fecha = (iso: string) => {
 /** Un plazo que ya pasó deja de ser un dato y pasa a ser un aviso */
 function estaVencida(iso: string | null) {
     if (!iso) return false
-    const hoy = new Date(Date.now() - 5 * 3600_000); hoy.setHours(0, 0, 0, 0)
-    const d = new Date(iso); d.setHours(0, 0, 0, 0)
-    return d.getTime() < hoy.getTime()
+    // El plazo es un día del calendario; "hoy" es el de Colombia
+    return diasEntre(instanteDeDia(iso.slice(0, 10)), new Date()) > 0
 }
 
 const CSS = PANEL_CSS + `

@@ -38,31 +38,8 @@ export function formatPrecio(amount: number | null | undefined): string {
     return formatCOP(amount).replace(/\s/g, '')
 }
 
-/** Desde y hasta de cada periodo, en la hora del equipo. La semana va de lunes a hoy */
-export function getDateRange(period: 'today' | 'week' | 'month' | 'year' | 'total' | 'custom'): { from: string | null; to: string | null } {
-    const now = new Date()
-    if (period === 'total') return { from: null, to: null }
-    if (period === 'today') {
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        return { from: start.toISOString(), to: now.toISOString() }
-    }
-    if (period === 'week') {
-        const day = now.getDay()
-        const diff = now.getDate() - day + (day === 0 ? -6 : 1)
-        const start = new Date(now.setDate(diff))
-        start.setHours(0, 0, 0, 0)
-        return { from: start.toISOString(), to: new Date().toISOString() }
-    }
-    if (period === 'month') {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1)
-        return { from: start.toISOString(), to: new Date().toISOString() }
-    }
-    if (period === 'year') {
-        const start = new Date(now.getFullYear(), 0, 1)
-        return { from: start.toISOString(), to: new Date().toISOString() }
-    }
-    return { from: null, to: null }
-}
+/** Desde y hasta de cada periodo, en hora de Colombia: vive en lib/periodos */
+export { getDateRange } from '@/lib/periodos'
 
 /** Calculate CPP: (currentStock * currentCpp + newQty * newCost) / (currentStock + newQty) */
 export function calculateCPP(currentStock: number, currentCpp: number, newQty: number, newCost: number): number {
@@ -72,7 +49,7 @@ export function calculateCPP(currentStock: number, currentCpp: number, newQty: n
 
 /** Short date format */
 export function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+    return new Date(dateStr).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' })
 }
 
 /** Truncate text */
