@@ -49,6 +49,7 @@ export async function POST(request: Request) {
         { data: expenses },
         { data: saleItems },
         { data: payments },
+        { data: inventario },
     ] = await Promise.all([
         supabase.from('products').select('id, name, stock, cpp, sale_price, is_active, created_at').eq('store_id', storeId).eq('is_active', true),
         supabase.from('sales').select('id, total, created_at, payment_method').eq('store_id', storeId).gte('created_at', last30),
@@ -56,6 +57,8 @@ export async function POST(request: Request) {
         supabase.from('expenses').select('amount, category, description, created_at').eq('store_id', storeId).gte('created_at', last30),
         supabase.from('sale_items').select('product_id, quantity, unit_price, unit_cost, sales!inner(created_at, store_id)').eq('sales.store_id', storeId).gte('sales.created_at', last30),
         supabase.from('payments').select('method, amount, type').eq('store_id', storeId).gte('created_at', last30),
+        // El valor del inventario cuenta cada presentación, igual que en Inventario
+        supabase.rpc('toul_inventory_overview', { p_limit: 1 }),
     ])
 
     // ── Compute derived metrics ───────────────────────────────────────────────
@@ -70,7 +73,7 @@ export async function POST(request: Request) {
     const prevRevenue = prevSales.reduce((s, v) => s + v.total, 0)
     const revGrowth = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue * 100).toFixed(1) : null
     const totalExpenses = exps.reduce((s, e) => s + e.amount, 0)
-    const inventoryValue = prods.reduce((s, p) => s + p.stock * p.cpp, 0)
+    const inventoryValue = Number((inventario as { value?: number } | null)?.value ?? 0)
     const avgTicket = sales.length > 0 ? totalRevenue / sales.length : 0
 
     // Product analytics

@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { motion } from 'framer-motion'
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { formatCOP } from '@/lib/utils'
+import { formatCOP, getDateRange } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
 import { EASE_OUT_EMIL } from '@/components/ui'
 
@@ -70,7 +70,8 @@ function since(period: Period): string | null {
     const now = new Date()
     if (period === 'total') return null
     if (period === 'today') { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.toISOString() }
-    if (period === 'week') { const d = new Date(now); d.setDate(d.getDate() - 6); d.setHours(0, 0, 0, 0); return d.toISOString() }
+    // De lunes a hoy, igual que en el Inicio y en Reportes
+    if (period === 'week') return getDateRange('week').from
     const d = new Date(now.getFullYear(), now.getMonth(), 1)
     return d.toISOString()
 }

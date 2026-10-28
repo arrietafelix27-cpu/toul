@@ -13,6 +13,7 @@ import { Sheet } from '@/components/isla/Sheet'
 import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { SaleDetail } from '@/components/ventas/SaleDetail'
+import { MetodoAbono } from '@/components/customers/MetodoAbono'
 import { SALE_DETAIL_SELECT } from '@/lib/types'
 import type { SaleDetailData } from '@/lib/types'
 import { explainError } from '@/lib/errors'
@@ -65,6 +66,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
 
     const [payOpen, setPayOpen] = useState(false)
     const [payAmount, setPayAmount] = useState('')
+    const [payMethod, setPayMethod] = useState<string | null>(null)
     const [saving, setSaving] = useState(false)
     const [removeOpen, setRemoveOpen] = useState(false)
     const [removing, setRemoving] = useState(false)
@@ -125,21 +127,21 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         const amount = Number(onlyDigits(payAmount))
         if (!amount || amount <= 0) { toast.error('Escribe cuánto abonó'); return }
         if (amount > calculada) { toast.error(`No puede abonar más de ${formatCOP(calculada)}`); return }
+        if (!payMethod) { toast.error('Elige por dónde te pagó'); return }
 
         setSaving(true)
-        // Por el endpoint, que lo hace todo junto: antes la pantalla
-        // escribía el movimiento y la deuda por separado, y si una
-        // fallaba el saldo quedaba mal
+        // Por el endpoint, que lo guarda todo en una sola transacción: el
+        // movimiento, la entrada a la caja y la deuda
         const response = await fetch('/api/customers/payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customerId: id, amount, notes: `Abono de ${customer.name}` }),
+            body: JSON.stringify({ customerId: id, amount, methodId: payMethod, notes: `Abono de ${customer.name}` }),
         })
         const result = await response.json().catch(() => ({}))
         setSaving(false)
         if (!response.ok) { toast.error(result?.error || 'No se pudo registrar el abono'); return }
 
-        setPayOpen(false); setPayAmount('')
+        setPayOpen(false); setPayAmount(''); setPayMethod(null)
         await mutate()
         toast.success(`Abono de ${formatCOP(amount)} registrado`)
     }
@@ -499,6 +501,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                     }}>
                     Abonó todo ({formatCOP(calculada)})
                 </button>
+                <MetodoAbono valor={payMethod} onCambio={setPayMethod} />
             </Sheet>
 
             {/* El mismo resumen que se abre desde Ventas. Sin el bloque de

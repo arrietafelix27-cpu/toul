@@ -2,7 +2,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { formatCOP } from '@/lib/utils'
+import { formatCOP, getDateRange } from '@/lib/utils'
 import { Clock, Ban, Search, SlidersHorizontal, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
@@ -27,7 +27,8 @@ function getRange(period: Period, from: string, to: string) {
     if (period === 'custom') return { from: from || null, to: to ? to + 'T23:59:59' : null }
     if (period === 'total') return { from: null, to: null }
     if (period === 'today') { const s = new Date(now); s.setHours(0, 0, 0, 0); return { from: s.toISOString(), to: now.toISOString() } }
-    if (period === 'week') { const s = new Date(now); s.setDate(s.getDate() - 6); s.setHours(0, 0, 0, 0); return { from: s.toISOString(), to: now.toISOString() } }
+    // De lunes a hoy, igual que en el Inicio y en Reportes
+    if (period === 'week') return getDateRange('week')
     if (period === 'month') { const s = new Date(now.getFullYear(), now.getMonth(), 1); return { from: s.toISOString(), to: now.toISOString() } }
     return { from: null, to: null }
 }
@@ -86,9 +87,14 @@ export default function VentasPage() {
     const { data: customerList } = useSWR(
         storeId && customerEdit ? ['clientes-venta', storeId] : null,
         async () => {
-            const { data } = await supabase.from('customers')
-                .select('id, name, total_debt').eq('store_id', storeId!).eq('is_active', true).order('name')
-            return data ?? []
+            // Lo que debe cada uno sale de los movimientos, igual que en Cuentas por cobrar
+            const [{ data }, { data: cartera }] = await Promise.all([
+                supabase.from('customers').select('id, name').eq('store_id', storeId!).eq('is_active', true).order('name'),
+                supabase.rpc('toul_receivables'),
+            ])
+            const saldos = new Map(((cartera as { clientes?: { id: string; saldo: number }[] } | null)?.clientes ?? [])
+                .map(c => [c.id, Number(c.saldo)]))
+            return (data ?? []).map(c => ({ ...c, total_debt: saldos.get(c.id) ?? 0 }))
         },
         { revalidateOnFocus: false },
     )

@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { Plus, Receipt, Megaphone, Truck, ShoppingBag, Zap, Package, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { formatCOP } from '@/lib/utils'
+import { formatCOP, getDateRange } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
 import { EXPENSE_CATEGORIES } from '@/lib/types'
 import { explainError } from '@/lib/errors'
@@ -52,7 +52,8 @@ const PERIODS: { value: Period; label: string }[] = [
 function since(period: Period): string | null {
     const now = new Date()
     if (period === 'all') return null
-    if (period === 'week') { const d = new Date(now); d.setDate(d.getDate() - 6); d.setHours(0, 0, 0, 0); return d.toISOString() }
+    // De lunes a hoy, igual que en el Inicio y en Reportes
+    if (period === 'week') return getDateRange('week').from
     if (period === 'year') return new Date(now.getFullYear(), 0, 1).toISOString()
     return new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 }

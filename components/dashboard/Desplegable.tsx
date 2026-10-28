@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, ChevronLeft } from 'lucide-react'
 import { Sheet } from '@/components/isla/Sheet'
 import { ease } from '@/lib/motion'
+import { textoRango, type Periodo, type Rango } from '@/lib/periodos'
 
 /* ══════════════════════════════════════════════════════════════
    El menú del Inicio.
@@ -16,8 +17,8 @@ import { ease } from '@/lib/motion'
    ══════════════════════════════════════════════════════════════ */
 
 export type Variante = 'movil' | 'pc'
-export type Periodo = 'today' | 'week' | 'month' | 'total' | 'custom'
-export type Rango = { from: string; to: string } | null
+export type { Periodo, Rango }
+export { textoRango }
 
 export interface Opcion<T extends string> {
     valor: T
@@ -59,6 +60,8 @@ const CSS = `
     border-radius: 16px; background: var(--toul-surface-overlay); border: 1px solid var(--toul-border-2);
     box-shadow: 0 18px 48px color-mix(in srgb, var(--toul-bg) 72%, transparent);
     transform-origin: top left; }
+/* Cuando el botón está en la esquina derecha, el menú crece hacia la izquierda */
+.dz-menu[data-lado="derecha"] { left: auto; right: 0; transform-origin: top right; }
 
 .dz-opcion { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
     min-height: 40px; padding: 0 12px; border: none; border-radius: 10px; background: none;
@@ -94,7 +97,7 @@ const CSS = `
 `
 
 /** El botón y lo que abre. `contenido` recibe con qué cerrarlo. */
-export function Desplegable({ variante, titulo, boton, claseBoton, alAbrir, contenido }: {
+export function Desplegable({ variante, titulo, boton, claseBoton, alAbrir, contenido, lado = 'izquierda' }: {
     variante: Variante
     /** Título de la hoja en el celular, y nombre del menú para los lectores de pantalla */
     titulo: string
@@ -102,6 +105,8 @@ export function Desplegable({ variante, titulo, boton, claseBoton, alAbrir, cont
     claseBoton: string
     alAbrir?: () => void
     contenido: (cerrar: () => void) => ReactNode
+    /** En el computador, hacia dónde se abre el menú */
+    lado?: 'izquierda' | 'derecha'
 }) {
     const [abierto, setAbierto] = useState(false)
     const raiz = useRef<HTMLDivElement>(null)
@@ -157,7 +162,7 @@ export function Desplegable({ variante, titulo, boton, claseBoton, alAbrir, cont
             ) : (
                 <AnimatePresence>
                     {abierto && (
-                        <motion.div className="dz-menu" role="dialog" aria-label={titulo}
+                        <motion.div className="dz-menu" role="dialog" aria-label={titulo} data-lado={lado}
                             initial={{ opacity: 0, transform: 'translateY(-4px) scale(0.97)' }}
                             animate={{ opacity: 1, transform: 'translateY(0px) scale(1)' }}
                             exit={{ opacity: 0, transform: 'translateY(-4px) scale(0.97)', transition: { duration: 0.12, ease: ease.out } }}
@@ -211,22 +216,15 @@ const PERIODOS: Opcion<Periodo>[] = [
     { valor: 'month', etiqueta: 'Este mes' },
     { valor: 'custom', etiqueta: 'Elegir fechas' },
 ]
-
-const mes = (d: Date) => d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '')
-
-/** "15 – 20 oct", "28 sep – 3 oct" o "26 oct" si es un solo día */
-export function textoRango(desde: Date, hasta: Date): string {
-    if (desde.toDateString() === hasta.toDateString()) return `${desde.getDate()} ${mes(desde)}`
-    return desde.getMonth() === hasta.getMonth() && desde.getFullYear() === hasta.getFullYear()
-        ? `${desde.getDate()} – ${hasta.getDate()} ${mes(hasta)}`
-        : `${desde.getDate()} ${mes(desde)} – ${hasta.getDate()} ${mes(hasta)}`
-}
+/* Reportes también mira el año */
+const PERIODOS_CON_ANO: Opcion<Periodo>[] = [...PERIODOS.slice(0, 3), { valor: 'year', etiqueta: 'Este año' }, PERIODOS[3]]
 
 /** Lo que dice el título: "Hoy", "Esta semana"… o las fechas elegidas */
 export function tituloPeriodo(period: Periodo, rango: Rango): string {
     if (period === 'today') return 'Hoy'
     if (period === 'week') return 'Esta semana'
     if (period === 'month') return 'Este mes'
+    if (period === 'year') return 'Este año'
     if (period === 'total') return 'Todo'
     if (!rango) return 'Estas fechas'
     return textoRango(new Date(rango.from), new Date(rango.to))
@@ -236,14 +234,18 @@ export function tituloPeriodo(period: Periodo, rango: Rango): string {
 const diaLocal = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod, rango, setRango }: {
+export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod, rango, setRango, conAno = false, lado }: {
     variante: Variante
-    /** El título grande del celular, o la píldora pequeña del computador */
-    forma?: 'titulo' | 'pildora'
+    /** El título grande del celular, la píldora pequeña del Inicio en el
+     *  computador o la píldora de 34 px de Reportes */
+    forma?: 'titulo' | 'pildora' | 'boton'
     period: Periodo
     setPeriod: (p: Periodo) => void
     rango: Rango
     setRango: (r: Rango) => void
+    /** Incluir "Este año" */
+    conAno?: boolean
+    lado?: 'izquierda' | 'derecha'
 }) {
     const [conFechas, setConFechas] = useState(false)
     const [desde, setDesde] = useState('')
@@ -272,11 +274,14 @@ export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod,
     }
 
     return (
-        <Desplegable variante={variante} titulo={conFechas ? 'Elegir fechas' : 'Periodo'} alAbrir={alAbrir}
-            claseBoton={forma === 'pildora' ? 'dz-periodo-pildora' : 'dz-periodo'}
+        <Desplegable variante={variante} titulo={conFechas ? 'Elegir fechas' : 'Periodo'} alAbrir={alAbrir} lado={lado}
+            claseBoton={forma === 'pildora' ? 'dz-periodo-pildora' : forma === 'boton' ? 'dz-pildora' : 'dz-periodo'}
             boton={forma === 'pildora' ? <>
                 {tituloPeriodo(period, rango)}
                 <ChevronDown size={13} strokeWidth={2.4} className="dz-flecha" />
+            </> : forma === 'boton' ? <>
+                {tituloPeriodo(period, rango)}
+                <ChevronDown size={15} strokeWidth={2.3} className="dz-flecha" />
             </> : <>
                 <span className="dz-periodo-texto">{tituloPeriodo(period, rango)}</span>
                 <ChevronDown size={variante === 'movil' ? 24 : 22} strokeWidth={2.2} className="dz-flecha" />
@@ -299,7 +304,7 @@ export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod,
                     </button>
                 </div>
             ) : (
-                <Opciones variante={variante} opciones={PERIODOS} activo={period}
+                <Opciones variante={variante} opciones={conAno ? PERIODOS_CON_ANO : PERIODOS} activo={period}
                     onElegir={valor => {
                         if (valor === 'custom') { elegirFechas(); return }
                         setPeriod(valor)

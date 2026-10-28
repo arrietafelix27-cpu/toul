@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import AnimatedNumber from '@/components/ui/AnimatedNumber'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -16,7 +17,8 @@ import type { Periodo, Variante } from './Desplegable'
    lo que se gastó y lo que queda de las dos.
 
    "Ganancia en ventas" es la utilidad bruta: lo vendido menos lo que
-   costó la mercancía. "Te quedan" le resta los gastos.
+   costó la mercancía. "Ganancia después de gastos" le resta los gastos.
+   Tocar lo vendido abre Reportes en el mismo periodo.
 
    Son dos piezas porque en el celular la gráfica va entre las dos.
    ══════════════════════════════════════════════════════════════ */
@@ -50,6 +52,12 @@ const CSS = `
 .rv-monto-pc { font-size: 44px; }
 .rv-bajo { display: flex; align-items: center; gap: 12px; margin: 8px 0 0; min-height: 22px; }
 .rv-cuenta { font-size: 13px; font-weight: 500; color: var(--toul-text-subtle); margin: 0; }
+/* Lo vendido abre Reportes: se hunde un poco al tocarlo */
+.rv-enlace { display: grid; justify-content: start; color: inherit; text-decoration: none; border-radius: 10px;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    transition: transform 140ms var(--toul-ease-emil), opacity 160ms var(--toul-ease-emil); }
+.rv-enlace:active { transform: scale(0.98); }
+.rv-enlace:focus-visible { outline: 2px solid var(--toul-border-2); outline-offset: 4px; }
 
 /* La tendencia: flecha de color, número en blanco. Al tocarla o pasar
    el mouse dice contra qué se compara */
@@ -66,6 +74,7 @@ const CSS = `
 .rv-tendencia[data-abierta="true"] .rv-globo { opacity: 1; transform: translateX(-50%) translateY(0); }
 @media (hover: hover) and (pointer: fine) {
     .rv-tendencia:hover .rv-globo { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .rv-enlace:hover { opacity: 0.82; }
 }
 
 .rv-division { height: 1px; background: var(--toul-border); margin: 0 0 18px; }
@@ -77,6 +86,7 @@ const CSS = `
 .rv-quedan-valor { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) {
     .rv-globo { transition: opacity 140ms ease; transform: translateX(-50%); }
+    .rv-enlace:active { transform: none; }
 }
 `
 
@@ -110,7 +120,7 @@ function FlechaTendencia({ tendencia }: { tendencia: Tendencia }) {
     )
 }
 
-export function Vendiste({ metrics, loading, period, variante, conteo, tendencia, selector }: {
+export function Vendiste({ metrics, loading, period, variante, conteo, tendencia, selector, href }: {
     metrics: MetricasInicio
     loading: boolean
     period: Periodo
@@ -119,6 +129,8 @@ export function Vendiste({ metrics, loading, period, variante, conteo, tendencia
     tendencia: Tendencia
     /** En PC, la píldora del periodo va al lado de "Vendiste" */
     selector?: ReactNode
+    /** Reportes en el mismo periodo */
+    href: string
 }) {
     const sinVentas = metrics.salesCount === 0
 
@@ -132,8 +144,10 @@ export function Vendiste({ metrics, loading, period, variante, conteo, tendencia
             {loading ? (
                 <div style={{ marginTop: 10 }}><Skeleton width="200px" height="2.75rem" /></div>
             ) : (
-                <AnimatedNumber value={metrics.revenue} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
-                    className={`rv-monto rv-monto-${variante}`} style={{ ...BLOQUE, color: sinVentas ? APAGADO : 'var(--toul-text)' }} />
+                <Link href={href} className="rv-enlace" aria-label="Ver el reporte de este periodo">
+                    <AnimatedNumber value={metrics.revenue} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
+                        className={`rv-monto rv-monto-${variante}`} style={{ ...BLOQUE, color: sinVentas ? APAGADO : 'var(--toul-text)' }} />
+                </Link>
             )}
             {/* Sin ventas el monto va apagado y no hay tendencia: no hay nada que comparar */}
             {loading ? (
@@ -187,7 +201,7 @@ export function GananciaGastos({ metrics, loading, conteo }: {
             </div>
             {/* Lo que queda de la ganancia después de los gastos */}
             <div className="rv-quedan">
-                <p className="rv-rotulo">Te quedan</p>
+                <p className="rv-rotulo">Ganancia después de gastos</p>
                 {loading
                     ? <Skeleton width="84px" height="1.1rem" />
                     : <AnimatedNumber value={quedan} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}

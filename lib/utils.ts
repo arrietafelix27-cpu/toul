@@ -33,13 +33,13 @@ export function getPeriodLabel(period: 'today' | 'week' | 'month' | 'total' | 'c
     return map[period]
 }
 
-/** Get date range for a period */
 /** "$200.000": el Inicio lo muestra sin el espacio que deja el formato de Colombia */
 export function formatPrecio(amount: number | null | undefined): string {
     return formatCOP(amount).replace(/\s/g, '')
 }
 
-export function getDateRange(period: 'today' | 'week' | 'month' | 'total' | 'custom'): { from: string | null; to: string | null } {
+/** Desde y hasta de cada periodo, en la hora del equipo. La semana va de lunes a hoy */
+export function getDateRange(period: 'today' | 'week' | 'month' | 'year' | 'total' | 'custom'): { from: string | null; to: string | null } {
     const now = new Date()
     if (period === 'total') return { from: null, to: null }
     if (period === 'today') {
@@ -55,6 +55,10 @@ export function getDateRange(period: 'today' | 'week' | 'month' | 'total' | 'cus
     }
     if (period === 'month') {
         const start = new Date(now.getFullYear(), now.getMonth(), 1)
+        return { from: start.toISOString(), to: new Date().toISOString() }
+    }
+    if (period === 'year') {
+        const start = new Date(now.getFullYear(), 0, 1)
         return { from: start.toISOString(), to: new Date().toISOString() }
     }
     return { from: null, to: null }

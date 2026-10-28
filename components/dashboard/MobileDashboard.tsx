@@ -30,7 +30,7 @@ const CSS = ENTRADA_INICIO_CSS + `
 export default function MobileDashboard({
     storeName, saludo, storeId, period, setPeriod, rango, setRango,
     metrics, products, pending, insight, loading, primeraCarga, insightsLoading,
-    animar, dibujar, conteo, tendencia,
+    animar, dibujar, conteo, tendencia, hrefReporte,
 }: {
     storeName: string
     saludo: string
@@ -52,6 +52,8 @@ export default function MobileDashboard({
     dibujar: boolean
     conteo: Conteo
     tendencia: Tendencia
+    /** Tocar lo vendido abre Reportes en el mismo periodo */
+    hrefReporte: string
 }) {
     return (
         <div className="md-raiz">
@@ -65,7 +67,7 @@ export default function MobileDashboard({
                     <SelectorPeriodo variante="movil" period={period} setPeriod={setPeriod} rango={rango} setRango={setRango} />
                 </div>
                 <div {...entrada(2, animar, undefined, { marginTop: 18 })}>
-                    <Vendiste metrics={metrics} loading={loading} period={period} variante="movil" conteo={conteo} tendencia={tendencia} />
+                    <Vendiste metrics={metrics} loading={loading} period={period} variante="movil" conteo={conteo} tendencia={tendencia} href={hrefReporte} />
                 </div>
                 <div {...entrada(3, animar, 'md-grafica')}>
                     <HeroChart storeId={storeId} period={period} rango={rango} alto={110} dibujar={dibujar} />

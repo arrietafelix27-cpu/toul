@@ -11,12 +11,14 @@ import HeroChart from '@/components/dashboard/HeroChart'
 import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { PrimerosPasos } from '@/components/dashboard/PrimerosPasos'
-import { SelectorPeriodo, textoRango, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
+import { SelectorPeriodo, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
 import { Vendiste, GananciaGastos, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
 
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
 import { ENTRADA_INICIO_CSS, entrada, useEntradaInicio } from '@/lib/motion'
+import { contraQue, rangoAnterior } from '@/lib/periodos'
+import { porcentajeTendencia } from '@/lib/reports/calculos'
 import type { AIInsight } from '@/lib/types'
 
 type Period = Periodo
@@ -41,7 +43,7 @@ export default function DashboardPage() {
             const daysCount = getDaysDiff(range.from, range.to)
 
             // Previous period range for variation
-            const prevRange = getPrevRange(period, range)
+            const prevRange = rangoAnterior(period, range)
 
             // ── Date helpers for extra queries ─────────────────────────────
             const now = new Date()
@@ -367,17 +369,23 @@ export default function DashboardPage() {
         expenses: dashboardData?.metrics.expenses || 0,
         salesCount: dashboardData?.metrics.salesCount || 0,
     }
-    // Cómo va contra el mismo tramo del periodo anterior. Sin ventas antes,
-    // no hay con qué comparar
+    // Cómo va lo vendido contra el mismo tramo del periodo anterior. Se
+    // esconde si antes no hubo ventas o fue tan poquito que el % no dice nada
     const tendencia: Tendencia = useMemo(() => {
         const rango = period === 'custom' && customRange ? customRange : getDateRange(period)
-        const antes = dashboardData?.metrics.prevRevenue ?? 0
-        const ahora = dashboardData?.metrics.revenue ?? 0
         return {
-            porcentaje: antes > 0 ? Math.round(((ahora - antes) / antes) * 100) : null,
+            porcentaje: porcentajeTendencia({
+                ahora: dashboardData?.metrics.revenue ?? 0,
+                antes: dashboardData?.metrics.prevRevenue ?? 0,
+                ventasAntes: dashboardData?.metrics.prevSalesCount ?? 0,
+            }),
             contra: contraQue(period, rango),
         }
     }, [dashboardData, period, customRange])
+    // Tocar lo vendido abre Reportes en el mismo periodo
+    const hrefReporte = period === 'custom' && customRange
+        ? `/reportes?periodo=custom&desde=${encodeURIComponent(customRange.from)}&hasta=${encodeURIComponent(customRange.to)}`
+        : `/reportes?periodo=${period}`
     const products = dashboardData?.operational.products || { topUnits: [], topProfit: [], lowStock: [], slowMoving: [] }
     const pending = dashboardData?.pending || { customerDebts: [], providerDebts: [] }
 
@@ -439,6 +447,7 @@ export default function DashboardPage() {
                     dibujar={dibujar}
                     conteo={conteo}
                     tendencia={tendencia}
+                    hrefReporte={hrefReporte}
                 />
             </div>
 
@@ -466,7 +475,7 @@ export default function DashboardPage() {
                             <div className="in-pc-resumen">
                                 <div {...entrada(2, animar)}>
                                     <Vendiste metrics={metrics} loading={loading} period={period} variante="pc" conteo={conteo}
-                                        tendencia={tendencia}
+                                        tendencia={tendencia} href={hrefReporte}
                                         selector={<SelectorPeriodo variante="pc" forma="pildora" period={period} setPeriod={cambiarPeriodo}
                                             rango={customRange} setRango={cambiarRango} />} />
                                 </div>
@@ -541,45 +550,3 @@ const PC_CSS = ENTRADA_INICIO_CSS + `
     .in-pc-contenido { padding-left: 32px; padding-right: 32px; }
 }
 `
-
-/** El mismo tramo del periodo anterior, para que la comparación sea justa:
- *  hoy contra ayer hasta esta hora, la semana contra la semana pasada hasta
- *  este mismo día, el mes contra el mes pasado hasta este mismo día, y unas
- *  fechas elegidas contra los mismos días justo antes. */
-function getPrevRange(period: Period, current: { from: string | null; to: string | null }) {
-    if (!current.from || !current.to) return { from: null, to: null }
-
-    const start = new Date(current.from)
-    const end = new Date(current.to)
-    const atras = (d: Date, dias: number) => { const x = new Date(d); x.setDate(x.getDate() - dias); return x }
-
-    if (period === 'today') return { from: atras(start, 1).toISOString(), to: atras(end, 1).toISOString() }
-    if (period === 'week') return { from: atras(start, 7).toISOString(), to: atras(end, 7).toISOString() }
-    if (period === 'month') {
-        const desde = new Date(start.getFullYear(), start.getMonth() - 1, 1)
-        // El mismo día del mes pasado; si no existe, el último (31 de marzo → 28 de febrero)
-        const ultimoDia = new Date(end.getFullYear(), end.getMonth(), 0).getDate()
-        const hasta = new Date(end)
-        hasta.setDate(1)
-        hasta.setMonth(hasta.getMonth() - 1)
-        hasta.setDate(Math.min(end.getDate(), ultimoDia))
-        return { from: desde.toISOString(), to: hasta.toISOString() }
-    }
-
-    const diff = end.getTime() - start.getTime()
-    return {
-        from: new Date(start.getTime() - diff).toISOString(),
-        to: current.from
-    }
-}
-
-/** Contra qué se compara la tendencia: "vs ayer", "vs semana pasada", "vs 1 – 26 sep" */
-function contraQue(period: Period, current: { from: string | null; to: string | null }) {
-    if (period === 'today') return 'vs ayer'
-    if (period === 'week') return 'vs semana pasada'
-    const prev = getPrevRange(period, current)
-    if (!prev.from || !prev.to) return ''
-    // Unas fechas elegidas terminan justo donde empiezan las de ahora
-    const hasta = period === 'custom' ? new Date(new Date(prev.to).getTime() - 1) : new Date(prev.to)
-    return `vs ${textoRango(new Date(prev.from), hasta)}`
-}

@@ -12,6 +12,7 @@ import { onlyDigits, withThousands } from '@/lib/format/text'
 import { Sheet } from '@/components/isla/Sheet'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
+import { MetodoAbono } from '@/components/customers/MetodoAbono'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
 
 const supabase = createClient()
@@ -171,6 +172,7 @@ export function Receivables() {
     }
     const [abonoDe, setAbonoDe] = useState<Fila | null>(null)
     const [monto, setMonto] = useState('')
+    const [metodo, setMetodo] = useState<string | null>(null)
     const [fecha, setFecha] = useState(diaISO(3))
     const [guardando, setGuardando] = useState(false)
 
@@ -201,18 +203,19 @@ export function Receivables() {
         const amount = Number(onlyDigits(monto))
         if (!amount || amount <= 0) { toast.error('Escribe cuánto abonó'); return }
         if (amount > abonoDe.saldo) { toast.error(`No puede abonar más de ${formatCOP(abonoDe.saldo)}`); return }
+        if (!metodo) { toast.error('Elige por dónde te pagó'); return }
 
         setGuardando(true)
         const res = await fetch('/api/customers/payment', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customerId: abonoDe.id, amount, notes: `Abono de ${abonoDe.nombre}` }),
+            body: JSON.stringify({ customerId: abonoDe.id, amount, methodId: metodo, notes: `Abono de ${abonoDe.nombre}` }),
         })
         const out = await res.json().catch(() => ({}))
         setGuardando(false)
         if (!res.ok) { toast.error(out?.error || 'No se pudo registrar el abono'); return }
 
         toast.success(`Abono de ${formatCOP(amount)} registrado`)
-        setAbonoDe(null); setMonto(''); setAbierta(null)
+        setAbonoDe(null); setMonto(''); setMetodo(null); setAbierta(null)
         mutate()
     }
 
@@ -498,6 +501,7 @@ export function Receivables() {
                         Abonó todo ({formatCOP(Number(abonoDe.saldo))})
                     </button>
                 )}
+                <MetodoAbono valor={metodo} onCambio={setMetodo} />
             </Sheet>
         </>
     )

@@ -20,8 +20,9 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
         { data: saleItems30d },
         { data: expenses30d },
         { data: payments30d },
-        { data: debtors },
+        { data: cartera },
         { data: credits30d },
+        { data: inventario },
     ] = await Promise.all([
         supabase.from('products').select('id, name, stock, sale_price, cost_price, cpp, low_stock_threshold, is_active, created_at').eq('store_id', storeId).eq('is_active', true),
         supabase.from('sales').select('id, total, created_at, payment_method, is_credit').eq('store_id', storeId).gte('created_at', daysAgo(7)),
@@ -32,8 +33,11 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
         supabase.from('sale_items').select('product_id, quantity, unit_price, unit_cost, sales!inner(created_at, store_id)').eq('sales.store_id', storeId).gte('sales.created_at', daysAgo(30)),
         supabase.from('expenses').select('amount, category, description, created_at').eq('store_id', storeId).gte('created_at', daysAgo(30)),
         supabase.from('payments').select('amount, type, method, created_at').eq('store_id', storeId).gte('created_at', daysAgo(30)),
-        supabase.from('customers').select('name, total_debt').eq('store_id', storeId).gt('total_debt', 0).order('total_debt', { ascending: false }),
+        // Lo que te deben sale de los movimientos, igual que en Cuentas por cobrar
+        supabase.rpc('toul_receivables'),
         supabase.from('credits').select('type, amount, created_at').eq('store_id', storeId).gte('created_at', daysAgo(30)),
+        // El valor del inventario cuenta cada presentación, igual que en Inventario
+        supabase.rpc('toul_inventory_overview', { p_limit: 1 }),
     ])
 
     // ── Compute Derived Metrics ─────────────────────────────────────────────
@@ -46,7 +50,9 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
     const items = saleItems30d || []
     const exps = expenses30d || []
     const pays = payments30d || []
-    const debts = debtors || []
+    const debts = ((cartera as { clientes?: { nombre: string; saldo: number }[] } | null)?.clientes ?? [])
+        .map(c => ({ name: c.nombre, total_debt: Number(c.saldo) }))
+        .sort((a, b) => b.total_debt - a.total_debt)
     const creds = credits30d || []
 
     // Revenue by period
@@ -97,7 +103,7 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
     const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue * 100) : 0
 
     // Inventory
-    const inventoryValue = prods.reduce((s, p) => s + p.stock * p.cpp, 0)
+    const inventoryValue = Number((inventario as { value?: number } | null)?.value ?? 0)
     const outOfStock = prods.filter(p => p.stock === 0)
     const lowStock = prods.filter(p => p.stock > 0 && p.stock <= (p.low_stock_threshold || 5))
     const noRotation = prodList.filter(p => p.units === 0 && p.stock > 0)
@@ -124,7 +130,7 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
     const topDebtors = debts.slice(0, 5)
 
     // Credits / payments received
-    const abonos = creds.filter(c => c.type === 'abono').reduce((s, c) => s + c.amount, 0)
+    const abonos = creds.filter(c => c.type === 'payment').reduce((s, c) => s + c.amount, 0)
 
     // Sales by day of week
     const dayMap: Record<number, number> = {}
