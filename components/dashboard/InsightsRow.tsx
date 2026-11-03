@@ -20,13 +20,11 @@ const CSS = ENTRADA_INICIO_CSS + `
 
 /* Se mide el espacio disponible, no la pantalla: la barra lateral
    de la app se lleva 240 px que no se pueden usar */
-/* Las tres terminan a la misma altura: la fila mide lo que mide Tus
-   productos, y las otras dos se acomodan a ese alto (Plata pendiente
-   muestra los deudores que quepan; las acciones se reparten). Así las
-   líneas divisorias son tan altas como el contenido */
+/* Cada columna mide lo que mide su contenido, alineada arriba; la fila
+   mide lo que la más alta. Las líneas divisorias van de arriba abajo de
+   la fila, pero nada de adentro se estira */
 @container (min-width: 900px) {
-    .ir-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); min-height: var(--in-pc-fila, auto); }
-    .ir-plata, .ir-acciones { contain: size; }
+    .ir-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); }
     .ir-col { padding: 0 clamp(20px, 2.2vw, 32px); }
     .ir-col:first-child { padding-left: 0; }
     .ir-col:last-child { padding-right: 0; }

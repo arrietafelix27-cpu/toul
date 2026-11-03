@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { Fragment, useMemo, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { ChevronRight, MessageCircle } from 'lucide-react'
 import AnimatedNumber from '@/components/ui/AnimatedNumber'
@@ -67,10 +67,8 @@ const CSS = `
 .pl-barra > span { min-width: 6px; border-radius: 999px; transition: opacity 200ms var(--toul-ease-emil); }
 
 .pl-lista { display: flex; flex-direction: column; margin-top: 8px; }
-/* En el computador la lista ocupa el alto que le deja la columna, y se
-   muestran los deudores que quepan */
-.pl-seccion[data-variante="pc"] { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.pl-seccion[data-variante="pc"] .pl-lugar { flex: 1; min-height: 0; overflow: hidden; }
+/* En el computador la lista va arriba, con su espacio natural */
+.pl-seccion[data-variante="pc"] { display: flex; flex-direction: column; }
 .pl-todos { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin-top: 6px; padding: 6px 0;
     font-size: 13px; font-weight: 500; color: var(--toul-text-muted); text-decoration: none;
     transition: color 160ms var(--toul-ease-emil); }
@@ -115,6 +113,9 @@ function whatsappLink(phone: string, message: string) {
 const initialsOf = (name: string) =>
     name.trim().split(/\s+/).map(word => word[0]).join('').toUpperCase().slice(0, 2)
 
+/** Los que más deben: 3, en el celular y en el computador */
+const MOSTRAR = 3
+
 export function PendingPanel({ pending, storeName, variante, loading, cuenta = false }: {
     pending: PendingData
     storeName?: string | null
@@ -140,24 +141,10 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
         },
     ]
 
-    // En el computador: los que quepan en la columna, máximo 6
-    const lugar = useRef<HTMLDivElement>(null)
-    const [caben, setCaben] = useState(3)
-    useEffect(() => {
-        const node = lugar.current
-        if (variante !== 'pc' || !node) return
-        const observer = new ResizeObserver(() => {
-            const fila = node.querySelector('.pl-item, .pl-fila')?.getBoundingClientRect().height || 56
-            // 8 px: el margen de arriba de la lista
-            setCaben(Math.max(1, Math.min(6, Math.floor((node.clientHeight - 8) / fila))))
-        })
-        observer.observe(node)
-        return () => observer.disconnect()
-    }, [variante])
 
     const esCobrar = lado === 'cobrar'
     const lista = esCobrar ? pending.customerDebts : pending.providerDebts
-    const mostrados = lista.slice(0, variante === 'movil' ? 3 : caben)
+    const mostrados = lista.slice(0, MOSTRAR)
     const total = (esCobrar ? pending.customerCount : pending.providerCount) ?? lista.length
     // Si alguno tiene WhatsApp, todos reservan ese espacio: los montos
     // quedan alineados en vez de bailar de renglón en renglón
@@ -201,7 +188,7 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
                 ))}
             </div>
 
-            <div ref={lugar} className="pl-lugar">
+            <div className="pl-lugar">
             {loading ? (
                 <div className="pl-lista" aria-hidden>
                     {[0, 1, 2].map(i => (
@@ -246,7 +233,7 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
             )}
             </div>
 
-            {/* Si no caben todos, el resto está a un toque */}
+            {/* Si son más, el resto está a un toque */}
             {variante === 'pc' && !loading && total > mostrados.length && (
                 <Link href={esCobrar ? '/customers?ver=cobros' : '/providers'} prefetch={false} className="pl-todos">
                     Ver todos <ChevronRight size={14} strokeWidth={2.2} />

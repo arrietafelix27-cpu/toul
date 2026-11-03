@@ -484,22 +484,13 @@ export default function DashboardPage() {
    arriba a la izquierda, la gráfica que llega hasta el borde derecho y
    la pantalla que se llena de arriba abajo */
 const PC_CSS = ENTRADA_INICIO_CSS + `
-/* Las medidas que comparten el encabezado y la fila de abajo. El
-   gráfico mide entre 220 y 320 px según la pantalla, y el resumen de
-   la derecha se reparte en ese mismo alto. La fila de abajo mide lo que
-   miden tus productos (título, píldora, foto y nombre): las fotos toman
-   lo que sobra, para que la pantalla quede llena sin franja vacía. En
-   pantallas muy altas las fotos no pasan de 420 px y el resto lo toma
-   el gráfico */
+/* Dos filas. La de abajo (plata pendiente, tus productos y acciones)
+   mide lo que mide su contenido y nunca se estira. La de arriba (el
+   gráfico y el resumen) toma todo lo que sobra, con un mínimo de 320 px:
+   así la pantalla queda llena sin franja vacía */
 .in-pc {
     position: relative;
-    --in-pc-alto: clamp(220px, 30vh, 320px);
     --in-pc-hueco: clamp(24px, 3.5vh, 40px);
-    /* Lo que no cambia: los márgenes, el saludo, el hueco y lo que no es foto abajo */
-    --in-pc-fijo: calc(2rem + 24px + 16px + 40px + 6px + var(--in-pc-hueco) + 134px);
-    --in-pc-cabeza: max(var(--in-pc-alto), calc(100dvh - var(--in-pc-fijo) - 420px));
-    --in-pc-foto: max(150px, calc(100dvh - var(--in-pc-fijo) - var(--in-pc-cabeza)));
-    --in-pc-fila: calc(134px + var(--in-pc-foto));
 }
 /* Sin z-index ni isolation, como en el celular: los menús y las hojas
    tienen que poder quedar por encima de todo. Los 2rem son el margen de
@@ -515,10 +506,11 @@ const PC_CSS = ENTRADA_INICIO_CSS + `
     transition: color 160ms var(--toul-ease-emil), background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
 .in-pc-ajustes:active { transform: scale(0.94); }
 
+.in-pc-cabeza { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* La gráfica ocupa cerca del 60% desde el borde izquierdo; el resumen,
-   el resto. Las dos miden lo mismo: si el resumen no cabe, crecen juntas */
-.in-pc-cuerpo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
-    grid-template-rows: minmax(var(--in-pc-cabeza), auto); column-gap: clamp(32px, 4vw, 64px); margin-top: 6px; }
+   el resto. Las dos miden lo mismo y crecen con la fila */
+.in-pc-cuerpo { flex: 1; min-height: 320px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+    grid-template-rows: 1fr; column-gap: clamp(32px, 4vw, 64px); margin-top: 6px; }
 /* Sin ventas en toda su historia no hay gráfica: el resumen va solo */
 .in-pc-cuerpo[data-nuevo] { grid-template-columns: minmax(0, 1fr); }
 .in-pc-grafica { min-width: 0; min-height: 220px; }
