@@ -127,7 +127,7 @@ export const inicio = {
     /** Cada sección sube 12 px hasta su lugar; 70 ms entre una y otra */
     entrada: { duracion: 0.7, distancia: 12, escalon: 0.07 },
     /** La línea se traza de izquierda a derecha; el relleno sale al final */
-    grafica: { trazo: 1.5, relleno: 0.5 },
+    grafica: { trazo: 1.4, relleno: 0.5 },
     /** Lo que tardan los montos en contar */
     cuenta: 1.1,
 }

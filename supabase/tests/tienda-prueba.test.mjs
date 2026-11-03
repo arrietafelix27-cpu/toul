@@ -9,7 +9,7 @@
 // decir cuál.
 //
 // Solo corre en la base de pruebas en memoria (PGlite), nunca en producción.
-import { deCada100, porcentajeTendencia, resumir } from '../../lib/reports/calculos.ts'
+import { deCada100, lineaAcumulada, porcentajeTendencia, resumir } from '../../lib/reports/calculos.ts'
 import { instanteDeDia, rangoAnterior, rangoPeriodo } from '../../lib/periodos.ts'
 
 const O = '11111111-1111-1111-1111-111111111111'
@@ -214,6 +214,36 @@ export default async function (db) {
   const repMesOct = resumir(await r(`SELECT toul_reporte($1,$2) r`, [mesOct.from, mesOct.to]))
   igual('"Este mes" a las 23:45 del 31: incluye la de las 23:30', 640000, repMesOct.vendiste)
 
+  console.log('\n— La línea del gráfico del Inicio')
+  const conLinea = await r(`SELECT toul_reporte($1,$2,'dia') r`, [octubre.from, octubre.to])
+  const ultimoDe = (serie) => Number(serie.at(-1)?.acumulado ?? 0)
+  si('Reportes no cambia: sin paso no trae la línea', rep.serie === undefined)
+  si('con paso trae lo mismo de siempre', JSON.stringify({ ...conLinea, serie: undefined, primeraVenta: undefined }) === JSON.stringify(rep))
+  igual('Octubre: la línea termina en Vendiste', 640000, ultimoDe(conLinea.serie))
+  const lineaOct = lineaAcumulada({
+    paso: 'dia', desde: octubre.from, hasta: octubre.to, serie: conLinea.serie,
+    anterior: { desde: antes.from, hasta: antes.to, serie: (await r(`SELECT toul_reporte($1,$2,'dia') r`, [antes.from, antes.to])).serie },
+  })
+  igual('el último punto de la gráfica es Vendiste', 640000, lineaOct.actual.at(-1).valor)
+  igual('el último punto de septiembre es lo vendido en septiembre', 100000, lineaOct.anterior.at(-1).valor)
+  si('la línea arranca el 4 de octubre, el día antes de la primera venta', lineaOct.actual[0].x === 3 && lineaOct.actual[0].valor === 0)
+  si('septiembre va al lado, día 4 contra día 4', lineaOct.anterior[0].x === 3)
+  const dia = (serie, fecha) => serie.find(t => new Date(t.t).getTime() === instanteDeDia(fecha).getTime())
+  si('la venta de las 11:30 p. m. del 31 cae el 31 de octubre', dia(conLinea.serie, '2026-10-31')?.ventas === 1 && Number(dia(conLinea.serie, '2026-10-31')?.acumulado) === 640000)
+  si('la anulada del 25 no está en la línea', dia(conLinea.serie, '2026-10-25') === undefined)
+  const lineaNov = (await r(`SELECT toul_reporte($1,$2,'dia') r`, [instanteDeDia('2026-11-01').toISOString(), instanteDeDia('2026-11-30', true).toISOString()])).serie
+  si('noviembre arranca con la de las 00:15 del 1, no con la del 31', lineaNov.length === 1 && dia(lineaNov, '2026-11-01')?.ventas === 1 && Number(lineaNov[0].acumulado) === 100000)
+  const horasDel31 = (await r(`SELECT toul_reporte($1,$2,'hora') r`, [instanteDeDia('2026-10-31').toISOString(), instanteDeDia('2026-10-31', true).toISOString()])).serie
+  si('por hora, la del 31 cae a las 11 p. m. de Colombia', horasDel31.length === 1 && new Date(horasDel31[0].t).toISOString() === new Date(co('2026-10-31 23:00')).toISOString(), horasDel31[0]?.t)
+  si('la primera venta de la tienda es la del 20 de septiembre', new Date(conLinea.primeraVenta).getTime() === new Date(co('2026-09-20 10:00')).getTime(), conLinea.primeraVenta)
+  let pasoMalo = null
+  try { await r(`SELECT toul_reporte(now() - interval '1 day', now(), 'mes') r`) } catch (e) { pasoMalo = e.message }
+  si('solo va por hora o por día', /por hora o por día/.test(pasoMalo ?? ''), pasoMalo)
+  await db.exec(`SET TIME ZONE 'Asia/Tokyo'`)
+  const lineaTokio = await r(`SELECT toul_reporte($1,$2,'dia') r`, [octubre.from, octubre.to])
+  await db.exec(`SET TIME ZONE 'UTC'`)
+  si('con la base en hora de Tokio, la línea cae en los mismos días', JSON.stringify(lineaTokio.serie.map(t => [new Date(t.t).getTime(), t.acumulado])) === JSON.stringify(conLinea.serie.map(t => [new Date(t.t).getTime(), t.acumulado])))
+
   console.log('\n— Mes a mes')
   const meses = await r(`SELECT toul_reporte_meses(6, '2026-11-01') r`)
   const mes = (iso) => meses.find(m => m.mes === iso) ?? {}
@@ -365,6 +395,8 @@ export default async function (db) {
   igual('De contado + A crédito = Ventas antes de devoluciones', 100000, conDevolucion.contado + conDevolucion.credito)
   igual('la devolución sale como plata', 100000, conDevolucion.devuelto)
   igual('Ganaste', 0, conDevolucion.ganaste)
+  const lineaDevolucion = (await r(`SELECT toul_reporte($1,$2,'dia') r`, [noviembre.from, noviembre.to])).serie
+  si('la línea sube el 1 y baja el 2 con la devolución', JSON.stringify(lineaDevolucion.map(t => Number(t.acumulado))) === JSON.stringify([100000, 0]))
   const mesesConDevolucion = await r(`SELECT toul_reporte_meses(6, '2026-11-01') r`)
   igual('Mes a mes de noviembre: ventas', 0, mesesConDevolucion.find(m => m.mes === '2026-11-01')?.ventas)
   igual('Mes a mes de noviembre: ganancia', 0, mesesConDevolucion.find(m => m.mes === '2026-11-01')?.ganancia)

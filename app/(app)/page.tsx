@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getDateRange } from '@/lib/utils'
 import { Settings, AlertTriangle, RefreshCw } from 'lucide-react'
@@ -7,18 +7,18 @@ import Link from 'next/link'
 import useSWR from 'swr'
 
 // Components
-import HeroChart from '@/components/dashboard/HeroChart'
+import HeroChart, { type Comparacion } from '@/components/dashboard/HeroChart'
 import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { PrimerosPasos } from '@/components/dashboard/PrimerosPasos'
 import { SelectorPeriodo, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
-import { Vendiste, GananciaGastos, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
+import { Vendiste, GananciaGastos, LlevasEnHoy, type LlevasHoy, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
 
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
 import { ENTRADA_INICIO_CSS, entrada, useEntradaInicio } from '@/lib/motion'
-import { contraQue, diasEntre, rangoAnterior } from '@/lib/periodos'
-import { porcentajeTendencia, resumir } from '@/lib/reports/calculos'
+import { contraQue, diasEntre, rangoAnterior, textoRango } from '@/lib/periodos'
+import { lineaAcumulada, porcentajeTendencia, resumir, type LineaInicio, type TramoLinea } from '@/lib/reports/calculos'
 import type { ReporteSQL } from '@/lib/reports/types'
 import type { AIInsight } from '@/lib/types'
 
@@ -26,6 +26,24 @@ type Period = Periodo
 
 /** Cada cuánto se recalculan las ideas de TOUL AI */
 const IDEAS_VIGENCIA = 6 * 60 * 60 * 1000
+
+/** El periodo que se está viendo, en un texto: los datos que llegan dicen de qué periodo son */
+const claveDe = (period: Period, rango: { from: string; to: string } | null) => `${period}|${rango?.from ?? ''}|${rango?.to ?? ''}`
+
+/** La línea del gráfico viene en la misma respuesta de toul_reporte */
+type ReporteConLinea = ReporteSQL & { serie?: TramoLinea[]; primeraVenta?: string | null }
+
+/** Lo de arriba del Inicio que depende del periodo, además de los montos */
+interface Cabecera {
+    linea: LineaInicio | null
+    /** La línea termina ahora (no en unas fechas que ya pasaron) */
+    enVivo: boolean
+    comparacion: Comparacion | null
+    /** Nunca ha vendido: sin gráfica */
+    nuevo: boolean
+    /** Hoy sin ventas: cómo vas en la semana y en el mes */
+    llevas: LlevasHoy | null
+}
 
 export default function DashboardPage() {
     const supabase = createClient()
@@ -41,15 +59,20 @@ export default function DashboardPage() {
         storeId ? ['dashboard-v3', storeId, period, customRange] : null,
         async () => {
             const range = period === 'custom' && customRange ? customRange : getDateRange(period)
-            // El mismo tramo del periodo anterior, para la tendencia
-            const prevRange = rangoAnterior(period, range)
+            // El mismo tramo del periodo anterior, para la tendencia y la
+            // línea de atrás. En Hoy no se compara
+            const compara = period !== 'today'
+            const prevRange = compara ? rangoAnterior(period, range) : { from: null, to: null }
+            // La línea del gráfico: por hora en Hoy, por día en los demás
+            const paso = period === 'today' ? 'hora' : 'dia'
 
             const [reporte, reporteAntes, sales, returns, customersDebt, payables, pulse] = await Promise.all([
-                // Vendiste, ganancia en ventas y gastos salen de la misma
-                // función de Reportes: los dos no pueden dar números distintos
-                supabase.rpc('toul_reporte', { p_desde: range.from, p_hasta: range.to }),
+                // Vendiste, ganancia en ventas, gastos y la línea del gráfico
+                // salen de la misma función de Reportes: no pueden dar
+                // números distintos
+                supabase.rpc('toul_reporte', { p_desde: range.from, p_hasta: range.to, p_paso: paso }),
                 prevRange.from && prevRange.to
-                    ? supabase.rpc('toul_reporte', { p_desde: prevRange.from, p_hasta: prevRange.to })
+                    ? supabase.rpc('toul_reporte', { p_desde: prevRange.from, p_hasta: prevRange.to, p_paso: paso })
                     : Promise.resolve({ data: null, error: null }),
                 // Las ventas y devoluciones, solo para las listas de productos
                 supabase.from('sales').select('total, subtotal, created_at, sale_items(unit_price, unit_cost, quantity, product_id, products(name, image_url))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
@@ -64,8 +87,54 @@ export default function DashboardPage() {
             if (reporte.error) throw reporte.error
 
             // 1. LO VENDIDO, LA GANANCIA Y LOS GASTOS
-            const actual = resumir(reporte.data as ReporteSQL)
-            const anterior = reporteAntes.data ? resumir(reporteAntes.data as ReporteSQL) : null
+            const datos = reporte.data as ReporteConLinea
+            const datosAntes = reporteAntes.data as ReporteConLinea | null
+            const actual = resumir(datos)
+            const anterior = datosAntes ? resumir(datosAntes) : null
+
+            // La línea termina ahora, o al final de las fechas si ya pasaron
+            const ahora = Date.now()
+            const enVivo = period !== 'custom' || !range.to || Date.parse(range.to) > ahora
+            const hastaLinea = period === 'custom' && enVivo ? new Date(ahora).toISOString() : range.to
+            const linea = range.from && hastaLinea ? lineaAcumulada({
+                paso,
+                desde: range.from,
+                hasta: hastaLinea,
+                serie: datos.serie ?? [],
+                anterior: datosAntes && prevRange.from && prevRange.to
+                    ? { desde: prevRange.from, hasta: prevRange.to, serie: datosAntes.serie ?? [] }
+                    : null,
+            }) : null
+            const comparacion: Comparacion | null = !compara ? null
+                : period === 'week' ? { actual: 'Esta semana', anterior: 'Semana pasada', globo: 'Semana pasada' }
+                    : period === 'month' ? { actual: 'Este mes', anterior: 'Mes pasado', globo: 'Mes pasado' }
+                        : period === 'year' ? { actual: 'Este año', anterior: 'Año pasado', globo: 'Año pasado' }
+                            : range.from && range.to && prevRange.from && prevRange.to
+                                ? {
+                                    actual: textoRango(new Date(range.from), new Date(range.to)),
+                                    anterior: textoRango(new Date(prevRange.from), new Date(prevRange.to)),
+                                    globo: 'Periodo anterior',
+                                }
+                                : null
+            const nuevo = !datos.primeraVenta
+
+            // Hoy sin ventas: en lugar de la ganancia y los gastos, cómo vas
+            // en la semana y en el mes. Si hoy ya hubo gastos, el mes no se pide
+            let llevas: LlevasHoy | null = null
+            if (period === 'today' && actual.cantidad === 0 && !nuevo) {
+                const semana = getDateRange('week')
+                const mes = getDateRange('month')
+                const [deLaSemana, delMes] = await Promise.all([
+                    supabase.rpc('toul_reporte', { p_desde: semana.from, p_hasta: semana.to }),
+                    actual.gastos > 0 ? Promise.resolve(null) : supabase.rpc('toul_reporte', { p_desde: mes.from, p_hasta: mes.to }),
+                ])
+                if (deLaSemana.error) throw deLaSemana.error
+                if (delMes?.error) throw delMes.error
+                llevas = {
+                    semana: resumir(deLaSemana.data as ReporteSQL).vendiste,
+                    mes: delMes ? resumir(delMes.data as ReporteSQL).vendiste : null,
+                }
+            }
 
             // 2. LAS LISTAS DE PRODUCTOS
             const productUnitsMap: Record<string, { name: string; image_url: string | null; units: number; profit: number; revenue: number; last_sale: string }> = {}
@@ -169,7 +238,10 @@ export default function DashboardPage() {
                 days: p.desde ? Math.max(0, diasEntre(p.desde, new Date())) : null,
             }))
 
+            const cabecera: Cabecera = { linea, enVivo, comparacion, nuevo, llevas }
             return {
+                clave: claveDe(period, customRange),
+                cabecera,
                 metrics: {
                     revenue: actual.vendiste,
                     expenses: actual.gastos,
@@ -243,7 +315,7 @@ export default function DashboardPage() {
     const dibujar = animar || periodoTocado
     const conteo = useMemo(() => ({
         cuenta: animar || periodoTocado,
-        clave: `${period}|${customRange?.from ?? ''}|${customRange?.to ?? ''}`,
+        clave: claveDe(period, customRange),
     }), [animar, periodoTocado, period, customRange])
 
     const metrics: MetricasInicio = {
@@ -257,7 +329,8 @@ export default function DashboardPage() {
     const tendencia: Tendencia = useMemo(() => {
         const rango = period === 'custom' && customRange ? customRange : getDateRange(period)
         return {
-            porcentaje: porcentajeTendencia({
+            // En Hoy no se compara contra ayer
+            porcentaje: period === 'today' ? null : porcentajeTendencia({
                 ahora: dashboardData?.metrics.revenue ?? 0,
                 antes: dashboardData?.metrics.prevRevenue ?? 0,
                 ventasAntes: dashboardData?.metrics.prevSalesCount ?? 0,
@@ -271,6 +344,21 @@ export default function DashboardPage() {
         : `/reportes?periodo=${period}`
     const products = dashboardData?.operational.products || { topUnits: [], topProfit: [], lowStock: [], slowMoving: [] }
     const pending = dashboardData?.pending || { customerDebts: [], providerDebts: [] }
+
+    // La gráfica solo muestra la línea del periodo que se está viendo:
+    // mientras llega uno nuevo queda vacía, y al llegar se dibuja
+    const cabecera = dashboardData?.clave === conteo.clave ? dashboardData.cabecera : null
+    // Nunca ha vendido: no hay gráfica ni ganancia que mostrar, solo el $0
+    const nuevo = !!dashboardData?.cabecera.nuevo
+    const grafica = (variante: 'movil' | 'pc') => nuevo ? null : (
+        <HeroChart linea={cabecera?.linea ?? null} clave={conteo.clave} comparacion={cabecera?.comparacion ?? null}
+            enVivo={cabecera?.enVivo ?? true} variante={variante} alto={variante === 'movil' ? 150 : '100%'} dibujar={dibujar} />
+    )
+    // Debajo de lo vendido: la ganancia y los gastos; en Hoy sin ventas, cómo vas en la semana
+    const abajo: ReactNode = nuevo ? null
+        : period === 'today' && !loading && metrics.salesCount === 0 && cabecera?.llevas
+            ? <LlevasEnHoy llevas={cabecera.llevas} gastosHoy={metrics.expenses} conteo={conteo} />
+            : <GananciaGastos metrics={metrics} loading={loading} conteo={conteo} />
 
     return (
         <>
@@ -314,7 +402,6 @@ export default function DashboardPage() {
                 <MobileDashboard
                     storeName={storeName}
                     saludo={greeting}
-                    storeId={storeId}
                     period={period}
                     setPeriod={cambiarPeriodo}
                     rango={customRange}
@@ -327,10 +414,12 @@ export default function DashboardPage() {
                     primeraCarga={primeraCarga}
                     insightsLoading={insightsLoading || false}
                     animar={animar}
-                    dibujar={dibujar}
                     conteo={conteo}
                     tendencia={tendencia}
                     hrefReporte={hrefReporte}
+                    nuevo={nuevo}
+                    grafica={grafica('movil')}
+                    abajo={abajo}
                 />
             </div>
 
@@ -351,20 +440,22 @@ export default function DashboardPage() {
                                 <Settings size={20} strokeWidth={1.9} />
                             </Link>
                         </div>
-                        <div className="in-pc-cuerpo">
-                            <div {...entrada(1, animar, 'in-pc-grafica')}>
-                                <HeroChart storeId={storeId} period={period} rango={customRange} alto="100%" dibujar={dibujar} />
-                            </div>
+                        {/* Las dos columnas empiezan y terminan a la misma altura:
+                            arriba lo vendido, abajo la ganancia y los gastos */}
+                        <div className="in-pc-cuerpo" data-nuevo={nuevo || undefined}>
+                            {!nuevo && (
+                                <div {...entrada(1, animar, 'in-pc-grafica')}>
+                                    {grafica('pc')}
+                                </div>
+                            )}
                             <div className="in-pc-resumen">
                                 <div {...entrada(2, animar)}>
                                     <Vendiste metrics={metrics} loading={loading} period={period} variante="pc" conteo={conteo}
-                                        tendencia={tendencia} href={hrefReporte}
+                                        tendencia={tendencia} href={hrefReporte} nuevo={nuevo}
                                         selector={<SelectorPeriodo variante="pc" forma="pildora" period={period} setPeriod={cambiarPeriodo}
                                             rango={customRange} setRango={cambiarRango} />} />
                                 </div>
-                                <div {...entrada(3, animar, undefined, { marginTop: 20 })}>
-                                    <GananciaGastos metrics={metrics} loading={loading} conteo={conteo} />
-                                </div>
+                                {abajo && <div {...entrada(3, animar)}>{abajo}</div>}
                             </div>
                         </div>
                     </header>
@@ -393,15 +484,22 @@ export default function DashboardPage() {
    arriba a la izquierda, la gráfica que llega hasta el borde derecho y
    la pantalla que se llena de arriba abajo */
 const PC_CSS = ENTRADA_INICIO_CSS + `
-/* Las medidas que comparten el encabezado y la fila de abajo. La fila
-   mide lo que miden tus productos (título, píldora, foto y nombre); la
-   gráfica toma todo lo que sobra, para que la pantalla quede llena sin
-   franja vacía y sin desplazamiento de sobra */
+/* Las medidas que comparten el encabezado y la fila de abajo. El
+   gráfico mide entre 220 y 320 px según la pantalla, y el resumen de
+   la derecha se reparte en ese mismo alto. La fila de abajo mide lo que
+   miden tus productos (título, píldora, foto y nombre): las fotos toman
+   lo que sobra, para que la pantalla quede llena sin franja vacía. En
+   pantallas muy altas las fotos no pasan de 420 px y el resto lo toma
+   el gráfico */
 .in-pc {
     position: relative;
-    --in-pc-foto: clamp(150px, 24vh, 260px);
-    --in-pc-fila: calc(134px + var(--in-pc-foto));
+    --in-pc-alto: clamp(220px, 30vh, 320px);
     --in-pc-hueco: clamp(24px, 3.5vh, 40px);
+    /* Lo que no cambia: los márgenes, el saludo, el hueco y lo que no es foto abajo */
+    --in-pc-fijo: calc(2rem + 24px + 16px + 40px + 6px + var(--in-pc-hueco) + 134px);
+    --in-pc-cabeza: max(var(--in-pc-alto), calc(100dvh - var(--in-pc-fijo) - 420px));
+    --in-pc-foto: max(150px, calc(100dvh - var(--in-pc-fijo) - var(--in-pc-cabeza)));
+    --in-pc-fila: calc(134px + var(--in-pc-foto));
 }
 /* Sin z-index ni isolation, como en el celular: los menús y las hojas
    tienen que poder quedar por encima de todo. Los 2rem son el margen de
@@ -418,13 +516,13 @@ const PC_CSS = ENTRADA_INICIO_CSS + `
 .in-pc-ajustes:active { transform: scale(0.94); }
 
 /* La gráfica ocupa cerca del 60% desde el borde izquierdo; el resumen,
-   el resto. Abajo quedan alineados */
-.in-pc-cuerpo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); column-gap: clamp(32px, 4vw, 64px);
-    align-items: end; margin-top: 6px; }
-/* Alto: la ventana menos todo lo demás (márgenes, saludo y la fila de abajo) */
-.in-pc-grafica { min-width: 0;
-    height: clamp(240px, calc(100dvh - 2rem - 24px - 16px - 40px - 6px - var(--in-pc-hueco) - var(--in-pc-fila)), 560px); }
-.in-pc-resumen { min-width: 0; }
+   el resto. Las dos miden lo mismo: si el resumen no cabe, crecen juntas */
+.in-pc-cuerpo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+    grid-template-rows: minmax(var(--in-pc-cabeza), auto); column-gap: clamp(32px, 4vw, 64px); margin-top: 6px; }
+/* Sin ventas en toda su historia no hay gráfica: el resumen va solo */
+.in-pc-cuerpo[data-nuevo] { grid-template-columns: minmax(0, 1fr); }
+.in-pc-grafica { min-width: 0; min-height: 220px; }
+.in-pc-resumen { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 20px; }
 .in-pc-abajo { flex: none; margin-top: var(--in-pc-hueco); }
 @media (hover: hover) and (pointer: fine) {
     .in-pc-ajustes:hover { color: var(--toul-text); background: var(--toul-surface); }

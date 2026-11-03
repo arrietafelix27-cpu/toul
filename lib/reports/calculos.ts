@@ -215,3 +215,137 @@ export function textoPorcentaje(parte: number, total: number): string {
     if (exacto > 0 && exacto < 1) return 'menos de 1%'
     return `${Math.round(exacto)}%`
 }
+
+/* ─── La línea del gráfico del Inicio ─────────────────────────────
+   Lo vendido acumulado: sube con cada venta y baja con cada devolución,
+   así termina exacto en "Vendiste". Sale de toul_reporte(desde, hasta,
+   paso), que entrega lo acumulado al terminar cada hora o cada día de
+   Colombia en que pasó algo.
+
+   · Hoy va por hora y el eje es el reloj: un punto en cada hora en
+     punto y el último, ahora. Arranca una hora antes de la primera venta.
+   · Los demás periodos van por día (por semana si pasan de 120 días):
+     cada punto es lo que llevabas al terminar ese día, y el último,
+     hasta ahora o hasta el final de las fechas. Arranca el día antes de
+     la primera venta.
+   · La línea del periodo anterior va por posición: el día 1 contra el
+     día 1. Termina en lo vendido en el periodo anterior equivalente.
+   ─────────────────────────────────────────────────────────────── */
+
+/** Una hora o un día de toul_reporte(..., paso).serie */
+export interface TramoLinea {
+    /** Cuándo empieza esa hora o ese día */
+    t: string
+    /** Lo vendido menos lo devuelto, desde el inicio del periodo hasta el final de este tramo */
+    acumulado: number
+    ventas?: number
+}
+
+export type PasoLinea = 'hora' | 'dia' | 'semana'
+
+export interface PuntoLinea {
+    /** Posición en el eje: horas desde la medianoche (Hoy) o número del día o de la semana del periodo */
+    x: number
+    /** Lo que llevabas en ese punto */
+    valor: number
+    /** El momento que cuenta: la hora en punto (Hoy), el final del día o de la semana, o el último momento */
+    t: number
+    /** Cae antes del periodo: se dibuja, pero no se lee */
+    fuera: boolean
+}
+
+export interface LineaInicio {
+    paso: PasoLinea
+    actual: PuntoLinea[]
+    /** null en Hoy: no se compara */
+    anterior: PuntoLinea[] | null
+    /** Dónde empieza y dónde termina el eje */
+    desde: number
+    hasta: number
+    /** El periodo no tuvo ventas ni devoluciones: la línea es la base en cero */
+    vacia: boolean
+}
+
+const HORA = 3_600_000
+
+type Tramo = { t: number; acumulado: number }
+const ordenar = (serie: TramoLinea[]): Tramo[] =>
+    serie.map(s => ({ t: Date.parse(s.t), acumulado: Math.round(Number(s.acumulado) || 0) })).sort((a, b) => a.t - b.t)
+/** Lo que llevabas justo antes de `t`: el acumulado del último tramo que ya terminó */
+const llevabasAntesDe = (tramos: Tramo[], t: number) => {
+    let valor = 0
+    for (const tramo of tramos) {
+        if (tramo.t >= t) break
+        valor = tramo.acumulado
+    }
+    return valor
+}
+/** Todo el periodo: el acumulado del último tramo */
+const total = (tramos: Tramo[]) => tramos.length ? tramos[tramos.length - 1].acumulado : 0
+
+export function lineaAcumulada({ paso, desde, hasta, serie, anterior = null }: {
+    paso: 'hora' | 'dia'
+    /** El inicio del periodo: medianoche en Colombia */
+    desde: string
+    /** Ahora, o el final de las fechas si ya pasaron */
+    hasta: string
+    serie: TramoLinea[]
+    /** El periodo anterior equivalente (no aplica en Hoy) */
+    anterior?: { desde: string; hasta: string; serie: TramoLinea[] } | null
+}): LineaInicio {
+    const d0 = Date.parse(desde)
+    const d1 = Date.parse(hasta)
+    const tramos = ordenar(serie)
+
+    if (paso === 'hora') {
+        // Una hora antes de la primera venta, sin salirse del día
+        const origen = tramos.length ? Math.max(d0, tramos[0].t - HORA) : d0
+        const actual: PuntoLinea[] = []
+        for (let t = origen; t < d1; t += HORA) {
+            actual.push({ x: (t - d0) / HORA, valor: llevabasAntesDe(tramos, t), t, fuera: false })
+        }
+        actual.push({ x: (d1 - d0) / HORA, valor: total(tramos), t: d1, fuera: false })
+        // A la medianoche en punto todavía no hay una hora que mostrar
+        if (actual.length === 1) actual.unshift({ x: actual[0].x - 1, valor: 0, t: d1 - HORA, fuera: true })
+        return { paso: 'hora', actual, anterior: null, desde: actual[0].x, hasta: actual[actual.length - 1].x, vacia: tramos.length === 0 }
+    }
+
+    const antes = anterior ? { d0: Date.parse(anterior.desde), d1: Date.parse(anterior.hasta), tramos: ordenar(anterior.serie) } : null
+    const diaDe = (t: number, base: number) => Math.floor((t - base) / DIA)
+    const ultimoDia = diaDe(d1, d0)
+    // Arranca el día antes de la primera venta. Sin ventas, donde arranca
+    // la línea anterior, que queda de referencia
+    const primerDia = tramos.length ? diaDe(tramos[0].t, d0)
+        : antes?.tramos.length ? diaDe(antes.tramos[0].t, antes.d0) : null
+    const porSemana = ultimoDia - (primerDia === null ? 0 : primerDia - 1) > 120
+    const dias = porSemana ? 7 : 1
+
+    const ultimo = Math.floor(ultimoDia / dias)
+    let origen = primerDia === null ? 0 : Math.floor(primerDia / dias) - 1
+    if (origen >= ultimo) origen = ultimo - 1
+
+    /** Los puntos de una línea: el acumulado al terminar cada día (o semana) */
+    const puntos = (base: number, fin: number, lista: Tramo[]): PuntoLinea[] => {
+        const hastaI = Math.floor(diaDe(fin, base) / dias)
+        const res: PuntoLinea[] = []
+        for (let i = origen; i <= hastaI; i++) {
+            const termina = base + (i + 1) * dias * DIA
+            res.push(i === hastaI
+                ? { x: i, valor: total(lista), t: fin, fuera: i < 0 }
+                : { x: i, valor: llevabasAntesDe(lista, termina), t: termina - 1, fuera: i < 0 })
+        }
+        return res
+    }
+
+    const actual = puntos(d0, d1, tramos)
+    const lineaAntes = antes ? puntos(antes.d0, antes.d1, antes.tramos) : null
+    const fin = Math.max(ultimo, lineaAntes?.length ? lineaAntes[lineaAntes.length - 1].x : ultimo)
+    return {
+        paso: porSemana ? 'semana' : 'dia',
+        actual,
+        anterior: lineaAntes && lineaAntes.length ? lineaAntes : null,
+        desde: origen,
+        hasta: fin,
+        vacia: tramos.length === 0,
+    }
+}

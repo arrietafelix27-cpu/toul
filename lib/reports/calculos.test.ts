@@ -1,10 +1,10 @@
 // npm run test:calculos
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { conOtros, deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir, textoPorcentaje } from './calculos.ts'
+import { conOtros, deCada100, formatoCorto, lineaAcumulada, porcentajeTendencia, proyeccion, resumir, textoPorcentaje } from './calculos.ts'
 
 /** Una fecha y hora de Colombia (UTC−5), sin depender de la zona del equipo que corre la prueba */
-const co = (ano: number, mes: number, dia: number, hora = 0, minuto = 0) => new Date(Date.UTC(ano, mes, dia, hora, minuto) + 5 * 3_600_000)
+const co = (ano: number, mes: number, dia: number, hora = 0, minuto = 0, segundo = 0) => new Date(Date.UTC(ano, mes, dia, hora, minuto, segundo) + 5 * 3_600_000)
 
 test('De cada $100 suma exactamente 100', () => {
     const casos = [
@@ -128,4 +128,125 @@ test('Los porcentajes de menos de 1% se dicen así, no 0% ni 1%', () => {
     assert.equal(textoPorcentaje(10_000, 1_000_000), '1%')
     assert.equal(textoPorcentaje(370_000, 520_000), '71%')
     assert.equal(textoPorcentaje(0, 520_000), '0%')
+})
+
+// ─── La línea del gráfico del Inicio ─────────────────────────────
+/** Como lo entrega la base: el momento en que empieza esa hora o ese día */
+const tramo = (d: Date, acumulado: number) => ({ t: d.toISOString().replace('.000Z', '+00:00'), acumulado })
+const iso = (d: Date) => d.toISOString()
+
+test('La línea termina en Vendiste y la anterior en lo vendido el periodo anterior', () => {
+    // "Este mes" el 3 de noviembre a las 2:37 p. m., contra el 1 – 3 de octubre a la misma hora
+    const linea = lineaAcumulada({
+        paso: 'dia', desde: iso(co(2026, 10, 1)), hasta: iso(co(2026, 10, 3, 14, 37)),
+        serie: [tramo(co(2026, 10, 2), 150_000), tramo(co(2026, 10, 3), 230_000)],
+        anterior: {
+            desde: iso(co(2026, 9, 1)), hasta: iso(co(2026, 9, 3, 14, 37)),
+            serie: [tramo(co(2026, 9, 1), 50_000), tramo(co(2026, 9, 3), 90_000)],
+        },
+    })
+    assert.equal(linea.paso, 'dia')
+    assert.deepEqual(linea.actual.map(p => p.valor), [0, 150_000, 230_000])
+    assert.equal(linea.actual.at(-1)?.valor, 230_000) // = Vendiste
+    // Día 1 contra día 1: 1 oct, 2 oct y 3 oct hasta las 2:37 p. m.
+    assert.deepEqual(linea.anterior?.map(p => [p.x, p.valor]), [[0, 50_000], [1, 50_000], [2, 90_000]])
+    assert.equal(linea.anterior?.at(-1)?.valor, 90_000) // = lo vendido del 1 al 3 de octubre
+    assert.equal(linea.actual.at(-1)?.t, co(2026, 10, 3, 14, 37).getTime())
+})
+
+test('Una devolución hace bajar la línea ese día', () => {
+    const linea = lineaAcumulada({
+        paso: 'dia', desde: iso(co(2026, 10, 1)), hasta: iso(co(2026, 10, 30, 23, 59, 59)),
+        serie: [tramo(co(2026, 10, 1), 100_000), tramo(co(2026, 10, 2), 0)],
+    })
+    assert.deepEqual(linea.actual.slice(0, 3).map(p => p.valor), [0, 100_000, 0])
+    assert.equal(linea.actual.at(-1)?.valor, 0)
+})
+
+test('Inicio inteligente: una hora antes de la primera venta en Hoy', () => {
+    // Primera venta a las 9:15 a. m.; son las 2:37 p. m.
+    const linea = lineaAcumulada({
+        paso: 'hora', desde: iso(co(2026, 10, 3)), hasta: iso(co(2026, 10, 3, 14, 37)),
+        serie: [tramo(co(2026, 10, 3, 9), 40_000), tramo(co(2026, 10, 3, 11), 70_000)],
+    })
+    assert.equal(linea.actual[0].t, co(2026, 10, 3, 8).getTime())
+    assert.deepEqual(linea.actual.map(p => p.valor), [0, 0, 40_000, 40_000, 70_000, 70_000, 70_000, 70_000])
+    assert.equal(linea.actual.at(-1)?.t, co(2026, 10, 3, 14, 37).getTime()) // termina ahora
+    assert.equal(linea.anterior, null) // Hoy no se compara
+    // La primera venta a las 12:20 a. m.: no arranca en el día de ayer
+    const temprano = lineaAcumulada({
+        paso: 'hora', desde: iso(co(2026, 10, 3)), hasta: iso(co(2026, 10, 3, 1, 5)),
+        serie: [tramo(co(2026, 10, 3, 0), 20_000)],
+    })
+    assert.equal(temprano.actual[0].t, co(2026, 10, 3).getTime())
+    assert.equal(temprano.actual.at(-1)?.valor, 20_000)
+})
+
+test('Inicio inteligente: un día antes de la primera venta en los demás periodos', () => {
+    // Primera venta del mes el 10: la línea arranca el 9 en cero
+    const linea = lineaAcumulada({
+        paso: 'dia', desde: iso(co(2026, 9, 1)), hasta: iso(co(2026, 9, 31, 23, 59, 59)),
+        serie: [tramo(co(2026, 9, 10), 80_000)],
+    })
+    assert.deepEqual([linea.actual[0].x, linea.actual[0].valor, linea.actual[0].fuera], [8, 0, false])
+    assert.equal(linea.actual.at(-1)?.x, 30) // termina el 31: el periodo ya pasó
+    // Primera venta el día 1: arranca el día antes, que no se lee
+    const dia1 = lineaAcumulada({
+        paso: 'dia', desde: iso(co(2026, 9, 1)), hasta: iso(co(2026, 9, 5, 12)),
+        serie: [tramo(co(2026, 9, 1), 80_000)],
+    })
+    assert.deepEqual([dia1.actual[0].x, dia1.actual[0].valor, dia1.actual[0].fuera], [-1, 0, true])
+})
+
+test('La venta de las 11:30 p. m. del último día cae en ese día', () => {
+    // La base la agrupa en el 31 de octubre de Colombia (en UTC ya es 1 de noviembre)
+    const delMes = lineaAcumulada({
+        paso: 'dia', desde: iso(co(2026, 9, 1)), hasta: iso(co(2026, 9, 31, 23, 45)),
+        serie: [tramo(co(2026, 9, 5), 560_000), tramo(co(2026, 9, 31), 640_000)],
+    })
+    const ultimo = delMes.actual.at(-1)!
+    assert.deepEqual([ultimo.x, ultimo.valor], [30, 640_000])
+    assert.equal(delMes.actual.at(-2)?.valor, 560_000) // el 30 todavía no estaba
+    // En Hoy (31 oct), a las 11:45 p. m.: entra en la hora de las 11 p. m.
+    const hoy = lineaAcumulada({
+        paso: 'hora', desde: iso(co(2026, 9, 31)), hasta: iso(co(2026, 9, 31, 23, 45)),
+        serie: [tramo(co(2026, 9, 31, 23), 80_000)],
+    })
+    assert.equal(hoy.actual.at(-2)?.t, co(2026, 9, 31, 23).getTime())
+    assert.equal(hoy.actual.at(-2)?.valor, 0)
+    assert.equal(hoy.actual.at(-1)?.valor, 80_000)
+})
+
+test('Más de 120 días va por semana, sin perder un peso', () => {
+    const linea = lineaAcumulada({
+        paso: 'dia', desde: iso(co(2026, 0, 1)), hasta: iso(co(2026, 5, 30, 23, 59, 59)),
+        serie: [tramo(co(2026, 0, 5), 10_000), tramo(co(2026, 2, 3), 55_000), tramo(co(2026, 5, 30), 99_000)],
+    })
+    assert.equal(linea.paso, 'semana')
+    assert.equal(linea.actual.at(-1)?.valor, 99_000)
+    assert.deepEqual([linea.actual[0].x, linea.actual[0].valor], [-1, 0])
+    // El 5 de enero cae en la primera semana (1 – 7 ene)
+    assert.equal(linea.actual[1].valor, 10_000)
+    // Un mes elegido sigue por día
+    const mes = lineaAcumulada({
+        paso: 'dia', desde: iso(co(2026, 9, 1)), hasta: iso(co(2026, 9, 31, 23, 59, 59)),
+        serie: [tramo(co(2026, 9, 2), 1)],
+    })
+    assert.equal(mes.paso, 'dia')
+})
+
+test('Sin ventas: la base en cero y la línea anterior de referencia', () => {
+    const linea = lineaAcumulada({
+        paso: 'dia', desde: iso(co(2026, 10, 2)), hasta: iso(co(2026, 10, 4, 18)),
+        serie: [],
+        anterior: { desde: iso(co(2026, 9, 26)), hasta: iso(co(2026, 9, 28, 18)), serie: [tramo(co(2026, 9, 27), 45_000)] },
+    })
+    assert.equal(linea.vacia, true)
+    assert.ok(linea.actual.every(p => p.valor === 0))
+    assert.equal(linea.anterior?.at(-1)?.valor, 45_000)
+    assert.equal(linea.actual[0].x, 0) // arranca el día antes de la primera venta de la semana pasada
+    // Sin nada en ninguno de los dos: la base desde el inicio
+    const nada = lineaAcumulada({ paso: 'hora', desde: iso(co(2026, 10, 3)), hasta: iso(co(2026, 10, 3, 9, 30)), serie: [] })
+    assert.equal(nada.actual[0].t, co(2026, 10, 3).getTime())
+    assert.ok(nada.actual.every(p => p.valor === 0))
 })

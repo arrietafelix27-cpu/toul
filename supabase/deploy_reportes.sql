@@ -4,7 +4,8 @@
 -- Cuatro cosas:
 --
 --   1. toul_reporte(desde, hasta): todo lo que muestra la pantalla de
---      Reportes para un periodo, calculado en un solo lugar.
+--      Reportes para un periodo, calculado en un solo lugar. Con un paso
+--      ('hora' o 'dia') trae también la línea del gráfico del Inicio.
 --   2. toul_reporte_meses(): ventas y ganancia de los últimos 6 meses,
 --      para "Mes a mes".
 --   3. toul_registrar_abono(...): el abono de un cliente ahora dice por
@@ -53,7 +54,14 @@ AS $$
        AND s.created_at >= p_desde AND s.created_at <= p_hasta
 $$;
 
-CREATE OR REPLACE FUNCTION public.toul_reporte(p_desde timestamptz, p_hasta timestamptz)
+-- Con `p_paso` ('hora' o 'dia') también devuelve la línea del Inicio:
+-- lo vendido acumulado al terminar cada hora o cada día de Colombia,
+-- con la misma resta de devoluciones que "Vendiste". El último punto es
+-- Vendiste, por construcción. Antes no tenía `p_paso`: se borra la
+-- versión vieja para que no haya dos funciones con el mismo nombre
+DROP FUNCTION IF EXISTS public.toul_reporte(timestamptz, timestamptz);
+
+CREATE OR REPLACE FUNCTION public.toul_reporte(p_desde timestamptz, p_hasta timestamptz, p_paso text DEFAULT NULL)
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
@@ -72,12 +80,16 @@ DECLARE
     v_mercancia  numeric;
     v_metodos    jsonb;
     v_productos  jsonb;
+    v_linea      jsonb := '{}'::jsonb;
 BEGIN
     IF v_store IS NULL OR toul_current_role() IS DISTINCT FROM 'admin' THEN
         RAISE EXCEPTION 'Solo el administrador puede ver los reportes';
     END IF;
     IF v_hasta < v_desde THEN
         RAISE EXCEPTION 'Elige un rango de fechas válido';
+    END IF;
+    IF p_paso IS NOT NULL AND p_paso NOT IN ('hora', 'dia') THEN
+        RAISE EXCEPTION 'La línea va por hora o por día';
     END IF;
 
     SELECT jsonb_build_object(
@@ -236,6 +248,43 @@ BEGIN
          LIMIT 5
       ) t;
 
+    -- La línea del Inicio. Cada venta cuenta en la hora o el día de
+    -- Colombia en que se hizo, y cada devolución resta en el suyo. El
+    -- acumulado se redondea igual que Vendiste (ventas y devoluciones por
+    -- separado), así el último punto da exacto lo mismo. `t` es el momento
+    -- en que empieza esa hora o ese día; solo vienen los que tuvieron algo.
+    -- `primeraVenta`: si nunca ha vendido, el Inicio no dibuja la línea
+    IF p_paso IS NOT NULL THEN
+        WITH movimientos AS (
+            SELECT date_trunc(CASE WHEN p_paso = 'hora' THEN 'hour' ELSE 'day' END, s.created_at AT TIME ZONE 'America/Bogota') AS tramo,
+                   v.total AS vendido, 0::numeric AS devuelto, 1 AS ventas
+              FROM toul_reporte_ventas(v_store, v_desde, v_hasta) v
+              JOIN sales s ON s.id = v.id
+            UNION ALL
+            SELECT date_trunc(CASE WHEN p_paso = 'hora' THEN 'hour' ELSE 'day' END, r.created_at AT TIME ZONE 'America/Bogota'),
+                   0, r.total, 0
+              FROM sale_returns r
+             WHERE r.store_id = v_store
+               AND r.created_at >= v_desde AND r.created_at <= v_hasta
+        ),
+        por_tramo AS (
+            SELECT tramo, SUM(vendido) AS vendido, SUM(devuelto) AS devuelto, SUM(ventas)::integer AS ventas
+              FROM movimientos GROUP BY tramo
+        ),
+        acumulado AS (
+            SELECT tramo, ventas,
+                   round(SUM(vendido) OVER w) - round(SUM(devuelto) OVER w) AS acumulado
+              FROM por_tramo
+            WINDOW w AS (ORDER BY tramo ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+        )
+        SELECT jsonb_build_object(
+                   'serie', COALESCE(jsonb_agg(jsonb_build_object(
+                                't', tramo AT TIME ZONE 'America/Bogota', 'acumulado', acumulado, 'ventas', ventas) ORDER BY tramo), '[]'::jsonb),
+                   'primeraVenta', (SELECT min(created_at) FROM sales WHERE store_id = v_store))
+          INTO v_linea
+          FROM acumulado;
+    END IF;
+
     RETURN jsonb_build_object(
         'ventas',             v_ventas,
         'devoluciones',       v_devol,
@@ -245,11 +294,11 @@ BEGIN
         'mercanciaPagada',    v_mercancia,
         'metodos',            v_metodos,
         'productos',          v_productos
-    );
+    ) || v_linea;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.toul_reporte(timestamptz, timestamptz) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.toul_reporte(timestamptz, timestamptz, text) TO authenticated;
 
 
 -- ─── 2. Mes a mes ────────────────────────────────────────────────
@@ -1003,6 +1052,13 @@ BEGIN
         esperado := v_netas; obtenido := (v_m->>'ventas')::numeric; ok := esperado = obtenido; detalle := NULL;
         RETURN NEXT;
 
+        -- La línea del gráfico del Inicio, día por día, termina en Vendiste
+        SELECT COALESCE((SELECT (e->>'acumulado')::numeric FROM jsonb_array_elements(toul_reporte(v_desde, v_hasta, 'dia')->'serie') e
+                          ORDER BY (e->>'t')::timestamptz DESC LIMIT 1), 0) INTO v_x;
+        chequeo := 'Gráfico del Inicio: la línea termina en Vendiste';
+        esperado := v_netas; obtenido := v_x; ok := esperado = obtenido; detalle := NULL;
+        RETURN NEXT;
+
         -- De cada $100, con la misma regla de la pantalla: se reparte 100
         -- redondeando hacia abajo y el que perdió más decimales se lleva lo que falta
         IF v_netas > 0 THEN
@@ -1064,6 +1120,16 @@ BEGIN
     -- ── Lo de hoy ──
     periodo := 'Hoy';
     v_cartera := toul_receivables();
+
+    -- La línea de Hoy va por hora: también termina en Vendiste
+    v_desde := date_trunc('day', now() AT TIME ZONE 'America/Bogota') AT TIME ZONE 'America/Bogota';
+    v_r := toul_reporte(v_desde, now(), 'hora');
+    SELECT COALESCE((SELECT (e->>'acumulado')::numeric FROM jsonb_array_elements(v_r->'serie') e
+                      ORDER BY (e->>'t')::timestamptz DESC LIMIT 1), 0) INTO v_x;
+    chequeo := 'Gráfico del Inicio: la línea de hoy termina en Vendiste';
+    esperado := (v_r->'ventas'->>'total')::numeric - (v_r->'devoluciones'->>'total')::numeric;
+    obtenido := v_x; ok := esperado = obtenido; detalle := NULL;
+    RETURN NEXT;
 
     WITH saldos AS (
         SELECT customer_id, round(SUM(CASE WHEN type = 'debt' THEN amount ELSE -amount END)) AS saldo

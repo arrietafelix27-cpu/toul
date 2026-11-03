@@ -1,8 +1,8 @@
 'use client'
 
-import HeroChart from './HeroChart'
+import type { ReactNode } from 'react'
 import { SelectorPeriodo, type Periodo, type Rango } from './Desplegable'
-import { Vendiste, GananciaGastos, type MetricasInicio, type Conteo, type Tendencia } from './ResumenHoy'
+import { Vendiste, type MetricasInicio, type Conteo, type Tendencia } from './ResumenHoy'
 import { AccionesRapidas, ObservacionAI } from './AccionesRapidas'
 import { ProductsPanel, type ProductsData } from './ProductsPanel'
 import { PendingPanel, type PendingData } from './PendingPanel'
@@ -14,7 +14,8 @@ import type { AIInsight } from '@/lib/types'
 
    Nada encerrado en cajas: lo separa el espacio. De arriba abajo,
    lo que se mira primero: el saludo, el periodo, cuánto vendiste,
-   la gráfica, la ganancia y los gastos; luego lo que se hace a diario
+   la gráfica de borde a borde, la ganancia y los gastos (en Hoy sin
+   ventas, cómo vas en la semana); luego lo que se hace a diario
    (acciones y TOUL AI), tus productos y la plata pendiente.
    ══════════════════════════════════════════════════════════════ */
 
@@ -28,13 +29,12 @@ const CSS = ENTRADA_INICIO_CSS + `
 `
 
 export default function MobileDashboard({
-    storeName, saludo, storeId, period, setPeriod, rango, setRango,
+    storeName, saludo, period, setPeriod, rango, setRango,
     metrics, products, pending, insight, loading, primeraCarga, insightsLoading,
-    animar, dibujar, conteo, tendencia, hrefReporte,
+    animar, conteo, tendencia, hrefReporte, nuevo, grafica, abajo,
 }: {
     storeName: string
     saludo: string
-    storeId: string | null
     period: Periodo
     setPeriod: (p: Periodo) => void
     rango: Rango
@@ -49,11 +49,16 @@ export default function MobileDashboard({
     insightsLoading: boolean
     /** La primera vez que se abre la app, las secciones entran en cascada */
     animar: boolean
-    dibujar: boolean
     conteo: Conteo
     tendencia: Tendencia
     /** Tocar lo vendido abre Reportes en el mismo periodo */
     hrefReporte: string
+    /** Nunca ha vendido: sin gráfica ni ganancia */
+    nuevo: boolean
+    /** La gráfica (null si nunca ha vendido) */
+    grafica: ReactNode
+    /** Debajo de la gráfica: la ganancia y los gastos, o cómo vas en la semana */
+    abajo: ReactNode
 }) {
     return (
         <div className="md-raiz">
@@ -67,14 +72,11 @@ export default function MobileDashboard({
                     <SelectorPeriodo variante="movil" period={period} setPeriod={setPeriod} rango={rango} setRango={setRango} />
                 </div>
                 <div {...entrada(2, animar, undefined, { marginTop: 18 })}>
-                    <Vendiste metrics={metrics} loading={loading} period={period} variante="movil" conteo={conteo} tendencia={tendencia} href={hrefReporte} />
+                    <Vendiste metrics={metrics} loading={loading} period={period} variante="movil" conteo={conteo} tendencia={tendencia}
+                        href={hrefReporte} nuevo={nuevo} />
                 </div>
-                <div {...entrada(3, animar, 'md-grafica')}>
-                    <HeroChart storeId={storeId} period={period} rango={rango} alto={110} dibujar={dibujar} />
-                </div>
-                <div {...entrada(4, animar)}>
-                    <GananciaGastos metrics={metrics} loading={loading} conteo={conteo} />
-                </div>
+                {grafica && <div {...entrada(3, animar, 'md-grafica')}>{grafica}</div>}
+                {abajo && <div {...entrada(4, animar)}>{abajo}</div>}
                 <div {...entrada(5, animar, undefined, { marginTop: 32 })}>
                     <AccionesRapidas variante="movil" />
                 </div>

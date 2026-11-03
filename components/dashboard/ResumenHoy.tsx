@@ -49,7 +49,7 @@ const CSS = `
 .rv-monto { font-weight: 700; letter-spacing: -2px; line-height: 1.04; margin: 6px 0 0;
     font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rv-monto-movil { font-size: 46px; }
-.rv-monto-pc { font-size: 44px; }
+.rv-monto-pc { font-size: 46px; }
 .rv-bajo { display: flex; align-items: center; gap: 12px; margin: 8px 0 0; min-height: 22px; }
 .rv-cuenta { font-size: 13px; font-weight: 500; color: var(--toul-text-subtle); margin: 0; }
 /* Lo vendido abre Reportes: se hunde un poco al tocarlo */
@@ -91,15 +91,15 @@ const CSS = `
 `
 
 const APAGADO = 'var(--toul-text-dim)'
+/** El $0 de un periodo sin ventas: blanco al 28% */
+const CERO = 'color-mix(in srgb, var(--toul-text) 28%, transparent)'
 /** El monto ocupa su propia línea, con el ancho del valor final */
 const BLOQUE = { display: 'grid', justifyContent: 'start' } as const
 
-function sinVentasTexto(period: Periodo): string {
-    if (period === 'today') return 'Aún no hay ventas hoy'
-    if (period === 'week') return 'Aún no hay ventas esta semana'
-    if (period === 'month') return 'Aún no hay ventas este mes'
-    if (period === 'custom') return 'No hubo ventas en estas fechas'
-    return 'Aún no hay ventas'
+function sinVentasTexto(period: Periodo, nuevo: boolean): string {
+    if (nuevo) return 'Registra tu primera venta y aquí verás cómo avanza tu negocio'
+    if (period === 'today') return 'Tu primera venta de hoy aparecerá aquí'
+    return 'Aún no hay ventas en este periodo'
 }
 
 function FlechaTendencia({ tendencia }: { tendencia: Tendencia }) {
@@ -120,13 +120,15 @@ function FlechaTendencia({ tendencia }: { tendencia: Tendencia }) {
     )
 }
 
-export function Vendiste({ metrics, loading, period, variante, conteo, tendencia, selector, href }: {
+export function Vendiste({ metrics, loading, period, variante, conteo, tendencia, selector, href, nuevo = false }: {
     metrics: MetricasInicio
     loading: boolean
     period: Periodo
     variante: Variante
     conteo: Conteo
     tendencia: Tendencia
+    /** Nunca ha vendido: no hay gráfica ni nada que comparar */
+    nuevo?: boolean
     /** En PC, la píldora del periodo va al lado de "Vendiste" */
     selector?: ReactNode
     /** Reportes en el mismo periodo */
@@ -146,7 +148,7 @@ export function Vendiste({ metrics, loading, period, variante, conteo, tendencia
             ) : (
                 <Link href={href} className="rv-enlace" aria-label="Ver el reporte de este periodo">
                     <AnimatedNumber value={metrics.revenue} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
-                        className={`rv-monto rv-monto-${variante}`} style={{ ...BLOQUE, color: sinVentas ? APAGADO : 'var(--toul-text)' }} />
+                        className={`rv-monto rv-monto-${variante}`} style={{ ...BLOQUE, color: sinVentas ? CERO : 'var(--toul-text)' }} />
                 </Link>
             )}
             {/* Sin ventas el monto va apagado y no hay tendencia: no hay nada que comparar */}
@@ -155,7 +157,7 @@ export function Vendiste({ metrics, loading, period, variante, conteo, tendencia
             ) : (
                 <div className="rv-bajo">
                     <p className="rv-cuenta">
-                        {sinVentas ? sinVentasTexto(period) : `${metrics.salesCount} ${metrics.salesCount === 1 ? 'venta' : 'ventas'}`}
+                        {sinVentas ? sinVentasTexto(period, nuevo) : `${metrics.salesCount} ${metrics.salesCount === 1 ? 'venta' : 'ventas'}`}
                     </p>
                     {!sinVentas && <FlechaTendencia tendencia={tendencia} />}
                 </div>
@@ -207,6 +209,45 @@ export function GananciaGastos({ metrics, loading, conteo }: {
                     : <AnimatedNumber value={quedan} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
                         className="rv-quedan-valor"
                         style={{ color: quedan < 0 ? 'var(--toul-error)' : nada ? APAGADO : 'var(--toul-text)' }} />}
+            </div>
+        </div>
+    )
+}
+
+/** Hoy sin ventas: en lugar de la ganancia y los gastos, cómo vas en la
+ *  semana y en el mes. Si hoy ya hubo gastos, el segundo dato son esos gastos */
+export interface LlevasHoy {
+    semana: number
+    /** null si hoy hubo gastos: no se pide */
+    mes: number | null
+}
+
+export function LlevasEnHoy({ llevas, gastosHoy, conteo }: {
+    llevas: LlevasHoy
+    gastosHoy: number
+    conteo: Conteo
+}) {
+    const segundo = gastosHoy > 0
+        ? { rotulo: 'Gastos de hoy', monto: gastosHoy }
+        : { rotulo: 'Este mes llevas', monto: llevas.mes ?? 0 }
+    const color = (monto: number) => (monto === 0 ? APAGADO : 'var(--toul-text)')
+
+    return (
+        <div>
+            <style>{CSS}</style>
+            <div className="rv-division" aria-hidden />
+            <div className="rv-cols">
+                <div style={{ minWidth: 0 }}>
+                    <p className="rv-rotulo">Esta semana llevas</p>
+                    <AnimatedNumber value={llevas.semana} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
+                        className="rv-valor" style={{ ...BLOQUE, color: color(llevas.semana) }} />
+                </div>
+                <span className="rv-linea" aria-hidden />
+                <div style={{ minWidth: 0 }}>
+                    <p className="rv-rotulo">{segundo.rotulo}</p>
+                    <AnimatedNumber value={segundo.monto} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
+                        className="rv-valor" style={{ ...BLOQUE, color: color(segundo.monto) }} />
+                </div>
             </div>
         </div>
     )
