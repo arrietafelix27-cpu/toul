@@ -133,7 +133,11 @@ export default async function (db) {
   ok(Number(c.total) === suma, `el total es la suma exacta de los saldos (${c.total})`)
   ok(Number(c.hoy) === c.clientes.filter(x => x.grupo === 'hoy').length, 'el contador de "hoy" cuadra con la lista')
   ok(Number(c.recuperadoMes) === 700000, `recuperaste $700.000 este mes (dio ${c.recuperadoMes})`)
-  ok(Number(c.fiadoMes) > 0, 'y muestra cuánto fiaste en el mes')
+  // Los primeros días del mes puede no haber fiados todavía: se fía uno hoy
+  const [hoyFio] = await q(`INSERT INTO customers(store_id,name) VALUES ($1,'Fía hoy') RETURNING id`, [STORE])
+  await fiar(hoyFio.id, 50000, 0)
+  c = await cartera()
+  ok(Number(c.fiadoMes) >= 50000, `y muestra cuánto fiaste en el mes (dio ${c.fiadoMes})`)
 
   console.log('\n— Mis clientes: compras, gasto y recencia')
   await q(`INSERT INTO sales(store_id,customer_id,total,created_at)

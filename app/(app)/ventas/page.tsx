@@ -4,7 +4,7 @@ import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange } from '@/lib/utils'
-import { ZONA_COLOMBIA, instanteDeDia } from '@/lib/periodos'
+import { ZONA_COLOMBIA, instanteDeDia, periodoDeDireccion } from '@/lib/periodos'
 import { nombreMetodo } from '@/lib/format/text'
 import { Clock, Ban, Search, SlidersHorizontal, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -23,7 +23,7 @@ import { SALE_DETAIL_SELECT } from '@/lib/types'
 import { SaleDetail } from '@/components/ventas/SaleDetail'
 import { DevolucionSheet } from '@/components/ventas/DevolucionSheet'
 
-type Period = 'today' | 'week' | 'month' | 'total' | 'custom'
+type Period = 'today' | 'week' | 'month' | 'year' | 'total' | 'custom'
 
 /** Los mismos periodos del Inicio y Reportes, en hora de Colombia. Las
  *  fechas elegidas van del primer al último instante de esos días allá
@@ -77,15 +77,12 @@ const KINDS: { value: Kind; label: string }[] = [
     { value: 'descuento', label: 'Con descuento' },
 ]
 
-/** El periodo que trae la dirección, o "Hoy" */
-function periodoDeLaDireccion(params: URLSearchParams | ReadonlyURLSearchParams): { period: Period; desde: string; hasta: string } {
-    const p = params.get('periodo')
-    const dia = /^\d{4}-\d{2}-\d{2}$/
-    const desde = params.get('desde') ?? ''
-    const hasta = params.get('hasta') ?? ''
-    if (p === 'custom' && dia.test(desde) && dia.test(hasta)) return { period: 'custom', desde, hasta }
-    if (p === 'today' || p === 'week' || p === 'month' || p === 'total') return { period: p, desde: '', hasta: '' }
-    return { period: 'today', desde: '', hasta: '' }
+/** El periodo y el tipo que trae la dirección (desde Reportes), o "Hoy" */
+function periodoDeLaDireccion(params: URLSearchParams | ReadonlyURLSearchParams): { period: Period; desde: string; hasta: string; kind: Kind } {
+    const p = periodoDeDireccion(params)
+    const tipo = params.get('tipo')
+    const kind: Kind = tipo === 'contado' || tipo === 'credito' || tipo === 'descuento' ? tipo : 'todas'
+    return { period: p?.periodo ?? 'today', desde: p?.desde ?? '', hasta: p?.hasta ?? '', kind }
 }
 
 export default function VentasPage() {
@@ -158,7 +155,7 @@ function Ventas() {
     }
     const [view, setView] = useState<'ventas' | 'anuladas'>('ventas')
     const [seller, setSeller] = useState<string>('todos')
-    const [kind, setKind] = useState<Kind>('todas')
+    const [kind, setKind] = useState<Kind>(inicial.kind)
     const [query, setQuery] = useState('')
     const [showFilters, setShowFilters] = useState(false)
     const [voidOpen, setVoidOpen] = useState(false)
@@ -266,7 +263,7 @@ function Ventas() {
             const range = getRange(period, fromDate, toDate)
             const run = (withSeller: boolean) => {
                 let q = supabase.from('sales')
-                    .select('total, sale_items(quantity, unit_price, unit_cost)')
+                    .select('total, is_credit, sale_items(quantity, unit_price, unit_cost), sale_payments(amount)')
                     .eq('store_id', storeId)
                     .gte('created_at', range.from || '1970-01-01')
                     .lte('created_at', range.to || '9999-12-31')
@@ -296,13 +293,19 @@ function Ventas() {
             let { data, error } = primera
             if (error) ({ data, error } = await run(false))
             if (error) throw error
-            const list = (data ?? []) as unknown as { total: number; sale_items: { quantity: number; unit_price: number; unit_cost: number }[] }[]
+            const list = (data ?? []) as unknown as { total: number; is_credit: boolean; sale_items: { quantity: number; unit_price: number; unit_cost: number }[]; sale_payments: { amount: number }[] | null }[]
             const devuelto = devueltas.reduce((sum, d) => sum + Number(d.total), 0)
             const gananciaDevuelta = devueltas.reduce((sum, d) => sum + Number(d.total) - Number(d.cost_total), 0)
             return {
                 revenue: Math.round(list.reduce((sum, v) => sum + Number(v.total), 0) - devuelto),
                 profit: Math.round(list.reduce((sum, v) => sum + utilidad(v), 0) - gananciaDevuelta),
                 count: list.length,
+                // Lo que quedó fiado: lo mismo que "A crédito" en Reportes
+                // (de cada venta a crédito, lo que no se pagó al momento)
+                fiado: Math.round(list.filter(v => v.is_credit).reduce((sum, v) => {
+                    const pagado = Math.min(Math.max((v.sale_payments ?? []).reduce((a, p) => a + Number(p.amount), 0), 0), Number(v.total))
+                    return sum + Number(v.total) - pagado
+                }, 0)),
             }
         },
         { revalidateOnFocus: false, dedupingInterval: 30000 },
@@ -334,15 +337,17 @@ function Ventas() {
                 revenue: Math.round(filtered.reduce((s, v) => s + v.total, 0) - devuelto),
                 profit: Math.round(filtered.reduce((s, v) => s + utilidad(v), 0) - gananciaDevuelta),
                 count: filtered.length,
+                fiado: periodTotals?.fiado ?? 0,
             }
         }
-        return periodTotals ?? { revenue: 0, profit: 0, count: 0 }
+        return periodTotals ?? { revenue: 0, profit: 0, count: 0, fiado: 0 }
     }, [filtered, periodTotals, query, devueltoPorVenta])
 
     const PERIODS: { value: Period; label: string }[] = [
         { value: 'today', label: 'Hoy' },
         { value: 'week', label: 'Semana' },
         { value: 'month', label: 'Mes' },
+        { value: 'year', label: 'Año' },
         { value: 'total', label: 'Todo' },
         { value: 'custom', label: 'Rango' },
     ]
@@ -524,11 +529,13 @@ function Ventas() {
                 </div>
             ) : (sales || []).length > 0 && (
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible"
-                    className="grid grid-cols-3 gap-2 mb-5">
+                    className={`grid ${kind === 'credito' ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'} gap-2 mb-5`}>
                     {[
                         { label: 'Ventas', value: String(totals.count), raw: true, color: 'var(--toul-text)' },
-                        { label: 'Facturado', value: totals.revenue, color: 'var(--toul-accent)' },
+                        // Después de devoluciones, como en toda la app
+                        { label: 'Vendiste', value: totals.revenue, color: 'var(--toul-accent)' },
                         { label: 'Utilidad', value: totals.profit, color: 'var(--toul-accent)' },
+                        ...(kind === 'credito' ? [{ label: 'Quedó fiado', value: totals.fiado, color: 'var(--toul-text)' }] : []),
                     ].map(chip => (
                         <motion.div key={chip.label} variants={staggerItem} className="toul-card py-2.5 px-3 text-center">
                             <p className="text-[10px] mb-1" style={{ color: 'var(--toul-text-subtle)' }}>{chip.label}</p>

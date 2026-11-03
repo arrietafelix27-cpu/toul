@@ -351,19 +351,6 @@ export default async function (db) {
   igual('la copia del proveedor queda igual', 50000, (await one(`SELECT total_debt s FROM providers WHERE id=$1`, [prov.id])).s)
   igual('y la caja tiene los dos pagos', 150000, (await one(`SELECT SUM(amount) s FROM payments WHERE store_id=$1 AND type='provider_payment'`, [STORE])).s)
 
-  // Una venta sin internet: la caja, los pagos y el fiado quedan con la hora real
-  const hace2 = new Date(Date.now() - 2 * 86_400_000)
-  const offline = await r(`SELECT (process_sale($1::jsonb))->>'saleId' r`, [JSON.stringify({
-    cart: [{ product: { id: B.id, name: 'x' }, quantity: 1, unitPrice: 80000 }],
-    payments: nequi(30000), subtotal: 80000, total: 80000, isCredit: true, customerName: 'Daniel',
-    initialPayment: 30000, soldAt: hace2.toISOString(), clientSaleId: 'sin-senal-1',
-  })])
-  const hora = async (sql) => new Date((await one(sql, [offline])).t).getTime()
-  si('la venta quedó con su hora real', await hora(`SELECT created_at t FROM sales WHERE id=$1`) === hace2.getTime())
-  si('la entrada de caja también', await hora(`SELECT created_at t FROM payments WHERE reference_id=$1 AND type='sale'`) === hace2.getTime())
-  si('el detalle del pago también', await hora(`SELECT created_at t FROM sale_payments WHERE sale_id=$1`) === hace2.getTime())
-  si('y el fiado también', await hora(`SELECT created_at t FROM credits WHERE sale_id=$1 AND type='debt'`) === hace2.getTime())
-
   // Una devolución el 2 de noviembre: "Vendiste" es después de devoluciones.
   // La devolución solo se permite hasta 30 días: se acerca la venta a hoy y luego se le devuelve su hora
   const ventaNov = (await one(`SELECT id FROM sales WHERE store_id=$1 AND created_at >= $2 AND created_at <= $3`, [STORE, noviembre.from, noviembre.to])).id
@@ -381,6 +368,20 @@ export default async function (db) {
   const mesesConDevolucion = await r(`SELECT toul_reporte_meses(6, '2026-11-01') r`)
   igual('Mes a mes de noviembre: ventas', 0, mesesConDevolucion.find(m => m.mes === '2026-11-01')?.ventas)
   igual('Mes a mes de noviembre: ganancia', 0, mesesConDevolucion.find(m => m.mes === '2026-11-01')?.ganancia)
+
+  // Va después de revisar noviembre: su fecha (hace 2 días) puede caer en cualquier mes
+  // Una venta sin internet: la caja, los pagos y el fiado quedan con la hora real
+  const hace2 = new Date(Date.now() - 2 * 86_400_000)
+  const offline = await r(`SELECT (process_sale($1::jsonb))->>'saleId' r`, [JSON.stringify({
+    cart: [{ product: { id: B.id, name: 'x' }, quantity: 1, unitPrice: 80000 }],
+    payments: nequi(30000), subtotal: 80000, total: 80000, isCredit: true, customerName: 'Daniel',
+    initialPayment: 30000, soldAt: hace2.toISOString(), clientSaleId: 'sin-senal-1',
+  })])
+  const hora = async (sql) => new Date((await one(sql, [offline])).t).getTime()
+  si('la venta quedó con su hora real', await hora(`SELECT created_at t FROM sales WHERE id=$1`) === hace2.getTime())
+  si('la entrada de caja también', await hora(`SELECT created_at t FROM payments WHERE reference_id=$1 AND type='sale'`) === hace2.getTime())
+  si('el detalle del pago también', await hora(`SELECT created_at t FROM sale_payments WHERE sale_id=$1`) === hace2.getTime())
+  si('y el fiado también', await hora(`SELECT created_at t FROM credits WHERE sale_id=$1 AND type='debt'`) === hace2.getTime())
 
   const auditoriaNueva = await comoDueno(() => q(`SELECT * FROM toul_auditoria()`))
   si('con todos los casos nuevos, la auditoría sigue cuadrando', auditoriaNueva.every(f => f.ok),

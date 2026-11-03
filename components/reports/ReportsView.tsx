@@ -10,7 +10,7 @@ import { ENTRADA_INICIO_CSS, entrada } from '@/lib/motion'
 import { formatPrecio } from '@/lib/utils'
 import { nombreMetodo } from '@/lib/format/text'
 import { nombreCategoria } from '@/lib/types'
-import { ZONA_COLOMBIA, contraQue, diaColombia, enColombia, formatoColombia, type Periodo, type Rango, type Tramo } from '@/lib/periodos'
+import { ZONA_COLOMBIA, contraQue, enColombia, formatoColombia, periodoEnDireccion, type Periodo, type Rango, type Tramo } from '@/lib/periodos'
 import { conOtros, deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir, textoPorcentaje, type ResumenReporte } from '@/lib/reports/calculos'
 import type { MesReporte, ReporteSQL } from '@/lib/reports/types'
 
@@ -84,8 +84,11 @@ const CSS = ENTRADA_INICIO_CSS + `
     border-radius: 10px; color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
     transition: background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
 .rp-enlace:active { transform: scale(0.99); }
+/* De contado y A crédito siguen viéndose como parte de lo vendido */
+.rp-enlace.rp-fila-sub { padding-left: 22px; color: var(--toul-text-muted); }
 .rp-enlace:focus-visible { outline: 2px solid var(--toul-border-2); outline-offset: 0; }
-.rp-enlace-flecha { flex-shrink: 0; align-self: center; margin-left: -10px; color: var(--toul-text-faint); }
+.rp-enlace-flecha { display: inline-block; vertical-align: -2px; margin-left: 3px; color: var(--toul-text-faint);
+    transition: color 160ms var(--toul-ease-emil), transform 160ms var(--toul-ease-emil); }
 .rp-item-enlace { display: block; margin: -6px -8px; padding: 6px 8px; border-radius: 10px; color: inherit; text-decoration: none;
     -webkit-tap-highlight-color: transparent; touch-action: manipulation;
     transition: background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
@@ -169,6 +172,8 @@ const CSS = ENTRADA_INICIO_CSS + `
 .rp-metodo-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rp-metodo-pct { color: var(--toul-text-subtle); font-variant-numeric: tabular-nums; }
 .rp-metodo-monto { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Cada método lleva a sus movimientos: la fila se puede tocar sin correr nada */
+.rp-metodo.rp-item-enlace { margin: 0 -8px; padding: 6px 8px; }
 
 /* Descargar */
 .dz-opcion.rp-opcion { padding-top: 9px; padding-bottom: 9px; }
@@ -207,7 +212,7 @@ const CSS = ENTRADA_INICIO_CSS + `
 @media (hover: hover) and (pointer: fine) {
     .rp-reintentar:hover { color: var(--toul-text); }
     .rp-enlace:hover, .rp-item-enlace:hover { background: var(--toul-surface-3); }
-    .rp-enlace:hover .rp-enlace-flecha { color: var(--toul-text-subtle); }
+    .rp-enlace:hover .rp-enlace-flecha { color: var(--toul-text-muted); transform: translateX(2px); }
 }
 @media (prefers-reduced-motion: reduce) {
     .rp-crece-x, .rp-crece-y, .rp-cien, .rp-dona-tramo { animation: rp-aparece 200ms ease backwards; }
@@ -232,13 +237,26 @@ const restante = (fraccion: number) => `${Math.round((1 - Math.min(Math.max(frac
 const estilo = (vars: Record<string, string | number>) => vars as CSSProperties
 const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 
-/** Ventas, en el mismo periodo. "Este año" no existe allá: van las mismas fechas */
-function hrefVentas(periodo: Periodo, tramo: Tramo): string {
-    if (periodo === 'today' || periodo === 'week' || periodo === 'month') return `/ventas?periodo=${periodo}`
-    const desde = tramo.from ? diaColombia(tramo.from) : ''
-    const hasta = diaColombia(tramo.to ?? new Date())
-    return `/ventas?periodo=custom&desde=${desde}&hasta=${hasta}`
+/** A dónde lleva cada número, en el mismo periodo. Cada pantalla suma lo mismo que Reportes */
+function enlacesDe(periodo: Periodo, tramo: Tramo) {
+    const q = periodoEnDireccion(periodo, tramo)
+    return {
+        ventas: `/ventas?${q}`,
+        fiado: `/ventas?${q}&tipo=credito`,
+        contado: `/movimientos?${q}&tipo=ventas`,
+        abonos: `/movimientos?${q}&tipo=abonos`,
+        gastos: `/expenses?${q}`,
+        categoria: (c: string) => `/expenses?${q}&categoria=${encodeURIComponent(c)}`,
+        mercancia: `/movimientos?${q}&tipo=mercancia`,
+        devoluciones: `/movimientos?${q}&tipo=devoluciones`,
+        // Los abonos de antes no tenían método: salen como "Abonos"
+        metodo: (nombre: string) => nombre === 'Abonos'
+            ? `/movimientos?${q}&tipo=abonos&metodo=sin`
+            : nombre === 'Otros' ? `/movimientos?${q}&tipo=cobros`
+            : `/movimientos?${q}&tipo=cobros&metodo=${encodeURIComponent(nombre)}`,
+    }
 }
+type Enlaces = ReturnType<typeof enlacesDe>
 
 /** "octubre de 2026" */
 function mesLargo(iso: string): string {
@@ -282,6 +300,7 @@ export function ReportsView({
     descargando: boolean
 }) {
     const r = actual ? resumir(actual) : null
+    const enlaces = enlacesDe(periodo, tramo)
     const antes = anterior ? resumir(anterior) : null
     const lado = variante === 'pc' ? 'derecha' : 'izquierda'
 
@@ -347,7 +366,7 @@ export function ReportsView({
 
                 <div className="rp-medio">
                     <section {...entrada(3, true, 'rp-col')} aria-labelledby="rp-tu-plata">
-                        <TuPlata r={r} clave={clave} cargando={cargando} hrefVentas={hrefVentas(periodo, tramo)} />
+                        <TuPlata r={r} clave={clave} cargando={cargando} enlaces={enlaces} />
                     </section>
                     <div {...entrada(4, true, 'rp-col rp-derecha')}>
                         <MesAMes meses={meses} />
@@ -359,13 +378,13 @@ export function ReportsView({
 
                 <div className="rp-abajo">
                     <section {...entrada(5, true, 'rp-col')}>
-                        <EnQueGastaste filas={actual?.gastosPorCategoria ?? null} cargando={cargando} />
+                        <EnQueGastaste filas={actual?.gastosPorCategoria ?? null} cargando={cargando} enlaces={enlaces} />
                     </section>
                     <section {...entrada(6, true, 'rp-col')}>
                         <QueTeDejoMas filas={actual?.productos ?? null} cargando={cargando} />
                     </section>
                     <section {...entrada(7, true, 'rp-col')}>
-                        <ComoTePagan filas={actual?.metodos ?? null} total={r?.entro ?? 0} cargando={cargando} />
+                        <ComoTePagan filas={actual?.metodos ?? null} total={r?.entro ?? 0} cargando={cargando} enlaces={enlaces} />
                     </section>
                 </div>
             </div>
@@ -468,20 +487,17 @@ function Fila({ rotulo, valor, sub, total, color, nota, href }: {
     const contenido = <>
         <span>
             {rotulo}
+            {/* La flecha va junto al nombre: así los montos siguen alineados */}
+            {href && <ChevronRight size={13} strokeWidth={2.2} className="rp-enlace-flecha" aria-hidden />}
             {nota && <span className="rp-fila-nota">{nota}</span>}
         </span>
         <span className="rp-fila-valor" style={color ? { color } : undefined}>{formatPrecio(valor)}</span>
     </>
     if (!href) return <div className={clase}>{contenido}</div>
-    return (
-        <Link href={href} className={`${clase} rp-enlace`}>
-            {contenido}
-            <ChevronRight size={14} strokeWidth={2.2} className="rp-enlace-flecha" aria-hidden />
-        </Link>
-    )
+    return <Link href={href} className={`${clase} rp-enlace`}>{contenido}</Link>
 }
 
-function TuPlata({ r, clave, cargando, hrefVentas }: { r: ResumenReporte | null; clave: string; cargando: boolean; hrefVentas: string }) {
+function TuPlata({ r, clave, cargando, enlaces }: { r: ResumenReporte | null; clave: string; cargando: boolean; enlaces: Enlaces }) {
     const mayor = Math.max(r?.entro ?? 0, r?.salio ?? 0, 1)
 
     return (
@@ -512,18 +528,18 @@ function TuPlata({ r, clave, cargando, hrefVentas }: { r: ResumenReporte | null;
 
                     <div className="rp-grupo">
                         <p className="rp-grupo-titulo">Entradas</p>
-                        <Fila rotulo="Ventas antes de devoluciones" valor={r.ventasAntes} href={hrefVentas} />
-                        <Fila rotulo="De contado" valor={r.contado} sub />
-                        <Fila rotulo="A crédito" valor={r.credito} sub />
-                        <Fila rotulo="Abonos que te hicieron" valor={r.abonos} />
+                        <Fila rotulo="Ventas antes de devoluciones" valor={r.ventasAntes} href={enlaces.ventas} />
+                        <Fila rotulo="De contado" valor={r.contado} sub href={enlaces.contado} />
+                        <Fila rotulo="A crédito" valor={r.credito} sub href={enlaces.fiado} />
+                        <Fila rotulo="Abonos que te hicieron" valor={r.abonos} href={enlaces.abonos} />
                         <Fila rotulo="Plata que entró" valor={r.entro} total color="var(--toul-accent)" nota="De contado + abonos" />
                     </div>
 
                     <div className="rp-grupo">
                         <p className="rp-grupo-titulo">Salidas</p>
-                        <Fila rotulo="Gastos" valor={r.gastos} />
-                        <Fila rotulo="Mercancía que pagaste" valor={r.mercancia} />
-                        {r.devuelto > 0 && <Fila rotulo="Devoluciones" valor={r.devuelto} />}
+                        <Fila rotulo="Gastos" valor={r.gastos} href={enlaces.gastos} />
+                        <Fila rotulo="Mercancía que pagaste" valor={r.mercancia} href={enlaces.mercancia} />
+                        {r.devuelto > 0 && <Fila rotulo="Devoluciones" valor={r.devuelto} href={enlaces.devoluciones} />}
                         <Fila rotulo="Plata que salió" valor={r.salio} total />
                     </div>
                 </>
@@ -664,10 +680,11 @@ function Cargando() {
     )
 }
 
-function EnQueGastaste({ filas, cargando }: { filas: ReporteSQL['gastosPorCategoria'] | null; cargando: boolean }) {
+function EnQueGastaste({ filas, cargando, enlaces }: { filas: ReporteSQL['gastosPorCategoria'] | null; cargando: boolean; enlaces: Enlaces }) {
+    // "Las demás" (las que no caben) llevan a todos los gastos del periodo
     const lista = conOtros(
-        (filas ?? []).map(f => ({ nombre: nombreCategoria(f.categoria), monto: Number(f.monto) })),
-        6, monto => ({ nombre: 'Otros', monto }),
+        (filas ?? []).map(f => ({ valor: f.categoria, nombre: nombreCategoria(f.categoria), monto: Number(f.monto) })),
+        6, monto => ({ valor: '', nombre: 'Las demás', monto }),
     )
     const mayor = Math.max(...lista.map(f => f.monto), 1)
 
@@ -678,12 +695,14 @@ function EnQueGastaste({ filas, cargando }: { filas: ReporteSQL['gastosPorCatego
             ) : (
                 <ul className="rp-lista" aria-labelledby="rp-gastos">
                     {lista.map((f, i) => (
-                        <li key={f.nombre} className="rp-item">
-                            <div className="rp-item-cabeza">
-                                <span className="rp-item-texto"><span className="rp-item-nombre">{f.nombre}</span></span>
-                                <span className="rp-item-monto">{formatPrecio(f.monto)}</span>
-                            </div>
-                            <Barra fraccion={f.monto / mayor} color="color-mix(in srgb, var(--toul-text) 55%, transparent)" alto={4} retraso={i * 60} />
+                        <li key={f.valor || 'las-demas'} className="rp-item">
+                            <Link href={f.valor ? enlaces.categoria(f.valor) : enlaces.gastos} className="rp-item-enlace">
+                                <div className="rp-item-cabeza">
+                                    <span className="rp-item-texto"><span className="rp-item-nombre">{f.nombre}</span></span>
+                                    <span className="rp-item-monto">{formatPrecio(f.monto)}</span>
+                                </div>
+                                <Barra fraccion={f.monto / mayor} color="color-mix(in srgb, var(--toul-text) 55%, transparent)" alto={4} retraso={i * 60} />
+                            </Link>
                         </li>
                     ))}
                 </ul>
@@ -725,7 +744,7 @@ function QueTeDejoMas({ filas, cargando }: { filas: ReporteSQL['productos'] | nu
     )
 }
 
-function ComoTePagan({ filas, total, cargando }: { filas: ReporteSQL['metodos'] | null; total: number; cargando: boolean }) {
+function ComoTePagan({ filas, total, cargando, enlaces }: { filas: ReporteSQL['metodos'] | null; total: number; cargando: boolean; enlaces: Enlaces }) {
     const lista = conOtros(
         (filas ?? []).map(f => ({ nombre: f.nombre, monto: Number(f.monto) })),
         5, monto => ({ nombre: 'Otros', monto }),
@@ -767,11 +786,13 @@ function ComoTePagan({ filas, total, cargando }: { filas: ReporteSQL['metodos'] 
                     </div>
                     <ul className="rp-metodos" aria-labelledby="rp-metodos">
                         {tramos.map(t => (
-                            <li key={t.nombre} className="rp-metodo">
-                                <i className="rp-punto" style={{ background: t.color }} />
-                                <span className="rp-metodo-nombre">{nombreMetodo(t.nombre)}</span>
-                                <span className="rp-metodo-pct">{textoPorcentaje(t.monto, suma)}</span>
-                                <span className="rp-metodo-monto">{formatPrecio(t.monto)}</span>
+                            <li key={t.nombre}>
+                                <Link href={enlaces.metodo(t.nombre)} className="rp-metodo rp-item-enlace">
+                                    <i className="rp-punto" style={{ background: t.color }} />
+                                    <span className="rp-metodo-nombre">{nombreMetodo(t.nombre)}</span>
+                                    <span className="rp-metodo-pct">{textoPorcentaje(t.monto, suma)}</span>
+                                    <span className="rp-metodo-monto">{formatPrecio(t.monto)}</span>
+                                </Link>
                             </li>
                         ))}
                     </ul>

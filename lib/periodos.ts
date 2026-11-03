@@ -178,3 +178,33 @@ export function contraQue(period: Periodo, actual: Tramo): string {
 
 /** Para pasar el periodo por la dirección: /reportes?periodo=month */
 export const PERIODOS_URL: Periodo[] = ['today', 'week', 'month', 'year', 'custom']
+
+/* ── El periodo en la dirección ──────────────────────────────── */
+
+/** "periodo=month" o "periodo=custom&desde=2026-10-01&hasta=2026-10-31" (días de Colombia).
+ *  Así Reportes abre Ventas, Gastos o Movimientos en el mismo periodo */
+export function periodoEnDireccion(periodo: Periodo, tramo: Tramo): string {
+    if (periodo === 'today' || periodo === 'week' || periodo === 'month' || periodo === 'year' || periodo === 'total') {
+        return `periodo=${periodo}`
+    }
+    const desde = tramo.from ? diaColombia(tramo.from) : diaColombia(new Date())
+    const hasta = diaColombia(tramo.to ?? new Date())
+    return `periodo=custom&desde=${desde}&hasta=${hasta}`
+}
+
+/** Lo contrario: el periodo que trae la dirección, si trae uno válido */
+export function periodoDeDireccion(params: { get(nombre: string): string | null }): { periodo: Periodo; desde: string; hasta: string } | null {
+    const p = params.get('periodo')
+    const dia = /^\d{4}-\d{2}-\d{2}$/
+    const desde = params.get('desde') ?? ''
+    const hasta = params.get('hasta') ?? ''
+    if (p === 'custom') return dia.test(desde) && dia.test(hasta) ? { periodo: 'custom', desde, hasta } : null
+    if (p === 'today' || p === 'week' || p === 'month' || p === 'year' || p === 'total') return { periodo: p, desde: '', hasta: '' }
+    return null
+}
+
+/** Desde y hasta de unas fechas elegidas como días de Colombia */
+export function tramoDeDias(desde: string, hasta: string): Tramo {
+    const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde]
+    return { from: instanteDeDia(a).toISOString(), to: instanteDeDia(b, true).toISOString() }
+}

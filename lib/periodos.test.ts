@@ -1,7 +1,7 @@
 // npm run test:calculos — corre en tres zonas horarias: el resultado tiene que ser el mismo
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { contraQue, diasEntre, diaColombia, enColombia, getDateRange, instanteDeDia, rangoAnterior, rangoPeriodo, textoRango } from './periodos.ts'
+import { contraQue, diasEntre, diaColombia, enColombia, getDateRange, instanteDeDia, periodoDeDireccion, periodoEnDireccion, rangoAnterior, rangoPeriodo, textoRango, tramoDeDias } from './periodos.ts'
 
 /** Una fecha y hora de Colombia (UTC−5) */
 const co = (ano: number, mes: number, dia: number, hora = 0, minuto = 0, segundo = 0, ms = 0) =>
@@ -88,4 +88,15 @@ test(`[${zona}] los textos de fechas salen en hora de Colombia`, () => {
     assert.equal(enColombia(tarde).dia, 31)
     assert.match(textoRango(tarde, tarde), /^31 oct$/)
     assert.match(textoRango(co(2026, 9, 1), tarde), /^1 – 31 oct$/)
+})
+
+test(`[${zona}] el periodo viaja por la dirección y vuelve igual`, () => {
+    const octubre = { from: iso(instanteDeDia('2026-10-01')), to: iso(instanteDeDia('2026-10-31', true)) }
+    const texto = periodoEnDireccion('custom', octubre)
+    assert.equal(texto, 'periodo=custom&desde=2026-10-01&hasta=2026-10-31')
+    const vuelta = periodoDeDireccion(new URLSearchParams(texto))
+    assert.deepEqual(vuelta, { periodo: 'custom', desde: '2026-10-01', hasta: '2026-10-31' })
+    assert.deepEqual(tramoDeDias('2026-10-01', '2026-10-31'), octubre)
+    assert.equal(periodoEnDireccion('year', octubre), 'periodo=year')
+    assert.equal(periodoDeDireccion(new URLSearchParams('periodo=nada')), null)
 })

@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { Plus, Receipt, Megaphone, Truck, ShoppingBag, Zap, Package, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange } from '@/lib/utils'
-import { ZONA_COLOMBIA, diasEntre } from '@/lib/periodos'
+import { ZONA_COLOMBIA, diasEntre, instanteDeDia, periodoDeDireccion, textoRango, tramoDeDias, type Tramo } from '@/lib/periodos'
 import { useStore } from '@/lib/hooks/useData'
-import { EXPENSE_CATEGORIES } from '@/lib/types'
+import { EXPENSE_CATEGORIES, nombreCategoria } from '@/lib/types'
 import { explainError } from '@/lib/errors'
 import { Field, PriceField, EASE_OUT_EMIL } from '@/components/ui'
 import { Sheet } from '@/components/isla/Sheet'
@@ -18,6 +19,12 @@ import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 const supabase = createClient()
 
 const CSS = `
+.gt-cat { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; font: inherit; cursor: pointer;
+    background: var(--toul-surface); border: 1px solid var(--toul-border); -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    transition: background-color 160ms var(--toul-ease-emil), border-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
+.gt-cat:active { transform: scale(0.97); }
+.gt-cat[data-activa="true"] { background: var(--toul-surface-2); border-color: var(--toul-border-2); }
+@media (prefers-reduced-motion: reduce) { .gt-cat:active { transform: none; } }
 .gt-fila { display: flex; align-items: center; gap: 13px; width: 100%; padding: 11px 10px;
     border-radius: 14px; border: none; background: none; font: inherit; color: inherit;
     text-align: left; cursor: pointer;
@@ -41,9 +48,10 @@ const CATEGORY_STYLE: Record<string, { Icon: typeof Receipt; color: string; dim:
     otros: { Icon: Receipt, ...NEUTRO },
 }
 
-type Period = 'week' | 'month' | 'year' | 'all'
+type Period = 'today' | 'week' | 'month' | 'year' | 'all' | 'custom'
 
 const PERIODS: { value: Period; label: string }[] = [
+    { value: 'today', label: 'Hoy' },
     { value: 'week', label: 'Semana' },
     { value: 'month', label: 'Mes' },
     { value: 'year', label: 'Año' },
@@ -51,9 +59,10 @@ const PERIODS: { value: Period; label: string }[] = [
 ]
 
 /** Los mismos periodos del Inicio y Reportes, en hora de Colombia */
-function since(period: Period): string | null {
-    if (period === 'all') return null
-    return getDateRange(period).from
+function tramoDe(period: Period, dias: { desde: string; hasta: string }): Tramo {
+    if (period === 'all') return { from: null, to: null }
+    if (period === 'custom') return tramoDeDias(dias.desde, dias.hasta)
+    return getDateRange(period)
 }
 
 interface ExpenseRow {
@@ -73,10 +82,29 @@ const dayLabel = (iso: string) => {
 }
 
 export default function ExpensesPage() {
+    // useSearchParams necesita su propio Suspense en el App Router
+    return (
+        <Suspense fallback={null}>
+            <Gastos />
+        </Suspense>
+    )
+}
+
+function Gastos() {
     const { data: store } = useStore()
     const storeId = store?.id || null
 
-    const [period, setPeriod] = useState<Period>('month')
+    // Desde Reportes se llega con el periodo y la categoría puestos:
+    // /expenses?periodo=month&categoria=publicidad
+    const params = useSearchParams()
+    const [inicial] = useState(() => {
+        const p = periodoDeDireccion(params)
+        const periodo = p?.periodo === 'total' ? 'all' : (p?.periodo ?? 'month')
+        return { period: periodo as Period, desde: p?.desde ?? '', hasta: p?.hasta ?? '', categoria: params.get('categoria') ?? '' }
+    })
+    const [period, setPeriod] = useState<Period>(inicial.period)
+    const [dias] = useState({ desde: inicial.desde, hasta: inicial.hasta })
+    const [categoria, setCategoria] = useState(inicial.categoria)
     const [adding, setAdding] = useState(false)
     const [saving, setSaving] = useState(false)
     const [form, setForm] = useState({ category: 'otros', description: '', amount: '' })
@@ -112,19 +140,27 @@ export default function ExpensesPage() {
         setAdding(true)
     }
 
+    const tramo = useMemo(() => tramoDe(period, dias), [period, dias])
+
+    // Todos los del periodo, de a 1.000: el total tiene que dar lo mismo que Reportes
     const { data: expenses, isLoading, mutate } = useSWR<ExpenseRow[]>(
-        storeId ? ['gastos', storeId, period] : null,
+        storeId ? ['gastos', storeId, period, tramo.from, period === 'custom' ? tramo.to : 'ahora'] : null,
         async () => {
-            let query = supabase.from('expenses')
-                .select('id, category, description, amount, created_at')
-                .eq('store_id', storeId)
-                .order('created_at', { ascending: false })
-                .limit(200)
-            const from = since(period)
-            if (from) query = query.gte('created_at', from)
-            const { data, error } = await query
-            if (error) throw error
-            return (data ?? []) as ExpenseRow[]
+            const filas: ExpenseRow[] = []
+            for (let desde = 0; ; desde += 1000) {
+                let query = supabase.from('expenses')
+                    .select('id, category, description, amount, created_at')
+                    .eq('store_id', storeId)
+                    .order('created_at', { ascending: false })
+                    .order('id')
+                    .range(desde, desde + 999)
+                if (tramo.from) query = query.gte('created_at', tramo.from)
+                if (tramo.to && period === 'custom') query = query.lte('created_at', tramo.to)
+                const { data, error } = await query
+                if (error) throw error
+                filas.push(...((data ?? []) as ExpenseRow[]))
+                if ((data ?? []).length < 1000) return filas
+            }
         },
         { revalidateOnFocus: false },
     )
@@ -140,20 +176,20 @@ export default function ExpensesPage() {
         toast.success('Gasto borrado')
     }
 
-    const rows = expenses ?? []
-    const total = useMemo(() => Math.round(rows.reduce((sum, e) => sum + Number(e.amount), 0)), [rows])
-
+    const todos = useMemo(() => expenses ?? [], [expenses])
+    // Las categorías salen de todo el periodo; la lista y el total, de la elegida
     const byCategory = useMemo(() => {
         const map = new Map<string, number>()
-        for (const row of rows) map.set(row.category, (map.get(row.category) ?? 0) + Number(row.amount))
+        for (const row of todos) {
+            const clave = row.category || 'otros'
+            map.set(clave, (map.get(clave) ?? 0) + Number(row.amount))
+        }
         return [...map.entries()]
-            .map(([value, amount]) => ({
-                value,
-                label: EXPENSE_CATEGORIES.find(c => c.value === value)?.label ?? 'Otros',
-                amount: Math.round(amount),
-            }))
+            .map(([value, amount]) => ({ value, label: nombreCategoria(value), amount: Math.round(amount) }))
             .sort((a, b) => b.amount - a.amount)
-    }, [rows])
+    }, [todos])
+    const rows = useMemo(() => categoria ? todos.filter(e => (e.category || 'otros') === categoria) : todos, [todos, categoria])
+    const total = useMemo(() => Math.round(rows.reduce((sum, e) => sum + Number(e.amount), 0)), [rows])
 
     const grouped = useMemo(() => {
         const map = new Map<string, ExpenseRow[]>()
@@ -236,7 +272,7 @@ export default function ExpensesPage() {
                 {PERIODS.map(p => {
                     const active = period === p.value
                     return (
-                        <button key={p.value} onClick={() => setPeriod(p.value)}
+                        <button key={p.value} onClick={() => setPeriod(p.value)} aria-pressed={active}
                             style={{
                                 padding: '8px 14px', borderRadius: 12, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                                 background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
@@ -248,14 +284,26 @@ export default function ExpensesPage() {
                         </button>
                     )
                 })}
+                {/* Unas fechas elegidas en Reportes */}
+                {period === 'custom' && (
+                    <span style={{
+                        padding: '8px 14px', borderRadius: 12, fontSize: 13, fontWeight: 500,
+                        background: 'var(--toul-surface-focused)', border: '1px solid var(--toul-border-focused)', color: 'var(--toul-accent)',
+                    }}>
+                        {textoRango(instanteDeDia(dias.desde), instanteDeDia(dias.hasta))}
+                    </span>
+                )}
             </div>
 
             {/* Total del período */}
             <motion.div
                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.26, ease: EASE_OUT_EMIL }}
                 style={{ marginBottom: 18 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: 0 }}>
-                    Gastaste {period === 'all' ? 'en total' : `en ${PERIODS.find(p => p.value === period)?.label.toLowerCase()}`}
+                <p style={{ fontSize: 13, color: 'var(--toul-text-subtle)', margin: 0 }}>
+                    Gastaste{categoria ? ` en ${nombreCategoria(categoria).toLowerCase()}` : ''}{' '}
+                    {period === 'all' ? 'en total'
+                        : period === 'custom' ? `del ${textoRango(instanteDeDia(dias.desde), instanteDeDia(dias.hasta))}`
+                        : ({ today: 'hoy', week: 'esta semana', month: 'este mes', year: 'este año' } as Record<string, string>)[period]}
                 </p>
                 <p style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.045em', color: 'var(--toul-text)', margin: '6px 0 0', lineHeight: 1.05, fontVariantNumeric: 'tabular-nums' }}>
                     {formatCOP(total)}
@@ -265,20 +313,24 @@ export default function ExpensesPage() {
                 </p>
             </motion.div>
 
-            {/* Reparto por categoría */}
+            {/* Reparto por categoría: tocar una muestra solo esa */}
             {byCategory.length > 0 && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }} role="group" aria-label="Categoría">
+                    {categoria && (
+                        <button type="button" className="gt-cat" onClick={() => setCategoria('')}>
+                            <span style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>Todas</span>
+                        </button>
+                    )}
                     {byCategory.map(cat => {
                         const style = CATEGORY_STYLE[cat.value] ?? CATEGORY_STYLE.otros
+                        const activa = categoria === cat.value
                         return (
-                            <span key={cat.value} style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 12,
-                                background: 'var(--toul-surface)', border: '1px solid var(--toul-border)',
-                            }}>
+                            <button key={cat.value} type="button" className="gt-cat" data-activa={activa} aria-pressed={activa}
+                                onClick={() => setCategoria(activa ? '' : cat.value)}>
                                 <style.Icon size={14} style={{ color: style.color }} />
-                                <span style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>{cat.label}</span>
+                                <span style={{ fontSize: 13, color: activa ? 'var(--toul-text)' : 'var(--toul-text-muted)' }}>{cat.label}</span>
                                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--toul-text)' }}>{formatCOP(cat.amount)}</span>
-                            </span>
+                            </button>
                         )
                     })}
                 </div>
