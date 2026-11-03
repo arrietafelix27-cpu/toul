@@ -25,6 +25,8 @@ interface PublishItem {
     price: number
     image: string | null
     isPublic: boolean
+    /** Si el cliente lo vería con "Solo productos con stock" encendido */
+    inStock: boolean
 }
 
 /** Convierte "Perfumes Félix" en "perfumes-felix". */
@@ -49,25 +51,31 @@ export default function CatalogoPublicoPage() {
 
         const { data: store } = await supabase
             .from('stores')
-            .select('id, name, public_slug, catalog_public, catalog_note')
+            .select('id, name, public_slug, catalog_public, catalog_note, catalog_in_stock_only')
             .eq('owner_id', user.id).single()
         if (!store) return null
 
-        const [productsRes, combosRes] = await Promise.all([
+        const [productsRes, combosRes, stockRes] = await Promise.all([
             supabase.from('products').select('id, name, sale_price, image_url, is_public')
                 .eq('store_id', store.id).eq('is_active', true).order('name'),
             supabase.from('combos').select('id, name, sale_price, image_url, is_public')
                 .eq('store_id', store.id).eq('is_active', true).order('name'),
+            // La misma regla con la que el link esconde lo agotado
+            supabase.rpc('toul_catalogo_con_stock', { p_store: store.id }),
         ])
+        if (stockRes.error) throw stockRes.error
+        const withStock = new Set((stockRes.data as { kind: string; id: string }[]).map(row => `${row.kind}-${row.id}`))
 
         const items: PublishItem[] = [
             ...(productsRes.data ?? []).map(row => ({
                 id: row.id, kind: 'producto' as const, name: row.name,
                 price: Number(row.sale_price), image: row.image_url, isPublic: !!row.is_public,
+                inStock: withStock.has(`producto-${row.id}`),
             })),
             ...(combosRes.data ?? []).map(row => ({
                 id: row.id, kind: 'combo' as const, name: row.name,
                 price: Number(row.sale_price), image: row.image_url, isPublic: !!row.is_public,
+                inStock: withStock.has(`combo-${row.id}`),
             })),
         ].sort((a, b) => a.name.localeCompare(b.name, 'es'))
 
@@ -86,6 +94,7 @@ export default function CatalogoPublicoPage() {
     }, [data?.store])
 
     const published = useMemo(() => (data?.items ?? []).filter(item => item.isPublic).length, [data?.items])
+    const publishedInStock = useMemo(() => (data?.items ?? []).filter(item => item.isPublic && item.inStock).length, [data?.items])
     const visible = useMemo(() => {
         const text = query.trim().toLowerCase()
         return (data?.items ?? []).filter(item => !text || item.name.toLowerCase().includes(text))
@@ -103,6 +112,10 @@ export default function CatalogoPublicoPage() {
     const store = data.store
     const link = `${origin}/t/${store.public_slug ?? slug}`
     const live = store.catalog_public && !!store.public_slug
+    const shown = store.catalog_in_stock_only ? publishedInStock : published
+    const shownLabel = published === 0
+        ? 'Todavía no has publicado productos'
+        : `Se mostrará${shown === 1 ? '' : 'n'} ${shown} de ${published} producto${published === 1 ? '' : 's'}`
 
     // ── Acciones ──
     const setStoreField = async (patch: Record<string, unknown>, successMessage?: string) => {
@@ -129,6 +142,12 @@ export default function CatalogoPublicoPage() {
         setSlug(clean)
         await mutate()
         toast.success('Dirección guardada')
+    }
+
+    const toggleInStockOnly = async (next: boolean) => {
+        mutate(current => current && { ...current, store: { ...current.store, catalog_in_stock_only: next } }, { revalidate: false })
+        const { error } = await supabase.from('stores').update({ catalog_in_stock_only: next }).eq('id', store.id)
+        if (error) { toast.error(explainError(error)); mutate() }
     }
 
     const togglePublish = async (item: PublishItem, next: boolean) => {
@@ -282,6 +301,22 @@ export default function CatalogoPublicoPage() {
                 <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '2px 0 10px' }}>
                     Solo lo que enciendas aparece en el link.
                 </p>
+
+                <div className="toul-card" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
+                            Solo productos con stock
+                        </p>
+                        <p style={{ fontSize: 13.5, color: 'var(--toul-text-dim)', margin: '3px 0 0', lineHeight: 1.45 }}>
+                            {shownLabel}
+                        </p>
+                    </div>
+                    <Switch
+                        checked={!!store.catalog_in_stock_only}
+                        onChange={toggleInStockOnly}
+                        label="Solo productos con stock"
+                    />
+                </div>
 
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                     <div style={{ position: 'relative', flex: 1 }}>

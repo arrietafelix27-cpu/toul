@@ -23,7 +23,7 @@ const MIGRATIONS = [
     'deploy_catalogo_publico.sql', 'deploy_inventario.sql',
     'deploy_compras_proveedor.sql', 'deploy_precision.sql',
     'deploy_clientes.sql', 'deploy_cartera.sql', 'deploy_compras_detalle.sql', 'deploy_guardado_atomico.sql', 'deploy_deshacer.sql', 'deploy_errores.sql', 'deploy_planes.sql',
-    'deploy_devoluciones.sql', 'deploy_reportes.sql',
+    'deploy_devoluciones.sql', 'deploy_reportes.sql', 'deploy_catalogo_stock.sql',
 ]
 
 const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs', 'inventario.test.mjs', 'compras-proveedor.test.mjs', 'precision.test.mjs', 'clientes.test.mjs', 'cartera.test.mjs', 'compras-detalle.test.mjs', 'guardado-atomico.test.mjs', 'deshacer.test.mjs', 'errores.test.mjs', 'devoluciones.test.mjs', 'reportes.test.mjs', 'tienda-prueba.test.mjs']
