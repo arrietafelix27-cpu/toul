@@ -69,7 +69,15 @@ const CSS = `
 .pl-lista { display: flex; flex-direction: column; margin-top: 8px; }
 /* En el computador la lista va arriba, con su espacio natural */
 .pl-seccion[data-variante="pc"] { display: flex; flex-direction: column; }
-.pl-todos { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin-top: 6px; padding: 6px 0;
+.pl-seccion[data-variante="pc"] .pl-fila { padding: clamp(8px, 1.2vh, 12px) 0; }
+/* En pantallas bajas el cuarto no cabe sin que la página tenga que bajar */
+@media (max-height: 859px) {
+    .pl-lista[data-variante="pc"] > :nth-child(4) { display: none; }
+}
+@media (min-height: 860px) {
+    .pl-todos[data-solo-bajas] { display: none; }
+}
+.pl-todos { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin-top: 2px; padding: 6px 0;
     font-size: 13px; font-weight: 500; color: var(--toul-text-muted); text-decoration: none;
     transition: color 160ms var(--toul-ease-emil); }
 .pl-item { display: flex; align-items: center; gap: 6px; }
@@ -113,8 +121,10 @@ function whatsappLink(phone: string, message: string) {
 const initialsOf = (name: string) =>
     name.trim().split(/\s+/).map(word => word[0]).join('').toUpperCase().slice(0, 2)
 
-/** Los que más deben: 3, en el celular y en el computador */
-const MOSTRAR = 3
+/** Los que más deben: 3 en el celular y 4 en el computador (3 si la
+ *  pantalla es baja) */
+const MOSTRAR: Record<Variante, number> = { movil: 3, pc: 4 }
+const MOSTRAR_PC_BAJA = 3
 
 export function PendingPanel({ pending, storeName, variante, loading, cuenta = false }: {
     pending: PendingData
@@ -144,7 +154,7 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
 
     const esCobrar = lado === 'cobrar'
     const lista = esCobrar ? pending.customerDebts : pending.providerDebts
-    const mostrados = lista.slice(0, MOSTRAR)
+    const mostrados = lista.slice(0, MOSTRAR[variante])
     const total = (esCobrar ? pending.customerCount : pending.providerCount) ?? lista.length
     // Si alguno tiene WhatsApp, todos reservan ese espacio: los montos
     // quedan alineados en vez de bailar de renglón en renglón
@@ -190,8 +200,8 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
 
             <div className="pl-lugar">
             {loading ? (
-                <div className="pl-lista" aria-hidden>
-                    {[0, 1, 2].map(i => (
+                <div className="pl-lista" data-variante={variante} aria-hidden>
+                    {Array.from({ length: MOSTRAR[variante] }, (_, i) => (
                         <div key={i} className="pl-fila">
                             <span className="pl-avatar skeleton" />
                             <span className="pl-quien"><Skeleton width="60%" height="0.9rem" /></span>
@@ -233,9 +243,11 @@ export function PendingPanel({ pending, storeName, variante, loading, cuenta = f
             )}
             </div>
 
-            {/* Si son más, el resto está a un toque */}
-            {variante === 'pc' && !loading && total > mostrados.length && (
-                <Link href={esCobrar ? '/customers?ver=cobros' : '/providers'} prefetch={false} className="pl-todos">
+            {/* Si son más, el resto está a un toque. Si solo falta el cuarto,
+                solo hace falta en pantallas bajas, donde no se ve */}
+            {variante === 'pc' && !loading && total > Math.min(mostrados.length, MOSTRAR_PC_BAJA) && (
+                <Link href={esCobrar ? '/customers?ver=cobros' : '/providers'} prefetch={false} className="pl-todos"
+                    data-solo-bajas={total <= mostrados.length || undefined}>
                     Ver todos <ChevronRight size={14} strokeWidth={2.2} />
                 </Link>
             )}

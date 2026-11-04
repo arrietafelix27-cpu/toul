@@ -20,6 +20,10 @@ export interface ReporteSQL {
     mercanciaPagada: number
     /** La plata que entró, por método. Los abonos viejos sin método van como "Abonos" */
     metodos: { nombre: string; monto: number }[]
+    /** Lo vendido por método, para el Inicio: lo pagado al vender (sin
+     *  abonos) menos la plata devuelta por ese método. Suma De contado −
+     *  lo reembolsado. No viene si la base de datos todavía no se actualizó */
+    metodosVenta?: { nombre: string; monto: number }[]
     /** Los 5 que más te dejaron, ya restado lo devuelto */
     productos: { id: string; nombre: string; ventas: number; ganancia: number; margen: number }[]
 }
@@ -37,5 +41,5 @@ export interface MesReporte {
 export const REPORTE_VACIO: ReporteSQL = {
     ventas: { total: 0, cantidad: 0, contado: 0, credito: 0, costo: 0 },
     devoluciones: { total: 0, costo: 0, reembolsado: 0 },
-    abonos: 0, gastos: 0, gastosPorCategoria: [], mercanciaPagada: 0, metodos: [], productos: [],
+    abonos: 0, gastos: 0, gastosPorCategoria: [], mercanciaPagada: 0, metodos: [], metodosVenta: [], productos: [],
 }

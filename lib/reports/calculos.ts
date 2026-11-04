@@ -216,20 +216,160 @@ export function textoPorcentaje(parte: number, total: number): string {
     return `${Math.round(exacto)}%`
 }
 
-/* ─── La línea del gráfico del Inicio ─────────────────────────────
-   Lo vendido acumulado: sube con cada venta y baja con cada devolución,
-   así termina exacto en "Vendiste". Sale de toul_reporte(desde, hasta,
-   paso), que entrega lo acumulado al terminar cada hora o cada día de
-   Colombia en que pasó algo.
+/* ─── El resumen del Inicio: tres vistas de lo vendido ────────────
+   Debajo de "Vendiste", una barra con sus filas que se puede alternar:
+   · Pagado y fiado: lo que te pagaron al vender y lo que quedó fiado.
+   · Ganancia y gastos: la ganancia en ventas, repartida en lo que se
+     fue en gastos y lo que ganaste.
+   · Cómo te pagaron: lo pagado por cada método, y lo fiado.
+   Lo devuelto se resta de donde salió: la plata que devolviste, de "Te
+   pagaron" (y del método por el que salió); la deuda que se le bajó al
+   cliente, de lo fiado. Así cada barra suma exacto lo que dice arriba.
+   "Ganaste" es el de Reportes, el mismo en las tres.
+   ─────────────────────────────────────────────────────────────── */
 
-   · Hoy va por hora y el eje es el reloj: un punto en cada hora en
-     punto y el último, ahora. Arranca una hora antes de la primera venta.
-   · Los demás periodos van por día (por semana si pasan de 120 días):
-     cada punto es lo que llevabas al terminar ese día, y el último,
-     hasta ahora o hasta el final de las fechas. Arranca el día antes de
-     la primera venta.
-   · La línea del periodo anterior va por posición: el día 1 contra el
-     día 1. Termina en lo vendido en el periodo anterior equivalente.
+export type VistaInicio = 'pagado' | 'ganancia' | 'metodos'
+
+/** El color de cada parte; cuál es cada uno lo decide la pantalla */
+export type TonoParte = 'verde' | 'fiado' | 'fiadoGris' | 'gastos' | 'metodo2' | 'metodo3' | 'metodo4'
+
+export interface ParteVista { clave: string; monto: number; tono: TonoParte }
+
+export interface FilaVista {
+    clave: string
+    rotulo: string
+    monto: number
+    /** El punto de color. null: no es una parte de la barra */
+    tono: TonoParte | null
+    /** El color del monto */
+    color: 'texto' | 'verde' | 'rojo'
+}
+
+export interface Vista {
+    id: VistaInicio
+    /** Lo que se dibuja, en orden. Solo lo que es más que cero */
+    barra: ParteVista[]
+    filas: FilaVista[]
+    /** La línea fina va antes de esta fila. null: no hay */
+    linea: number | null
+    /** La línea gris de arriba agrega "ganancia en ventas $X". null: no */
+    gananciaVentas: number | null
+}
+
+/** El más grande en verde; los demás, cada vez más tenues. "Otros" va al final */
+const TONOS_METODO: TonoParte[] = ['verde', 'metodo2', 'metodo3', 'metodo4']
+
+const conMonto = (partes: ParteVista[]) => partes.filter(p => p.monto > 0)
+
+/** Ganaste, o Perdiste en rojo con el monto sin signo, como en Reportes */
+function filaGanaste(ganaste: number, tono: TonoParte | null): FilaVista {
+    if (ganaste < 0) return { clave: 'ganaste', rotulo: 'Perdiste', monto: -ganaste, tono: null, color: 'rojo' }
+    return { clave: 'ganaste', rotulo: 'Ganaste', monto: ganaste, tono, color: ganaste > 0 ? 'verde' : 'texto' }
+}
+
+/** Los métodos de mayor a menor, máximo 4 contando "Otros". Los montos
+ *  vienen redondeados por método: el peso que se corra contra lo pagado
+ *  lo absorbe el más grande, así suman exacto */
+function metodosDeVenta(metodos: { nombre: string; monto: number }[], pagado: number) {
+    const lista = metodos
+        .map(m => ({ nombre: String(m.nombre), monto: Number(m.monto) || 0 }))
+        .filter(m => m.monto !== 0)
+        .sort((a, b) => b.monto - a.monto)
+    const corrido = pagado - lista.reduce((s, m) => s + m.monto, 0)
+    if (corrido !== 0) {
+        if (lista.length > 0) lista[0].monto += corrido
+        else lista.push({ nombre: 'Otros', monto: corrido })
+    }
+    const esOtros = (m: { nombre: string }) => m.nombre.trim().toLowerCase() === 'otros'
+    const propios = lista.filter(m => !esOtros(m))
+    let otros = lista.filter(esOtros).reduce((s, m) => s + m.monto, 0)
+    const caben = otros !== 0 || propios.length > 4 ? 3 : 4
+    otros += propios.slice(caben).reduce((s, m) => s + m.monto, 0)
+    return [...propios.slice(0, caben), ...(otros !== 0 ? [{ nombre: 'Otros', monto: otros }] : [])]
+}
+
+/** Las tres vistas del resumen del Inicio. "Cómo te pagaron" no sale si
+ *  la base de datos todavía no trae lo vendido por método */
+export function vistasInicio(r: ResumenReporte, metodosVenta?: { nombre: string; monto: number }[] | null): Vista[] {
+    // La plata devuelta sale de lo pagado; lo demás de lo devuelto bajó deuda
+    const pagado = r.contado - r.devuelto
+    const fiado = r.vendiste - pagado
+    const perdio = r.ganaste < 0
+
+    const pagadoYFiado: Vista = {
+        id: 'pagado',
+        barra: conMonto([{ clave: 'pagado', monto: pagado, tono: 'verde' }, { clave: 'fiado', monto: fiado, tono: 'fiado' }]),
+        filas: [
+            { clave: 'pagado', rotulo: 'Te pagaron', monto: pagado, tono: 'verde', color: 'texto' },
+            { clave: 'fiado', rotulo: 'Quedó fiado', monto: fiado, tono: 'fiado', color: 'texto' },
+            ...(r.gastos > 0 ? [{ clave: 'gastos', rotulo: 'Gastos', monto: r.gastos, tono: null, color: 'texto' } satisfies FilaVista] : []),
+            filaGanaste(r.ganaste, null),
+        ],
+        linea: 2,
+        gananciaVentas: null,
+    }
+
+    // Con pérdida no queda ganancia que repartir: toda la barra es gastos
+    const gananciaYGastos: Vista = {
+        id: 'ganancia',
+        barra: conMonto([
+            { clave: 'gastos', monto: r.gastos, tono: 'gastos' },
+            ...(perdio ? [] : [{ clave: 'ganaste', monto: r.ganaste, tono: 'verde' } satisfies ParteVista]),
+        ]),
+        filas: [
+            { clave: 'gastos', rotulo: 'Se fue en gastos', monto: r.gastos, tono: 'gastos', color: 'texto' },
+            filaGanaste(r.ganaste, 'verde'),
+        ],
+        linea: null,
+        // Sin gastos sería el mismo número de "Ganaste"
+        gananciaVentas: r.gastos > 0 ? r.gananciaVentas : null,
+    }
+
+    if (!metodosVenta) return [pagadoYFiado, gananciaYGastos]
+
+    const metodos = metodosDeVenta(metodosVenta, pagado)
+    const filasMetodos: FilaVista[] = [
+        ...metodos.map((m, i) => ({
+            clave: `metodo-${i}`, rotulo: m.nombre, monto: m.monto,
+            // Si por un método se devolvió más de lo que entró, no va en la barra
+            tono: m.monto > 0 ? TONOS_METODO[i] : null, color: 'texto' as const,
+        })),
+        // Gris y no verde: aquí el verde es del método que más entró
+        ...(fiado !== 0 ? [{ clave: 'fiado', rotulo: 'Fiado', monto: fiado, tono: fiado > 0 ? 'fiadoGris' : null, color: 'texto' } satisfies FilaVista] : []),
+    ]
+    const comoTePagaron: Vista = {
+        id: 'metodos',
+        barra: conMonto([
+            ...metodos.map((m, i) => ({ clave: `metodo-${i}`, monto: m.monto, tono: TONOS_METODO[i] })),
+            { clave: 'fiado', monto: fiado, tono: 'fiadoGris' },
+        ]),
+        filas: [...filasMetodos, filaGanaste(r.ganaste, null)],
+        linea: filasMetodos.length,
+        gananciaVentas: null,
+    }
+
+    return [pagadoYFiado, gananciaYGastos, comoTePagaron]
+}
+
+/* ─── La línea del gráfico del Inicio ─────────────────────────────
+   Lo vendido en cada hora (Hoy), cada día o cada semana: lo vendido
+   menos lo devuelto en ese tramo. Sale de toul_reporte(desde, hasta,
+   paso), que entrega lo acumulado al terminar cada hora o cada día de
+   Colombia en que pasó algo. Lo de cada tramo es la diferencia con el
+   anterior, así los tramos suman exacto "Vendiste".
+
+   La línea que se dibuja va SUAVIZADA: cada punto es un promedio
+   ponderado de los tramos vecinos (núcleo gaussiano), para que un día
+   sin ventas no la tire a cero. Es solo para verla: la etiqueta del
+   dedo dice lo REAL de ese tramo. Nunca baja de cero, ni con un día
+   de solo devoluciones (ese día la etiqueta sí dice el negativo).
+
+   · Hoy: por hora, suavizado de 0.7 horas, un punto cada 12 minutos.
+   · Hasta 7 días: por día, suavizado de 0.55 días.
+   · Hasta 62 días: por día, suavizado de 1.4 días.
+   · Más de 62 días: por semana, suavizado de 1 semana.
+   · Arranca un tramo antes de la primera venta, sin salirse del
+     periodo, y termina ahora o al final de las fechas.
    ─────────────────────────────────────────────────────────────── */
 
 /** Una hora o un día de toul_reporte(..., paso).serie */
@@ -243,23 +383,33 @@ export interface TramoLinea {
 
 export type PasoLinea = 'hora' | 'dia' | 'semana'
 
-export interface PuntoLinea {
-    /** Posición en el eje: horas desde la medianoche (Hoy) o número del día o de la semana del periodo */
-    x: number
-    /** Lo que llevabas en ese punto */
+/** Una hora, un día o una semana, con lo que de verdad se vendió */
+export interface TramoVentas {
+    /** Dónde empieza y dónde termina en el eje */
+    x0: number
+    x1: number
+    /** Cuándo empieza y cuándo termina (el último, ahora o el final de las fechas) */
+    inicio: number
+    fin: number
+    /** Lo vendido menos lo devuelto en ese tramo. Negativo si solo hubo devoluciones */
     valor: number
-    /** El momento que cuenta: la hora en punto (Hoy), el final del día o de la semana, o el último momento */
-    t: number
-    /** Cae antes del periodo: se dibuja, pero no se lee */
-    fuera: boolean
+    /** Cuántas ventas hubo */
+    ventas: number
+}
+
+/** Un punto de la línea suavizada */
+export interface PuntoSuave {
+    x: number
+    valor: number
 }
 
 export interface LineaInicio {
     paso: PasoLinea
-    actual: PuntoLinea[]
-    /** null en Hoy: no se compara */
-    anterior: PuntoLinea[] | null
-    /** Dónde empieza y dónde termina el eje */
+    /** Lo real, tramo por tramo: es lo que dice la etiqueta */
+    tramos: TramoVentas[]
+    /** Lo que se dibuja */
+    puntos: PuntoSuave[]
+    /** Dónde empieza y dónde termina el eje: horas desde la medianoche, o días o semanas del periodo */
     desde: number
     hasta: number
     /** El periodo no tuvo ventas ni devoluciones: la línea es la base en cero */
@@ -267,85 +417,80 @@ export interface LineaInicio {
 }
 
 const HORA = 3_600_000
+const SEMANA = 7 * DIA
 
-type Tramo = { t: number; acumulado: number }
-const ordenar = (serie: TramoLinea[]): Tramo[] =>
-    serie.map(s => ({ t: Date.parse(s.t), acumulado: Math.round(Number(s.acumulado) || 0) })).sort((a, b) => a.t - b.t)
-/** Lo que llevabas justo antes de `t`: el acumulado del último tramo que ya terminó */
-const llevabasAntesDe = (tramos: Tramo[], t: number) => {
-    let valor = 0
-    for (const tramo of tramos) {
-        if (tramo.t >= t) break
-        valor = tramo.acumulado
-    }
-    return valor
-}
-/** Todo el periodo: el acumulado del último tramo */
-const total = (tramos: Tramo[]) => tramos.length ? tramos[tramos.length - 1].acumulado : 0
+/** Cuánto se suaviza, en tramos (sigma del núcleo) */
+const SUAVIZADO = { hora: 0.7, corto: 0.55, mes: 1.4, semana: 1 }
+/** Cada cuánto va un punto de la línea, en tramos */
+const MUESTREO = { hora: 0.2, dia: 0.25, semana: 0.25 }
 
-export function lineaAcumulada({ paso, desde, hasta, serie, anterior = null }: {
+export function lineaVentas({ paso, desde, hasta, serie }: {
     paso: 'hora' | 'dia'
     /** El inicio del periodo: medianoche en Colombia */
     desde: string
     /** Ahora, o el final de las fechas si ya pasaron */
     hasta: string
     serie: TramoLinea[]
-    /** El periodo anterior equivalente (no aplica en Hoy) */
-    anterior?: { desde: string; hasta: string; serie: TramoLinea[] } | null
 }): LineaInicio {
     const d0 = Date.parse(desde)
     const d1 = Date.parse(hasta)
-    const tramos = ordenar(serie)
+    // Lo de cada hora o cada día: la diferencia entre dos acumulados
+    const movimientos = serie
+        .map(s => ({ t: Date.parse(s.t), acumulado: Math.round(Number(s.acumulado) || 0), ventas: Number(s.ventas) || 0 }))
+        .sort((a, b) => a.t - b.t)
+        .map((s, i, todos) => ({ t: s.t, valor: s.acumulado - (i ? todos[i - 1].acumulado : 0), ventas: s.ventas }))
 
-    if (paso === 'hora') {
-        // Una hora antes de la primera venta, sin salirse del día
-        const origen = tramos.length ? Math.max(d0, tramos[0].t - HORA) : d0
-        const actual: PuntoLinea[] = []
-        for (let t = origen; t < d1; t += HORA) {
-            actual.push({ x: (t - d0) / HORA, valor: llevabasAntesDe(tramos, t), t, fuera: false })
+    const dias = Math.ceil((d1 - d0) / DIA)
+    const tipo: PasoLinea = paso === 'hora' ? 'hora' : dias > 62 ? 'semana' : 'dia'
+    const unidad = tipo === 'hora' ? HORA : tipo === 'dia' ? DIA : SEMANA
+    const sigma = tipo === 'hora' ? SUAVIZADO.hora : tipo === 'semana' ? SUAVIZADO.semana : dias <= 7 ? SUAVIZADO.corto : SUAVIZADO.mes
+    const cada = MUESTREO[tipo]
+
+    const fin = Math.max((d1 - d0) / unidad, 0)
+    const ultimo = Math.max(Math.ceil(fin) - 1, 0)
+    const indice = (t: number) => Math.min(Math.max(Math.floor((t - d0) / unidad), 0), ultimo)
+    // Un tramo antes de la primera venta, sin salirse del periodo
+    const origen = movimientos.length ? Math.max(indice(movimientos[0].t) - 1, 0) : 0
+    // A la medianoche en punto todavía no hay nada que mostrar: un pedacito
+    const hastaX = Math.max(fin, origen + cada)
+
+    const tramos: TramoVentas[] = []
+    for (let i = origen; i <= ultimo; i++) {
+        tramos.push({
+            x0: i, x1: Math.min(i + 1, hastaX),
+            inicio: d0 + i * unidad, fin: Math.min(d0 + (i + 1) * unidad, d1),
+            valor: 0, ventas: 0,
+        })
+    }
+    for (const m of movimientos) {
+        const tramo = tramos[indice(m.t) - origen]
+        tramo.valor += m.valor
+        tramo.ventas += m.ventas
+    }
+
+    // El promedio ponderado de los vecinos, alrededor del centro de cada tramo
+    const centros = tramos.map(t => (t.x0 + t.x1) / 2)
+    const suave = (x: number) => {
+        let peso = 0
+        let suma = 0
+        for (let i = 0; i < tramos.length; i++) {
+            const d = (x - centros[i]) / sigma
+            if (Math.abs(d) > 4) continue
+            const w = Math.exp(-0.5 * d * d)
+            peso += w
+            suma += w * tramos[i].valor
         }
-        actual.push({ x: (d1 - d0) / HORA, valor: total(tramos), t: d1, fuera: false })
-        // A la medianoche en punto todavía no hay una hora que mostrar
-        if (actual.length === 1) actual.unshift({ x: actual[0].x - 1, valor: 0, t: d1 - HORA, fuera: true })
-        return { paso: 'hora', actual, anterior: null, desde: actual[0].x, hasta: actual[actual.length - 1].x, vacia: tramos.length === 0 }
+        return peso > 0 ? Math.max(0, suma / peso) : 0
     }
+    const puntos: PuntoSuave[] = []
+    for (let k = 0; origen + k * cada < hastaX - cada / 4; k++) puntos.push({ x: origen + k * cada, valor: suave(origen + k * cada) })
+    puntos.push({ x: hastaX, valor: suave(hastaX) })
 
-    const antes = anterior ? { d0: Date.parse(anterior.desde), d1: Date.parse(anterior.hasta), tramos: ordenar(anterior.serie) } : null
-    const diaDe = (t: number, base: number) => Math.floor((t - base) / DIA)
-    const ultimoDia = diaDe(d1, d0)
-    // Arranca el día antes de la primera venta. Sin ventas, donde arranca
-    // la línea anterior, que queda de referencia
-    const primerDia = tramos.length ? diaDe(tramos[0].t, d0)
-        : antes?.tramos.length ? diaDe(antes.tramos[0].t, antes.d0) : null
-    const porSemana = ultimoDia - (primerDia === null ? 0 : primerDia - 1) > 120
-    const dias = porSemana ? 7 : 1
+    return { paso: tipo, tramos, puntos, desde: origen, hasta: hastaX, vacia: movimientos.length === 0 }
+}
 
-    const ultimo = Math.floor(ultimoDia / dias)
-    let origen = primerDia === null ? 0 : Math.floor(primerDia / dias) - 1
-    if (origen >= ultimo) origen = ultimo - 1
-
-    /** Los puntos de una línea: el acumulado al terminar cada día (o semana) */
-    const puntos = (base: number, fin: number, lista: Tramo[]): PuntoLinea[] => {
-        const hastaI = Math.floor(diaDe(fin, base) / dias)
-        const res: PuntoLinea[] = []
-        for (let i = origen; i <= hastaI; i++) {
-            const termina = base + (i + 1) * dias * DIA
-            res.push(i === hastaI
-                ? { x: i, valor: total(lista), t: fin, fuera: i < 0 }
-                : { x: i, valor: llevabasAntesDe(lista, termina), t: termina - 1, fuera: i < 0 })
-        }
-        return res
-    }
-
-    const actual = puntos(d0, d1, tramos)
-    const lineaAntes = antes ? puntos(antes.d0, antes.d1, antes.tramos) : null
-    const fin = Math.max(ultimo, lineaAntes?.length ? lineaAntes[lineaAntes.length - 1].x : ultimo)
-    return {
-        paso: porSemana ? 'semana' : 'dia',
-        actual,
-        anterior: lineaAntes && lineaAntes.length ? lineaAntes : null,
-        desde: origen,
-        hasta: fin,
-        vacia: tramos.length === 0,
-    }
+/** El tramo que queda debajo del dedo, por su posición en el eje */
+export function tramoEn(linea: LineaInicio, x: number): TramoVentas | null {
+    for (const tramo of linea.tramos) if (x < tramo.x1) return tramo
+    return linea.tramos.at(-1) ?? null
 }

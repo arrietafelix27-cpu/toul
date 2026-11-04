@@ -9,7 +9,7 @@
 // decir cuál.
 //
 // Solo corre en la base de pruebas en memoria (PGlite), nunca en producción.
-import { deCada100, lineaAcumulada, porcentajeTendencia, resumir } from '../../lib/reports/calculos.ts'
+import { deCada100, lineaVentas, porcentajeTendencia, resumir, tramoEn, vistasInicio } from '../../lib/reports/calculos.ts'
 import { instanteDeDia, rangoAnterior, rangoPeriodo } from '../../lib/periodos.ts'
 
 const O = '11111111-1111-1111-1111-111111111111'
@@ -220,14 +220,12 @@ export default async function (db) {
   si('Reportes no cambia: sin paso no trae la línea', rep.serie === undefined)
   si('con paso trae lo mismo de siempre', JSON.stringify({ ...conLinea, serie: undefined, primeraVenta: undefined }) === JSON.stringify(rep))
   igual('Octubre: la línea termina en Vendiste', 640000, ultimoDe(conLinea.serie))
-  const lineaOct = lineaAcumulada({
-    paso: 'dia', desde: octubre.from, hasta: octubre.to, serie: conLinea.serie,
-    anterior: { desde: antes.from, hasta: antes.to, serie: (await r(`SELECT toul_reporte($1,$2,'dia') r`, [antes.from, antes.to])).serie },
-  })
-  igual('el último punto de la gráfica es Vendiste', 640000, lineaOct.actual.at(-1).valor)
-  igual('el último punto de septiembre es lo vendido en septiembre', 100000, lineaOct.anterior.at(-1).valor)
-  si('la línea arranca el 4 de octubre, el día antes de la primera venta', lineaOct.actual[0].x === 3 && lineaOct.actual[0].valor === 0)
-  si('septiembre va al lado, día 4 contra día 4', lineaOct.anterior[0].x === 3)
+  const lineaOct = lineaVentas({ paso: 'dia', desde: octubre.from, hasta: octubre.to, serie: conLinea.serie })
+  igual('lo real de cada día de octubre suma Vendiste', 640000, lineaOct.tramos.reduce((s, t) => s + t.valor, 0))
+  si('la línea suavizada nunca baja de cero', lineaOct.puntos.every(p => p.valor >= 0))
+  si('la línea arranca el 4 de octubre, el día antes de la primera venta', lineaOct.desde === 3 && lineaOct.tramos[0].valor === 0)
+  igual('la etiqueta del 31 dice lo real de ese día (la de las 11:30 p. m.)', 80000, tramoEn(lineaOct, 30.5)?.valor)
+  si('la etiqueta del 25 (la anulada) dice sin ventas', tramoEn(lineaOct, 24.5)?.valor === 0 && tramoEn(lineaOct, 24.5)?.ventas === 0)
   const dia = (serie, fecha) => serie.find(t => new Date(t.t).getTime() === instanteDeDia(fecha).getTime())
   si('la venta de las 11:30 p. m. del 31 cae el 31 de octubre', dia(conLinea.serie, '2026-10-31')?.ventas === 1 && Number(dia(conLinea.serie, '2026-10-31')?.acumulado) === 640000)
   si('la anulada del 25 no está en la línea', dia(conLinea.serie, '2026-10-25') === undefined)
@@ -289,6 +287,17 @@ export default async function (db) {
   igual('Inicio: Ganancia en ventas', 310000, inicio.gananciaVentas)
   igual('Inicio: Gastos', 40000, inicio.gastos)
   igual('Inicio: Ganancia después de gastos', 270000, inicio.ganaste)
+
+  // Las tres vistas del resumen, con lo que trae la base de datos
+  const sumaBarra = (v) => v.barra.reduce((s, p) => s + p.monto, 0)
+  const vistasOct = vistasInicio(inicio, rep.metodosVenta)
+  si('el Inicio tiene las tres vistas', vistasOct.length === 3)
+  igual('lo vendido por método suma De contado menos lo devuelto en plata', inicio.contado - inicio.devuelto,
+    rep.metodosVenta.reduce((s, m) => s + Number(m.monto), 0))
+  igual('Pagado y fiado: Te pagaron + Quedó fiado = Vendiste', 640000, sumaBarra(vistasOct[0]))
+  igual('Ganancia y gastos: Se fue en gastos + Ganaste = Ganancia en ventas', 310000, sumaBarra(vistasOct[1]))
+  igual('Cómo te pagaron: los métodos + Fiado = Vendiste', 640000, sumaBarra(vistasOct[2]))
+  si('Ganaste es el mismo en las tres vistas y en Reportes', vistasOct.every(v => v.filas.find(f => f.clave === 'ganaste').monto === res.ganaste))
 
   console.log('\n— La auditoría (A4) sobre esta tienda')
   const auditoria = await comoDueno(() => q(`SELECT * FROM toul_auditoria()`))
@@ -395,6 +404,11 @@ export default async function (db) {
   igual('De contado + A crédito = Ventas antes de devoluciones', 100000, conDevolucion.contado + conDevolucion.credito)
   igual('la devolución sale como plata', 100000, conDevolucion.devuelto)
   igual('Ganaste', 0, conDevolucion.ganaste)
+  const repDevolucion = await r(`SELECT toul_reporte($1,$2) r`, [noviembre.from, noviembre.to])
+  const vistasDevolucion = vistasInicio(conDevolucion, repDevolucion.metodosVenta)
+  si('lo devuelto en plata sale del método por el que se devolvió', repDevolucion.metodosVenta.length === 0,
+    JSON.stringify(repDevolucion.metodosVenta))
+  si('con la devolución las tres barras quedan en cero', vistasDevolucion.every(v => sumaBarra(v) === 0))
   const lineaDevolucion = (await r(`SELECT toul_reporte($1,$2,'dia') r`, [noviembre.from, noviembre.to])).serie
   si('la línea sube el 1 y baja el 2 con la devolución', JSON.stringify(lineaDevolucion.map(t => Number(t.acumulado))) === JSON.stringify([100000, 0]))
   const mesesConDevolucion = await r(`SELECT toul_reporte_meses(6, '2026-11-01') r`)

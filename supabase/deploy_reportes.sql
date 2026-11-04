@@ -22,6 +22,8 @@
 --   · A crédito       = Vendiste − De contado.
 --   · Ganancia        = (ventas − devoluciones) − (costo − costo devuelto).
 --   · Plata que entró = De contado + abonos que te hicieron.
+--   · Lo vendido por método (Inicio, "Cómo te pagaron") = lo pagado al
+--     vender, por método, menos la plata devuelta por ese método. Sin abonos.
 --   · Mercancía que pagaste = compras pagadas + abonos a proveedores.
 --   · Lo devuelto resta el día en que se devuelve.
 --
@@ -79,6 +81,7 @@ DECLARE
     v_categorias jsonb;
     v_mercancia  numeric;
     v_metodos    jsonb;
+    v_metodos_venta jsonb;
     v_productos  jsonb;
     v_linea      jsonb := '{}'::jsonb;
 BEGIN
@@ -142,7 +145,10 @@ BEGIN
     -- Cómo te pagan: la plata que entró, por método. Lo de cada venta sale
     -- de sus pagos; si una venta de contado no tiene el detalle (ventas
     -- viejas), va al método que quedó anotado en la venta. Los abonos van
-    -- por el método que se eligió; los de antes no lo tenían y van como "Abonos"
+    -- por el método que se eligió; los de antes no lo tenían y van como "Abonos".
+    -- En la misma pasada, lo vendido por método para el Inicio: solo lo
+    -- pagado al vender, menos la plata que se devolvió por cada método.
+    -- Suma De contado − lo reembolsado
     WITH pagos AS (
         SELECT v.id, pm.name AS nombre, sp.amount AS monto,
                SUM(sp.amount) OVER (PARTITION BY v.id) AS pagado, v.contado
@@ -165,10 +171,13 @@ BEGIN
                v.contado - COALESCE((SELECT SUM(a.monto) FROM ajustados a WHERE a.id = v.id), 0) AS monto
           FROM toul_reporte_ventas(v_store, v_desde, v_hasta) v
     ),
-    entradas AS (
+    al_vender AS (
         SELECT nombre, monto, 0 AS prioridad FROM ajustados
         UNION ALL
         SELECT nombre, monto, 1 FROM resto WHERE monto > 0
+    ),
+    entradas AS (
+        SELECT nombre, monto, prioridad FROM al_vender
         UNION ALL
         -- Los abonos de antes no tenían método: del 29 sep al 14 oct de 2026
         -- quedaron como "General" y después sin nada. Todos van como "Abonos"
@@ -181,16 +190,33 @@ BEGIN
          WHERE store_id = v_store AND type = 'payment'
            AND created_at >= v_desde AND created_at <= v_hasta
     ),
+    devuelto AS (
+        -- La plata devuelta en el periodo, por el método con que salió
+        SELECT COALESCE(pm.name, 'Otros') AS nombre, -r.refunded AS monto, 2 AS prioridad
+          FROM sale_returns r
+          LEFT JOIN payment_methods pm ON pm.id = r.refund_method_id
+         WHERE r.store_id = v_store AND r.refunded > 0
+           AND r.created_at >= v_desde AND r.created_at <= v_hasta
+    ),
     por_metodo AS (
         -- "Efectivo" y "efectivo" son el mismo método
         SELECT (array_agg(nombre ORDER BY prioridad))[1] AS nombre, round(SUM(monto)) AS monto
           FROM entradas
          GROUP BY lower(trim(nombre))
+    ),
+    por_metodo_venta AS (
+        SELECT (array_agg(nombre ORDER BY prioridad))[1] AS nombre, round(SUM(monto)) AS monto
+          FROM (SELECT nombre, monto, prioridad FROM al_vender
+                UNION ALL
+                SELECT nombre, monto, prioridad FROM devuelto) m
+         GROUP BY lower(trim(nombre))
     )
-    SELECT COALESCE(jsonb_agg(jsonb_build_object('nombre', nombre, 'monto', monto) ORDER BY monto DESC, nombre), '[]'::jsonb)
-      INTO v_metodos
-      FROM por_metodo
-     WHERE monto > 0;
+    SELECT (SELECT COALESCE(jsonb_agg(jsonb_build_object('nombre', nombre, 'monto', monto) ORDER BY monto DESC, nombre), '[]'::jsonb)
+              FROM por_metodo WHERE monto > 0),
+           -- Un método puede quedar en negativo si se devolvió más de lo que entró por él
+           (SELECT COALESCE(jsonb_agg(jsonb_build_object('nombre', nombre, 'monto', monto) ORDER BY monto DESC, nombre), '[]'::jsonb)
+              FROM por_metodo_venta WHERE monto <> 0)
+      INTO v_metodos, v_metodos_venta;
 
     -- Qué te dejó más: los 5 productos con más ganancia, ya restado lo
     -- que devolvieron en el periodo. El descuento de una venta se reparte
@@ -293,6 +319,7 @@ BEGIN
         'gastosPorCategoria', v_categorias,
         'mercanciaPagada',    v_mercancia,
         'metodos',            v_metodos,
+        'metodosVenta',       v_metodos_venta,
         'productos',          v_productos
     ) || v_linea;
 END;

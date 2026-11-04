@@ -75,12 +75,15 @@ const CSS = ENTRADA_INICIO_CSS + `
 .tp-fila[data-variante="movil"] .tp-foto { height: 164px; }
 .tp-fila[data-variante="movil"] .tp-numero { font-size: 60px; left: 11px; }
 
-/* Computador: los 3 primeros, y 4 en pantallas grandes. Cada foto
-   siempre en 4:5, recortada para llenar: nunca se estira */
+/* Computador: los 3 primeros, y 4 solo en pantallas muy anchas: antes
+   las fotos quedarían angostas. La foto crece con el alto de la
+   pantalla, entre 3:4 y un poco más alta que 2:3, recortada para
+   llenar: nunca se estira */
 .tp-fila[data-variante="pc"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
-.tp-fila[data-variante="pc"] .tp-foto { aspect-ratio: 4 / 5; }
+.tp-fila[data-variante="pc"] .tp-carta { container-type: inline-size; }
+.tp-fila[data-variante="pc"] .tp-foto { height: clamp(133cqw, 23vh, 160cqw); }
 .tp-fila[data-variante="pc"] > :nth-child(4) { display: none; }
-@media (min-width: 1440px) {
+@media (min-width: 1680px) {
     .tp-fila[data-variante="pc"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .tp-fila[data-variante="pc"] > :nth-child(4) { display: flex; }
 }

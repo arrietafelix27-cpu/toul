@@ -7,18 +7,18 @@ import Link from 'next/link'
 import useSWR from 'swr'
 
 // Components
-import HeroChart, { type Comparacion } from '@/components/dashboard/HeroChart'
+import HeroChart from '@/components/dashboard/HeroChart'
 import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { PrimerosPasos } from '@/components/dashboard/PrimerosPasos'
 import { SelectorPeriodo, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
-import { Vendiste, GananciaGastos, LlevasEnHoy, type LlevasHoy, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
+import { Vendiste, ResumenVistas, LlevasEnHoy, GastosSinVentas, useVistaInicio, type LlevasHoy, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
 
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
 import { ENTRADA_INICIO_CSS, entrada, useEntradaInicio } from '@/lib/motion'
-import { contraQue, diasEntre, rangoAnterior, textoRango } from '@/lib/periodos'
-import { lineaAcumulada, porcentajeTendencia, resumir, type LineaInicio, type TramoLinea } from '@/lib/reports/calculos'
+import { contraQue, diasEntre, rangoAnterior } from '@/lib/periodos'
+import { lineaVentas, porcentajeTendencia, resumir, vistasInicio, type LineaInicio, type TramoLinea } from '@/lib/reports/calculos'
 import type { ReporteSQL } from '@/lib/reports/types'
 import type { AIInsight } from '@/lib/types'
 
@@ -38,7 +38,6 @@ interface Cabecera {
     linea: LineaInicio | null
     /** La línea termina ahora (no en unas fechas que ya pasaron) */
     enVivo: boolean
-    comparacion: Comparacion | null
     /** Nunca ha vendido: sin gráfica */
     nuevo: boolean
     /** Hoy sin ventas: cómo vas en la semana y en el mes */
@@ -59,8 +58,8 @@ export default function DashboardPage() {
         storeId ? ['dashboard-v3', storeId, period, customRange] : null,
         async () => {
             const range = period === 'custom' && customRange ? customRange : getDateRange(period)
-            // El mismo tramo del periodo anterior, para la tendencia y la
-            // línea de atrás. En Hoy no se compara
+            // El mismo tramo del periodo anterior, para la tendencia. En Hoy
+            // no se compara
             const compara = period !== 'today'
             const prevRange = compara ? rangoAnterior(period, range) : { from: null, to: null }
             // La línea del gráfico: por hora en Hoy, por día en los demás
@@ -72,7 +71,7 @@ export default function DashboardPage() {
                 // números distintos
                 supabase.rpc('toul_reporte', { p_desde: range.from, p_hasta: range.to, p_paso: paso }),
                 prevRange.from && prevRange.to
-                    ? supabase.rpc('toul_reporte', { p_desde: prevRange.from, p_hasta: prevRange.to, p_paso: paso })
+                    ? supabase.rpc('toul_reporte', { p_desde: prevRange.from, p_hasta: prevRange.to })
                     : Promise.resolve({ data: null, error: null }),
                 // Las ventas y devoluciones, solo para las listas de productos
                 supabase.from('sales').select('total, subtotal, created_at, sale_items(unit_price, unit_cost, quantity, product_id, products(name, image_url))').eq('store_id', storeId).gte('created_at', range.from || '2000-01-01').lte('created_at', range.to || new Date().toISOString()),
@@ -88,7 +87,7 @@ export default function DashboardPage() {
 
             // 1. LO VENDIDO, LA GANANCIA Y LOS GASTOS
             const datos = reporte.data as ReporteConLinea
-            const datosAntes = reporteAntes.data as ReporteConLinea | null
+            const datosAntes = reporteAntes.data as ReporteSQL | null
             const actual = resumir(datos)
             const anterior = datosAntes ? resumir(datosAntes) : null
 
@@ -96,43 +95,25 @@ export default function DashboardPage() {
             const ahora = Date.now()
             const enVivo = period !== 'custom' || !range.to || Date.parse(range.to) > ahora
             const hastaLinea = period === 'custom' && enVivo ? new Date(ahora).toISOString() : range.to
-            const linea = range.from && hastaLinea ? lineaAcumulada({
-                paso,
-                desde: range.from,
-                hasta: hastaLinea,
-                serie: datos.serie ?? [],
-                anterior: datosAntes && prevRange.from && prevRange.to
-                    ? { desde: prevRange.from, hasta: prevRange.to, serie: datosAntes.serie ?? [] }
-                    : null,
-            }) : null
-            const comparacion: Comparacion | null = !compara ? null
-                : period === 'week' ? { actual: 'Esta semana', anterior: 'Semana pasada', globo: 'Semana pasada' }
-                    : period === 'month' ? { actual: 'Este mes', anterior: 'Mes pasado', globo: 'Mes pasado' }
-                        : period === 'year' ? { actual: 'Este año', anterior: 'Año pasado', globo: 'Año pasado' }
-                            : range.from && range.to && prevRange.from && prevRange.to
-                                ? {
-                                    actual: textoRango(new Date(range.from), new Date(range.to)),
-                                    anterior: textoRango(new Date(prevRange.from), new Date(prevRange.to)),
-                                    globo: 'Periodo anterior',
-                                }
-                                : null
+            const linea = range.from && hastaLinea
+                ? lineaVentas({ paso, desde: range.from, hasta: hastaLinea, serie: datos.serie ?? [] })
+                : null
             const nuevo = !datos.primeraVenta
 
-            // Hoy sin ventas: en lugar de la ganancia y los gastos, cómo vas
-            // en la semana y en el mes. Si hoy ya hubo gastos, el mes no se pide
+            // Hoy sin ventas: en lugar de la barra, cómo vas en la semana y en el mes
             let llevas: LlevasHoy | null = null
             if (period === 'today' && actual.cantidad === 0 && !nuevo) {
                 const semana = getDateRange('week')
                 const mes = getDateRange('month')
                 const [deLaSemana, delMes] = await Promise.all([
                     supabase.rpc('toul_reporte', { p_desde: semana.from, p_hasta: semana.to }),
-                    actual.gastos > 0 ? Promise.resolve(null) : supabase.rpc('toul_reporte', { p_desde: mes.from, p_hasta: mes.to }),
+                    supabase.rpc('toul_reporte', { p_desde: mes.from, p_hasta: mes.to }),
                 ])
                 if (deLaSemana.error) throw deLaSemana.error
-                if (delMes?.error) throw delMes.error
+                if (delMes.error) throw delMes.error
                 llevas = {
                     semana: resumir(deLaSemana.data as ReporteSQL).vendiste,
-                    mes: delMes ? resumir(delMes.data as ReporteSQL).vendiste : null,
+                    mes: resumir(delMes.data as ReporteSQL).vendiste,
                 }
             }
 
@@ -238,14 +219,15 @@ export default function DashboardPage() {
                 days: p.desde ? Math.max(0, diasEntre(p.desde, new Date())) : null,
             }))
 
-            const cabecera: Cabecera = { linea, enVivo, comparacion, nuevo, llevas }
+            const cabecera: Cabecera = { linea, enVivo, nuevo, llevas }
             return {
                 clave: claveDe(period, customRange),
                 cabecera,
+                // Pagado y fiado, ganancia y gastos, y cómo te pagaron
+                vistas: vistasInicio(actual, datos.metodosVenta),
                 metrics: {
                     revenue: actual.vendiste,
                     expenses: actual.gastos,
-                    grossProfit: actual.gananciaVentas,
                     salesCount: actual.cantidad,
                     prevRevenue: anterior?.vendiste ?? 0,
                     prevSalesCount: anterior?.cantidad ?? 0,
@@ -318,9 +300,14 @@ export default function DashboardPage() {
         clave: claveDe(period, customRange),
     }), [animar, periodoTocado, period, customRange])
 
+    // La vista del resumen se recuerda por persona en este equipo
+    const { data: usuario } = useSWR('usuario-sesion',
+        async () => (await supabase.auth.getSession()).data.session?.user.id ?? null,
+        { revalidateOnFocus: false })
+    const [vista, setVista] = useVistaInicio(usuario ?? null)
+
     const metrics: MetricasInicio = {
         revenue: dashboardData?.metrics.revenue || 0,
-        grossProfit: dashboardData?.metrics.grossProfit || 0,
         expenses: dashboardData?.metrics.expenses || 0,
         salesCount: dashboardData?.metrics.salesCount || 0,
     }
@@ -351,14 +338,23 @@ export default function DashboardPage() {
     // Nunca ha vendido: no hay gráfica ni ganancia que mostrar, solo el $0
     const nuevo = !!dashboardData?.cabecera.nuevo
     const grafica = (variante: 'movil' | 'pc') => nuevo ? null : (
-        <HeroChart linea={cabecera?.linea ?? null} clave={conteo.clave} comparacion={cabecera?.comparacion ?? null}
-            enVivo={cabecera?.enVivo ?? true} variante={variante} alto={variante === 'movil' ? 150 : '100%'} dibujar={dibujar} />
+        <HeroChart linea={cabecera?.linea ?? null} clave={conteo.clave} enVivo={cabecera?.enVivo ?? true}
+            variante={variante} alto={variante === 'movil' ? 150 : '100%'} dibujar={dibujar} />
     )
-    // Debajo de lo vendido: la ganancia y los gastos; en Hoy sin ventas, cómo vas en la semana
+    // Debajo de lo vendido, la barra con sus tres vistas. Sin ventas no hay
+    // barra: en Hoy, cómo vas en la semana y en el mes; en otro periodo, los
+    // gastos si los hubo
+    const vistas = dashboardData?.vistas ?? null
+    const sinVentas = !loading && metrics.salesCount === 0
     const abajo: ReactNode = nuevo ? null
-        : period === 'today' && !loading && metrics.salesCount === 0 && cabecera?.llevas
+        : sinVentas && period === 'today' && cabecera?.llevas
             ? <LlevasEnHoy llevas={cabecera.llevas} gastosHoy={metrics.expenses} conteo={conteo} />
-            : <GananciaGastos metrics={metrics} loading={loading} conteo={conteo} />
+            : sinVentas
+                ? (metrics.expenses > 0 ? <GastosSinVentas gastos={metrics.expenses} conteo={conteo} /> : null)
+                : <ResumenVistas vistas={vistas} vista={vista} onCambiar={setVista} loading={loading} conteo={conteo}
+                    claveDatos={dashboardData?.clave ?? ''} />
+    // En la vista de ganancia, la línea gris de arriba dice la ganancia en ventas
+    const gananciaVentas = sinVentas ? null : vistas?.find(v => v.id === vista)?.gananciaVentas ?? null
 
     return (
         <>
@@ -418,6 +414,7 @@ export default function DashboardPage() {
                     tendencia={tendencia}
                     hrefReporte={hrefReporte}
                     nuevo={nuevo}
+                    gananciaVentas={gananciaVentas}
                     grafica={grafica('movil')}
                     abajo={abajo}
                 />
@@ -440,8 +437,7 @@ export default function DashboardPage() {
                                 <Settings size={20} strokeWidth={1.9} />
                             </Link>
                         </div>
-                        {/* Las dos columnas empiezan y terminan a la misma altura:
-                            arriba lo vendido, abajo la ganancia y los gastos */}
+                        {/* La gráfica a la izquierda; a la derecha el resumen, agrupado arriba */}
                         <div className="in-pc-cuerpo" data-nuevo={nuevo || undefined}>
                             {!nuevo && (
                                 <div {...entrada(1, animar, 'in-pc-grafica')}>
@@ -450,8 +446,8 @@ export default function DashboardPage() {
                             )}
                             <div className="in-pc-resumen">
                                 <div {...entrada(2, animar)}>
-                                    <Vendiste metrics={metrics} loading={loading} period={period} variante="pc" conteo={conteo}
-                                        tendencia={tendencia} href={hrefReporte} nuevo={nuevo}
+                                    <Vendiste metrics={metrics} loading={loading} period={period} conteo={conteo}
+                                        tendencia={tendencia} href={hrefReporte} nuevo={nuevo} gananciaVentas={gananciaVentas}
                                         selector={<SelectorPeriodo variante="pc" forma="pildora" period={period} setPeriod={cambiarPeriodo}
                                             rango={customRange} setRango={cambiarRango} />} />
                                 </div>
@@ -460,7 +456,6 @@ export default function DashboardPage() {
                         </div>
                     </header>
 
-                    {/* Llega hasta el final de la pantalla */}
                     <div className="in-pc-abajo">
                         <InsightsRow
                             products={products}
@@ -480,23 +475,28 @@ export default function DashboardPage() {
     )
 }
 
-/* Lo del computador que no cabe en clases de Tailwind: la luz verde de
-   arriba a la izquierda, la gráfica que llega hasta el borde derecho y
-   la pantalla que se llena de arriba abajo */
+/* Lo del computador que no cabe en clases de Tailwind: la pantalla que se
+   llena de arriba abajo y el encabezado de dos columnas */
 const PC_CSS = ENTRADA_INICIO_CSS + `
-/* Dos filas. La de abajo (plata pendiente, tus productos y acciones)
-   mide lo que mide su contenido y nunca se estira. La de arriba (el
-   gráfico y el resumen) toma todo lo que sobra, con un mínimo de 320 px:
-   así la pantalla queda llena sin franja vacía */
+/* La pantalla se llena sin franja vacía abajo. Lo que sobra se reparte
+   en proporción, para que nada se vea estirado a la fuerza:
+   · dos tercios para el encabezado: el gráfico crece (nunca menos de
+     240 px ni menos que el resumen, que va agrupado arriba, sin huecos
+     por dentro);
+   · un tercio para el aire entre el encabezado y la fila de abajo, que
+     queda pegada al final de la pantalla.
+   La fila de abajo (plata pendiente, tus productos y acciones) mide lo
+   que mide su contenido y nunca se estira */
 .in-pc {
     position: relative;
-    --in-pc-hueco: clamp(24px, 3.5vh, 40px);
+    --in-pc-hueco: clamp(24px, 3.8vh, 56px);
 }
 /* Sin z-index ni isolation, como en el celular: los menús y las hojas
    tienen que poder quedar por encima de todo. Los 2rem son el margen de
    abajo que ya pone la app. En pantallas muy anchas no pasa de 1680 px */
 .in-pc-contenido { position: relative; width: 100%; max-width: 1680px; margin: 0 auto;
-    min-height: calc(100dvh - 2rem); display: flex; flex-direction: column; padding: 24px 24px 16px; }
+    min-height: calc(100dvh - 2rem); display: flex; flex-direction: column;
+    padding: clamp(20px, 2.6vh, 32px) 24px 16px; }
 
 .in-pc-arriba { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 40px; }
 .in-pc-saludo { min-width: 0; font-size: 14px; font-weight: 400; letter-spacing: -0.01em; color: var(--toul-text-subtle); margin: 0;
@@ -506,16 +506,16 @@ const PC_CSS = ENTRADA_INICIO_CSS + `
     transition: color 160ms var(--toul-ease-emil), background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
 .in-pc-ajustes:active { transform: scale(0.94); }
 
-.in-pc-cabeza { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-/* La gráfica ocupa cerca del 60% desde el borde izquierdo; el resumen,
-   el resto. Las dos miden lo mismo y crecen con la fila */
-.in-pc-cuerpo { flex: 1; min-height: 320px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
-    grid-template-rows: 1fr; column-gap: clamp(32px, 4vw, 64px); margin-top: 6px; }
+.in-pc-cabeza { flex: 2 1 auto; min-height: 0; display: flex; flex-direction: column; }
+/* La gráfica, cerca del 60% desde el borde izquierdo; el resumen, el
+   resto, a 40 px */
+.in-pc-cuerpo { flex: 1; min-height: 240px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+    grid-template-rows: 1fr; column-gap: 40px; margin-top: 6px; }
 /* Sin ventas en toda su historia no hay gráfica: el resumen va solo */
 .in-pc-cuerpo[data-nuevo] { grid-template-columns: minmax(0, 1fr); }
-.in-pc-grafica { min-width: 0; min-height: 220px; }
-.in-pc-resumen { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 20px; }
-.in-pc-abajo { flex: none; margin-top: var(--in-pc-hueco); }
+.in-pc-grafica { min-width: 0; min-height: 0; }
+.in-pc-resumen { min-width: 0; display: flex; flex-direction: column; gap: clamp(12px, 2vh, 18px); }
+.in-pc-abajo { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: flex-end; margin-top: var(--in-pc-hueco); }
 @media (hover: hover) and (pointer: fine) {
     .in-pc-ajustes:hover { color: var(--toul-text); background: var(--toul-surface); }
 }

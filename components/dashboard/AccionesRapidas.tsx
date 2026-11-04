@@ -42,9 +42,9 @@ const CSS = PANEL_CSS + `
 .ar-circulo { width: 58px; height: 58px; border-radius: 50%; }
 .ar-etiqueta { font-size: 13px; font-weight: 500; color: var(--toul-text-muted); letter-spacing: -0.01em; }
 
-/* ── Computador ── filas de 60 px, una debajo de la otra */
+/* ── Computador ── una fila debajo de la otra; con más alto de pantalla, más aire */
 .ar-pc { display: flex; flex-direction: column; }
-.ar-pc .ar-fila { height: 60px; padding-top: 0; padding-bottom: 0; }
+.ar-pc .ar-fila { height: clamp(62px, 7.6vh, 76px); padding-top: 0; padding-bottom: 0; }
 .ar-titulo { font-size: 17px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; color: var(--toul-text); margin: 0 0 10px; }
 .ar-filas { display: flex; flex-direction: column; }
 .ar-fila { display: flex; align-items: center; gap: 14px; width: calc(100% + 16px); padding: 12px 8px; margin: 0 -8px;
