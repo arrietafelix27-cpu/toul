@@ -1,32 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { UserX } from 'lucide-react'
-import DesktopPOS from '@/components/pos/desktop/DesktopPOS'
+import { Caja } from '@/components/pos/caja/Caja'
 import { POSFlowProvider } from '@/components/pos/POSFlowProvider'
-import { POSModeProvider, type POSModeValue } from '@/components/pos/POSMode'
 import { useCaja } from '@/components/isla/CajaContext'
 import { OpenSessionCard } from '@/components/isla/OpenSessionCard'
-import { Sheet } from '@/components/isla/Sheet'
 
 export default function CajaPage() {
-    const router = useRouter()
-    const { ctx, session, sessionLoading, refreshSession, autoPrint, isPro } = useCaja()
-    const [openShift, setOpenShift] = useState(false)
-    // El administrador puede vender con el turno de otra persona abierto:
-    // esas ventas no entran a ese turno (TOUL las deja por fuera)
-    const turnoAjeno = !!session && session.opened_by !== ctx.userId
-    const miTurno = session && !turnoAjeno ? session.id : null
-
-    const mode = useMemo<POSModeValue>(() => ({
-        mode: 'caja',
-        role: ctx.role,
-        autoPrint,
-        cashSessionId: miTurno,
-        sellerName: ctx.displayName,
-        onViewHistory: () => router.push('/caja/ventas'),
-    }), [ctx.role, autoPrint, miTurno, ctx.displayName, router])
+    const { ctx, session, sessionLoading, refreshSession } = useCaja()
 
     if (sessionLoading) {
         return (
@@ -60,52 +41,10 @@ export default function CajaPage() {
         )
     }
 
+    // El turno abierto de otra persona y "sin turno" ahora se ven en la barra de arriba
     return (
-        <POSModeProvider value={mode}>
-            <POSFlowProvider enabled>
-                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--toul-pos-bg-main)' }}>
-                    {turnoAjeno && (
-                        <div role="status" style={{
-                            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
-                            padding: '10px 16px', background: 'var(--toul-warning-dim)',
-                            borderBottom: '1px solid var(--toul-border)',
-                        }}>
-                            <UserX size={16} style={{ color: 'var(--toul-warning)', flexShrink: 0 }} />
-                            <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: 'var(--toul-warning)' }}>
-                                El turno abierto es de {session?.opened_by_name || 'otra persona'}. Lo que vendas aquí no entra a su turno ni a su cuadre.
-                            </span>
-                        </div>
-                    )}
-                    {isPro && !session && (
-                        <div style={{
-                            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
-                            padding: '10px 16px', background: 'var(--toul-surface)',
-                            borderBottom: '1px solid var(--toul-border)',
-                        }}>
-                            <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--toul-text-muted)' }}>
-                                <span className="hidden md:inline">Vendiendo sin turno de caja. Ábrelo si estás atendiendo en la isla.</span>
-                                <span className="md:hidden">Estás vendiendo sin turno abierto.</span>
-                            </span>
-                            <button onClick={() => setOpenShift(true)}
-                                style={{
-                                    height: 34, padding: '0 14px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
-                                    border: '1px solid var(--toul-border-focused)', background: 'var(--toul-surface-focused)',
-                                    color: 'var(--toul-accent)', fontSize: 13, fontWeight: 600,
-                                }}>
-                                Abrir turno
-                            </button>
-                        </div>
-                    )}
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <DesktopPOS />
-                    </div>
-                </div>
-
-                <Sheet open={openShift} onClose={() => setOpenShift(false)} title="Abrir turno de caja"
-                    subtitle="Cuenta el efectivo que hay en la caja antes de empezar.">
-                    <OpenSessionCard name={ctx.displayName} onOpened={() => { setOpenShift(false); refreshSession() }} embedded />
-                </Sheet>
-            </POSFlowProvider>
-        </POSModeProvider>
+        <POSFlowProvider enabled>
+            <Caja />
+        </POSFlowProvider>
     )
 }

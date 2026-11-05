@@ -10,7 +10,7 @@ import { notifyAdmins } from '@/lib/isla/push'
  * a crédito) vía el RPC `toul_request_approval` y avisa por notificación push
  * a los administradores.
  *
- * Body: { type: 'void_sale' | 'return_sale' | 'credit_sale', saleId?, amount?, reason?, details? }
+ * Body: { type: 'void_sale' | 'return_sale' | 'credit_sale' | 'discount_sale', saleId?, amount?, reason?, details? }
  * En una devolución, details = { items: [{ saleItemId, quantity }], methodId } y
  * el monto lo calcula la base: no se confía en el que mande el equipo.
  */
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     }
 
     const type = body.type
-    if (type !== 'void_sale' && type !== 'credit_sale' && type !== 'return_sale') {
+    if (type !== 'void_sale' && type !== 'credit_sale' && type !== 'return_sale' && type !== 'discount_sale') {
         return NextResponse.json({ error: 'Tipo de solicitud inválido' }, { status: 400 })
     }
 
@@ -53,13 +53,17 @@ export async function POST(request: Request) {
 
     const who = created?.requested_by_name || 'Un vendedor'
     const amount = formatCOP(Number(created?.amount) || 0)
-    const customer = (created?.details as { customerName?: string } | null)?.customerName
+    const details = created?.details as { customerName?: string; discount?: number } | null
+    const customer = details?.customerName
+    const descuento = Number(details?.discount) || 0
 
     const sent = await notifyAdmins(supabase, requestId, type === 'void_sale'
         ? { title: 'Solicitud de anulación', body: `${who} quiere anular una venta de ${amount}`, url: '/aprobaciones', tag: requestId }
         : type === 'return_sale'
             ? { title: 'Solicitud de devolución', body: `${who} quiere devolver ${amount} de una venta`, url: '/aprobaciones', tag: requestId }
-            : { title: 'Solicitud de crédito', body: `${who} quiere fiar ${amount}${customer ? ` a ${customer}` : ''}`, url: '/aprobaciones', tag: requestId }
+            : type === 'discount_sale'
+                ? { title: 'Solicitud de descuento', body: `${who} quiere descontar ${formatCOP(descuento)} en una venta de ${amount}`, url: '/aprobaciones', tag: requestId }
+                : { title: 'Solicitud de crédito', body: `${who} quiere fiar ${amount}${customer ? ` a ${customer}` : ''}${descuento > 0 ? ` con ${formatCOP(descuento)} de descuento` : ''}`, url: '/aprobaciones', tag: requestId }
     )
 
     return NextResponse.json({ id: requestId, notified: sent })

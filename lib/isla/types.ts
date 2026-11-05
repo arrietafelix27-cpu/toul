@@ -41,11 +41,15 @@ export interface CashSessionSummary {
     /** Desde deploy_devoluciones.sql: antes de correrlo no llegan */
     returnCount?: number
     returnTotal?: number
+    /** Desde deploy_caja_permisos.sql: vueltos del turno (solo informativo) */
+    changeCount?: number
+    changeTotal?: number
+    cashReceived?: number
     countedCash?: number
     difference?: number
 }
 
-export type ApprovalType = 'void_sale' | 'credit_sale' | 'return_sale'
+export type ApprovalType = 'void_sale' | 'credit_sale' | 'return_sale' | 'discount_sale'
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'used' | 'cancelled' | 'expired'
 
 export interface ApprovalRequest {
@@ -68,6 +72,11 @@ export interface ApprovalRequest {
         saleSummary?: string
         /** Devolución: por dónde sale la plata */
         methodId?: string | null
+        /** Venta con descuento: cuánto se descuenta y de cuánto era */
+        discount?: number
+        subtotal?: number
+        /** La solicitud de fiado también lleva descuento */
+        isCredit?: boolean
     }
     resolved_by_name: string | null
     resolved_at: string | null
@@ -108,4 +117,7 @@ export interface ReceiptData {
     payments: { method: string; amount: number }[]
     isCredit: boolean
     initialPayment?: number
+    /** Efectivo que entregó el cliente y lo que se le devolvió */
+    cashReceived?: number | null
+    change?: number | null
 }

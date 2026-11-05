@@ -57,6 +57,8 @@ export function CashSummary({ summary }: { summary: CashSessionSummary }) {
             {summary.creditCount > 0 && <Row label="A crédito" value={String(summary.creditCount)} />}
             {summary.voidCount > 0 && <Row label={`Anuladas (${summary.voidCount})`} value={formatCOP(summary.voidTotal)} tone="error" />}
             {(summary.returnCount ?? 0) > 0 && <Row label={`Devoluciones (${summary.returnCount})`} value={`−${formatCOP(summary.returnTotal ?? 0)}`} tone="warn" />}
+            {/* El vuelto sale del efectivo recibido: no cambia lo que debería haber */}
+            {(summary.changeCount ?? 0) > 0 && <Row label={`Vueltos entregados (${summary.changeCount})`} value={formatCOP(summary.changeTotal ?? 0)} tone="muted" />}
         </div>
     )
 }

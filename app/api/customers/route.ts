@@ -54,7 +54,13 @@ export async function POST(req: Request) {
         .select()
         .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+        // La base no deja crear clientes al vendedor sin ese permiso
+        if (error.code === '42501' || /row-level security/i.test(error.message)) {
+            return NextResponse.json({ error: 'No tienes permiso para crear clientes. Elige uno que ya exista.' }, { status: 403 })
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     return NextResponse.json({ customer })
 }

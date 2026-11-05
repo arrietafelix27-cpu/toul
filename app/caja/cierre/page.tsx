@@ -17,7 +17,7 @@ import type { CashSession, CashSessionSummary } from '@/lib/isla/types'
 
 export default function CajaCierrePage() {
     const router = useRouter()
-    const { ctx, session, refreshSession, isPro } = useCaja()
+    const { ctx, session, refreshSession, isPro, permisos } = useCaja()
     // Cerrar sesión pasa por un solo lugar: carga lo pendiente, avisa si
     // algo no se pudo cargar y no deja nada de la cuenta en el equipo
     const { cerrar: cerrarSesion, cerrando: saliendo, dialogo: dialogoSalir } = useCerrarSesion(ctx.storeId)
@@ -29,6 +29,20 @@ export default function CajaCierrePage() {
 
     // En el plan Básico no hay turnos que cerrar
     useEffect(() => { if (!isPro) router.replace('/caja') }, [isPro, router])
+
+    // El vendedor con permiso (y el administrador) ve cuánto debería haber
+    // antes de contar. Lo decide el servidor; si no deja, el cierre sigue a ciegas
+    const verEfectivo = permisos.ver_efectivo === 'solo' && !!session
+    const [enVivo, setEnVivo] = useState<{ sessionId: string; summary: CashSessionSummary } | null>(null)
+    useEffect(() => {
+        if (!verEfectivo || !session) return
+        let vigente = true
+        createClient().rpc('toul_cash_session_summary', { p_session_id: session.id }).then(({ data, error }) => {
+            if (vigente && !error && data) setEnVivo({ sessionId: session.id, summary: data as CashSessionSummary })
+        })
+        return () => { vigente = false }
+    }, [verEfectivo, session])
+    const resumenVivo = enVivo && session && enVivo.sessionId === session.id ? enVivo.summary : null
 
     async function close() {
         if (!session) return
@@ -102,6 +116,15 @@ export default function CajaCierrePage() {
                 <p style={{ fontSize: 15, color: 'var(--toul-text-muted)', lineHeight: 1.5, margin: '0 0 24px' }}>
                     Cuenta todo el efectivo que hay en la caja, incluida la base. Al cerrar verás si la caja cuadra.
                 </p>
+
+                {resumenVivo && canClose && (
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, padding: '0 2px 16px' }}>
+                        <span style={{ fontSize: 15, color: 'var(--toul-text-muted)' }}>Debería haber en efectivo</span>
+                        <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }}>
+                            {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Math.round(resumenVivo.expectedCash))}
+                        </span>
+                    </div>
+                )}
 
                 {canClose ? (
                     <>

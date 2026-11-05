@@ -10,6 +10,7 @@ import { Sheet } from './Sheet'
 import { VoidSaleDialog } from './VoidSaleDialog'
 import { DevolucionSheet, useDevolucionesDeVenta, DIAS_PARA_DEVOLVER } from '@/components/ventas/DevolucionSheet'
 import { saleItemName } from '@/lib/types'
+import type { Nivel } from '@/lib/pos/permisos'
 
 export interface SaleListRow {
     id: string
@@ -40,14 +41,19 @@ export const itemName = (i: SaleListRow['sale_items'][number]) =>
 /** Detalle de una venta con acciones: reimprimir tirilla, devolver una parte
  *  y anular. El vendedor pide la devolución o la anulación; el administrador
  *  las hace de una. Una venta con devoluciones ya no se anula. */
-export function SaleDetail({ sale, onClose, isAdmin, voidPending, returnPending = false, onChanged }: {
+export function SaleDetail({ sale, onClose, isAdmin, voidPending, returnPending = false, onChanged, nivelAnular, nivelDevolver }: {
     sale: SaleListRow | null
     onClose: () => void
     isAdmin: boolean
+    /** Permisos del vendedor en la caja: solo, con aprobación o no permitido */
+    nivelAnular?: Nivel
+    nivelDevolver?: Nivel
     voidPending: boolean
     returnPending?: boolean
     onChanged: () => void
 }) {
+    const anular = nivelAnular ?? (isAdmin ? 'solo' : 'aprobacion')
+    const devolver = nivelDevolver ?? (isAdmin ? 'solo' : 'aprobacion')
     const [voidOpen, setVoidOpen] = useState(false)
     const [devolverOpen, setDevolverOpen] = useState(false)
     const [printing, setPrinting] = useState(false)
@@ -90,9 +96,9 @@ export function SaleDetail({ sale, onClose, isAdmin, voidPending, returnPending 
                             <button className="toul-btn-secondary" disabled style={{ color: 'var(--toul-warning)' }}>
                                 <Clock size={17} /> Devolución pendiente
                             </button>
-                        ) : puedeDevolver && !voidPending && (
+                        ) : puedeDevolver && !voidPending && devolver !== 'no' && (
                             <button className="toul-btn-secondary" onClick={() => setDevolverOpen(true)} style={{ color: 'var(--toul-text)' }}>
-                                <Undo2 size={17} /> {isAdmin ? 'Devolver productos' : 'Pedir devolución'}
+                                <Undo2 size={17} /> {devolver === 'solo' ? 'Devolver productos' : 'Pedir devolución'}
                             </button>
                         )}
                         <div style={{ display: 'flex', gap: 10 }}>
@@ -103,9 +109,9 @@ export function SaleDetail({ sale, onClose, isAdmin, voidPending, returnPending 
                                 <button className="toul-btn-secondary" disabled style={{ color: 'var(--toul-warning)' }}>
                                     <Clock size={17} /> Anulación pendiente
                                 </button>
-                            ) : !conDevoluciones && !returnPending && (
+                            ) : !conDevoluciones && !returnPending && anular !== 'no' && (
                                 <button className="toul-btn-secondary" onClick={() => setVoidOpen(true)} style={{ color: 'var(--toul-error)' }}>
-                                    <Ban size={17} /> {isAdmin ? 'Anular' : 'Pedir anulación'}
+                                    <Ban size={17} /> {anular === 'solo' ? 'Anular' : 'Pedir anulación'}
                                 </button>
                             )}
                         </div>
@@ -169,7 +175,7 @@ export function SaleDetail({ sale, onClose, isAdmin, voidPending, returnPending 
                     onClose={() => setVoidOpen(false)}
                     saleId={sale.id}
                     total={sale.total}
-                    isAdmin={isAdmin}
+                    isAdmin={anular === 'solo'}
                     onDone={() => { setVoidOpen(false); onClose(); onChanged() }}
                 />
             )}
@@ -178,7 +184,7 @@ export function SaleDetail({ sale, onClose, isAdmin, voidPending, returnPending 
                 open={devolverOpen}
                 onClose={cerrarDevolucion}
                 saleId={sale?.id ?? null}
-                isAdmin={isAdmin}
+                isAdmin={devolver === 'solo'}
                 onDone={devolucionHecha}
             />
         </>

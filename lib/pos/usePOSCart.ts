@@ -55,6 +55,8 @@ export interface POSCartState {
     decrementItem: (productId: string) => void
     removeItem: (productId: string) => void
     clearCart: () => void
+    /** Vuelve a poner un carrito completo (al deshacer una venta) */
+    restoreCart: (cartMap: Record<string, number>) => void
 }
 
 export function usePOSCart(products: Product[], variantsByProduct: Record<string, POSVariant[]>, combos: POSCombo[], stock: Cuenta): POSCartState {
@@ -102,6 +104,8 @@ export function usePOSCart(products: Product[], variantsByProduct: Record<string
         setCartMap({})
         try { localStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
     }, [])
+
+    const restoreCart = useCallback((map: Record<string, number>) => setCartMap({ ...map }), [])
 
     const addCombo = useCallback((comboId: string) => addItem(`combo:${comboId}`), [addItem])
 
@@ -166,5 +170,6 @@ export function usePOSCart(products: Product[], variantsByProduct: Record<string
         decrementItem,
         removeItem,
         clearCart,
-    }), [cartMap, cartItems, subtotal, totalUnits, isEmpty, addItem, addCombo, canAdd, missingFor, decrementItem, removeItem, clearCart])
+        restoreCart,
+    }), [cartMap, cartItems, subtotal, totalUnits, isEmpty, addItem, addCombo, canAdd, missingFor, decrementItem, removeItem, clearCart, restoreCart])
 }

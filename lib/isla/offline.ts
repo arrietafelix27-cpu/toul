@@ -40,6 +40,10 @@ export interface CachedStoreInfo {
     address: string | null
     phone: string | null
     receipt_footer: string | null
+    /** Botones del comprobante: 'whatsapp', 'tirilla' o 'ambos' */
+    receipt_buttons?: string | null
+    /** Permisos del vendedor. undefined: la base todavía no los tiene */
+    seller_permissions?: unknown
 }
 
 // ─── Almacenamiento local ─────────────────────────────────────

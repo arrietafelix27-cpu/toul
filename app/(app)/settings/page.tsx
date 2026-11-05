@@ -8,7 +8,8 @@ import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { ChevronRight, Link2 as LinkIcon, LogOut, Store, User, Download, CreditCard, Sparkles } from 'lucide-react'
 import { TeamSection } from '@/components/isla/TeamSection'
-import { ReceiptSettings } from '@/components/isla/ReceiptSettings'
+import { ComprobanteSettings } from '@/components/isla/ComprobanteSettings'
+import { PermisosEquipo } from '@/components/isla/PermisosEquipo'
 import { PushPrompt } from '@/components/isla/PushPrompt'
 import { SeguridadCuenta } from '@/components/settings/SeguridadCuenta'
 
@@ -264,9 +265,12 @@ export default function SettingsPage() {
                     <p className="toul-section-label" style={{ marginTop: 24 }}>Punto físico</p>
                     <PushPrompt />
                     {storeId && <TeamSection storeId={storeId} />}
-                    {storeId && <ReceiptSettings storeId={storeId} />}
+                    {storeId && <PermisosEquipo storeId={storeId} />}
                 </>
             )}
+
+            {/* Comprobante: para todos los planes (la tirilla es del Pro) */}
+            {storeId && <ComprobanteSettings storeId={storeId} isPro={plan === 'pro'} />}
 
             {email && <SeguridadCuenta storeId={storeId || null} email={email} />}
 

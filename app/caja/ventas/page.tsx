@@ -27,7 +27,7 @@ const CSS = `
 const supabase = createClient()
 
 export default function CajaVentasPage() {
-    const { ctx, session, isPro } = useCaja()
+    const { ctx, session, isPro, permisos } = useCaja()
     const offline = useOfflineSales(ctx.storeId)
     const [selected, setSelected] = useState<SaleListRow | null>(null)
     // El administrador con el turno de otra persona abierto: lo suyo no entra a
@@ -159,6 +159,8 @@ export default function CajaVentasPage() {
                 sale={selected}
                 onClose={cerrarDetalle}
                 isAdmin={ctx.role === 'admin'}
+                nivelAnular={permisos.anular}
+                nivelDevolver={permisos.devolver}
                 voidPending={!!selected && !!data?.pendingVoids.has(selected.id)}
                 returnPending={!!selected && !!data?.pendingReturns.has(selected.id)}
                 onChanged={refrescar}

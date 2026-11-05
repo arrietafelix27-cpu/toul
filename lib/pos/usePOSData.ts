@@ -58,7 +58,14 @@ export interface POSCombo {
     name: string
     sale_price: number
     image_url: string | null
+    category_id?: string | null
     combo_items: POSComboItem[]
+}
+
+export interface POSCategory {
+    id: string
+    name: string
+    sort_order: number
 }
 
 // ─── Hook ─────────────────────────────────────────────────────
@@ -69,6 +76,9 @@ export interface POSDataState {
     combos: POSCombo[]
     methods: PaymentMethodConfig[]
     customers: Customer[]
+    categories: POSCategory[]
+    /** Unidades vendidas en los últimos 30 días ('producto' o 'combo:id') */
+    sold: Record<string, number>
     /** Lo que queda de cada unidad de inventario ('p:<producto>', 'v:<presentación>') */
     stock: Cuenta
     /** "Sauvage" o "Bleu · 50ml": para decir qué le falta a un combo */
@@ -152,6 +162,8 @@ export function usePOSData(enabled: boolean): POSDataState {
     const rawProducts = useMemo<Product[]>(() => prodData?.products ?? [], [prodData])
     const rawVariants = useMemo<POSVariant[]>(() => prodData?.variants ?? [], [prodData])
     const combos = useMemo<POSCombo[]>(() => (prodData?.combos ?? []) as unknown as POSCombo[], [prodData])
+    const categories = useMemo<POSCategory[]>(() => prodData?.categories ?? [], [prodData])
+    const sold = useMemo<Record<string, number>>(() => prodData?.sold ?? {}, [prodData])
 
     const stock = useMemo<Cuenta>(() => {
         const base: Cuenta = {}
@@ -241,7 +253,7 @@ export function usePOSData(enabled: boolean): POSDataState {
     const refreshCustomers = useCallback(() => { void mutateCust() }, [mutateCust])
 
     return useMemo(() => ({
-        products, variantsByProduct, combos, methods, customers, stock, unitName,
+        products, variantsByProduct, combos, methods, customers, categories, sold, stock, unitName,
         isLoading, failed, retry, refreshProducts, refreshCustomers,
-    }), [products, variantsByProduct, combos, methods, customers, stock, unitName, isLoading, failed, retry, refreshProducts, refreshCustomers])
+    }), [products, variantsByProduct, combos, methods, customers, categories, sold, stock, unitName, isLoading, failed, retry, refreshProducts, refreshCustomers])
 }

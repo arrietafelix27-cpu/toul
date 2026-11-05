@@ -60,6 +60,7 @@ function receiptHtml(r: ReceiptData): string {
   <div class="sep"></div>
   ${r.isCredit ? line('Venta a crédito', '') : ''}
   ${payments}
+  ${r.change && r.change > 0 && r.cashReceived ? line('Recibido en efectivo', formatCOP(r.cashReceived)) + line('Vuelto', formatCOP(r.change)) : ''}
   ${r.isCredit ? line('Saldo pendiente', formatCOP(pending), true) : ''}
   <div class="sep"></div>
   <div class="center">${escape(r.footer || '¡Gracias por tu compra!')}</div>
@@ -98,6 +99,8 @@ interface SaleRow {
     total: number
     is_credit: boolean
     initial_payment: number | null
+    cash_received?: number | null
+    change_given?: number | null
     customer_name: string | null
     seller_name: string | null
     sale_items: {
@@ -114,7 +117,8 @@ interface SaleRow {
 export async function loadReceiptData(supabase: SupabaseClient, saleId: string): Promise<ReceiptData> {
     const { data: sale, error } = await supabase
         .from('sales')
-        .select(`id, created_at, subtotal, discount, total, is_credit, initial_payment, customer_name, seller_name, store_id,
+        // Con * entran también lo recibido y el vuelto cuando la base ya los tiene
+        .select(`*,
             sale_items(quantity, unit_price, products(name), product_variants(name), combos(name)),
             sale_payments(amount, payment_methods(name))`)
         .eq('id', saleId)
@@ -146,6 +150,8 @@ export async function loadReceiptData(supabase: SupabaseClient, saleId: string):
         payments: row.sale_payments.map(p => ({ method: p.payment_methods?.name ?? 'Pago', amount: Number(p.amount) })),
         isCredit: row.is_credit,
         initialPayment: Number(row.initial_payment ?? 0),
+        cashReceived: row.cash_received == null ? null : Number(row.cash_received),
+        change: row.change_given == null ? null : Number(row.change_given),
     }
 }
 
@@ -181,6 +187,7 @@ export function printCashClose(meta: { storeName: string; openedBy: string; open
   ${s.creditCount ? line('A crédito', String(s.creditCount)) : ''}
   ${s.voidCount ? line(`Anuladas (${s.voidCount})`, formatCOP(s.voidTotal)) : ''}
   ${s.returnCount ? line(`Devoluciones (${s.returnCount})`, `-${formatCOP(s.returnTotal ?? 0)}`) : ''}
+  ${s.changeCount ? line(`Vueltos entregados (${s.changeCount})`, formatCOP(s.changeTotal ?? 0)) : ''}
   <div class="sign">Firma responsable</div>
 </body></html>`
     const iframe = document.createElement('iframe')

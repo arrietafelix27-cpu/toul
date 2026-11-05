@@ -4,7 +4,7 @@ import { useState } from 'react'
 import useSWR, { useSWRConfig } from 'swr'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { Ban, CreditCard, Check, X, Inbox, Undo2, Tag } from 'lucide-react'
+import { Ban, CreditCard, Check, X, Inbox, Undo2, Tag, Percent } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useSessionContext } from '@/lib/isla/useSession'
@@ -79,6 +79,7 @@ export default function AprobacionesPage() {
         else if (!approve) toast.success('Solicitud rechazada')
         else if (req.type === 'void_sale') toast.success('Venta anulada. Inventario y caja actualizados.')
         else if (req.type === 'return_sale') toast.success('Devolución hecha. Inventario y caja actualizados.')
+        else if (req.type === 'discount_sale') toast.success('Descuento aprobado. El vendedor ya puede cobrar.')
         else toast.success('Crédito aprobado. El vendedor ya puede confirmar la venta.')
         setRejecting(null)
         setNote('')
@@ -113,7 +114,7 @@ export default function AprobacionesPage() {
                 <div className="toul-card" style={{ textAlign: 'center', padding: '44px 20px' }}>
                     <Inbox size={32} strokeWidth={1.5} style={{ color: 'var(--toul-text-faint)', margin: '0 auto 12px' }} />
                     <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Nada pendiente</p>
-                    <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>Cuando un vendedor pida anular, devolver o fiar, o cobre sin internet un precio distinto, aparece aquí.</p>
+                    <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>Cuando un vendedor pida anular, devolver, fiar o un descuento, o cobre sin internet un precio distinto, aparece aquí.</p>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -121,6 +122,8 @@ export default function AprobacionesPage() {
                         {data!.pending.map(req => {
                             const isVoid = req.type === 'void_sale'
                             const isReturn = req.type === 'return_sale'
+                            const isDiscount = req.type === 'discount_sale'
+                            const descuento = Math.round(Number(req.details.discount) || 0)
                             const metodoDevolucion = isReturn ? methods.find(m => m.id === req.details.methodId)?.name : undefined
                             const sale = req.sale_id ? data!.sales.get(req.sale_id) : undefined
                             const busy = busyId === req.id
@@ -133,7 +136,8 @@ export default function AprobacionesPage() {
                                         <div style={{ width: 44, height: 44, borderRadius: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isVoid ? 'var(--toul-error-dim)' : isReturn ? 'var(--toul-warning-dim)' : 'var(--toul-info-dim)' }}>
                                             {isVoid ? <Ban size={20} style={{ color: 'var(--toul-error)' }} />
                                                 : isReturn ? <Undo2 size={20} style={{ color: 'var(--toul-warning)' }} />
-                                                    : <CreditCard size={20} style={{ color: 'var(--toul-info)' }} />}
+                                                    : isDiscount ? <Percent size={20} style={{ color: 'var(--toul-info)' }} />
+                                                        : <CreditCard size={20} style={{ color: 'var(--toul-info)' }} />}
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0 }}>
@@ -142,7 +146,8 @@ export default function AprobacionesPage() {
                                             <p style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '2px 0 6px' }}>
                                                 {isVoid ? `Anular venta de ${formatCOP(req.amount ?? 0)}`
                                                     : isReturn ? `Devolver ${formatCOP(req.amount ?? 0)} de una venta`
-                                                        : `Fiar ${formatCOP(req.amount ?? 0)} a ${req.details.customerName ?? 'cliente'}`}
+                                                        : isDiscount ? `Descontar ${formatCOP(descuento)} en una venta`
+                                                            : `Fiar ${formatCOP(req.amount ?? 0)} a ${req.details.customerName ?? 'cliente'}`}
                                             </p>
                                             {isReturn ? (
                                                 <>
@@ -173,7 +178,10 @@ export default function AprobacionesPage() {
                                             ) : (
                                                 <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: 0 }}>
                                                     {req.details.items?.map(i => `${i.quantity}× ${i.name}`).join(', ')}
-                                                    {req.details.initialPayment ? ` · Abono ${formatCOP(req.details.initialPayment)}` : ' · Sin abono'}
+                                                    {descuento > 0 && req.details.subtotal
+                                                        ? ` · ${Math.round(descuento * 100 / Number(req.details.subtotal))}% de ${formatCOP(Number(req.details.subtotal))}, queda en ${formatCOP(req.amount ?? 0)}`
+                                                        : ''}
+                                                    {isDiscount ? '' : req.details.initialPayment ? ` · Abono ${formatCOP(req.details.initialPayment)}` : ' · Sin abono'}
                                                     {req.details.dueDate ? ` · Plazo ${new Date(req.details.dueDate + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}` : ''}
                                                 </p>
                                             )}
@@ -188,7 +196,7 @@ export default function AprobacionesPage() {
                                         <motion.button whileTap={{ scale: 0.97 }} transition={SPRING_PRESS} disabled={busy}
                                             onClick={() => resolve(req, true)}
                                             style={{ flex: 1, height: 50, borderRadius: 14, border: 'none', background: 'var(--toul-accent)', color: '#000', fontSize: 15, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 4px 20px var(--toul-accent-glow)', fontFamily: 'inherit', opacity: busy ? 0.6 : 1 }}>
-                                            <Check size={17} strokeWidth={2.6} /> {busy ? 'Procesando…' : isVoid ? 'Aprobar y anular' : isReturn ? 'Aprobar devolución' : 'Aprobar crédito'}
+                                            <Check size={17} strokeWidth={2.6} /> {busy ? 'Procesando…' : isVoid ? 'Aprobar y anular' : isReturn ? 'Aprobar devolución' : isDiscount ? 'Aprobar descuento' : 'Aprobar crédito'}
                                         </motion.button>
                                     </div>
                                 </motion.div>
@@ -257,7 +265,7 @@ export default function AprobacionesPage() {
                                 <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--toul-divider)' : 'none' }}>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
-                                            {req.type === 'void_sale' ? 'Anulación' : req.type === 'return_sale' ? 'Devolución' : `Crédito a ${req.details.customerName ?? 'cliente'}`} · {formatCOP(req.amount ?? 0)}
+                                            {req.type === 'void_sale' ? 'Anulación' : req.type === 'return_sale' ? 'Devolución' : req.type === 'discount_sale' ? 'Descuento' : `Crédito a ${req.details.customerName ?? 'cliente'}`} · {formatCOP(req.amount ?? 0)}
                                         </p>
                                         <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>
                                             {req.requested_by_name} · {ago(req.requested_at)}{req.reason ? ` · ${req.reason}` : ''}{req.resolution_note ? ` · Nota: ${req.resolution_note}` : ''}

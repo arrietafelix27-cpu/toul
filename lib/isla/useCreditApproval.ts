@@ -16,7 +16,11 @@ export interface CreditApprovalState {
 
 interface Params {
     enabled: boolean
+    /** Fiado (también lleva el descuento) o solo descuento */
+    type: 'credit_sale' | 'discount_sale'
     total: number
+    subtotal: number
+    discount: number
     customerName: string
     dueDate: string
     initialPayment: number
@@ -26,20 +30,26 @@ interface Params {
 const supabase = createClient()
 
 /**
- * Venta a crédito de un vendedor: pide aprobación al administrador y espera la respuesta.
- * Si el total cambia después de pedirla, la solicitud se cancela (el servidor también lo valida).
+ * Venta de un vendedor que necesita aprobación (fiado, o un descuento más
+ * grande del que puede dar solo): pide aprobación al administrador y espera.
+ * Si el total o el descuento cambian después de pedirla, la solicitud se
+ * cancela (el servidor también lo valida).
  */
-export function useCreditApproval({ enabled, total, customerName, dueDate, initialPayment, items }: Params): CreditApprovalState {
+export function useCreditApproval({ enabled, type, total, subtotal, discount, customerName, dueDate, initialPayment, items }: Params): CreditApprovalState {
     const [status, setStatus] = useState<CreditApprovalStatus>('idle')
     const [requestId, setRequestId] = useState<string | null>(null)
     const [message, setMessage] = useState<string | null>(null)
     const approvedTotal = useRef<number | null>(null)
+    const approvedDiscount = useRef<number | null>(null)
+    const approvedType = useRef<Params['type'] | null>(null)
 
     const reset = useCallback(() => {
         setStatus('idle')
         setRequestId(null)
         setMessage(null)
         approvedTotal.current = null
+        approvedDiscount.current = null
+        approvedType.current = null
     }, [])
 
     const request = useCallback(async () => {
@@ -50,21 +60,23 @@ export function useCreditApproval({ enabled, total, customerName, dueDate, initi
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    type: 'credit_sale',
+                    type,
                     amount: total,
-                    details: { customerName, dueDate, initialPayment, items },
+                    details: { customerName, dueDate, initialPayment, items, discount, subtotal, isCredit: type === 'credit_sale' },
                 }),
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'No se pudo enviar la solicitud')
             approvedTotal.current = total
+            approvedDiscount.current = discount
+            approvedType.current = type
             setRequestId(data.id)
             setStatus('pending')
         } catch (err) {
             setStatus('idle')
             setMessage(err instanceof Error ? err.message : 'No se pudo enviar la solicitud')
         }
-    }, [total, customerName, dueDate, initialPayment, items])
+    }, [type, total, subtotal, discount, customerName, dueDate, initialPayment, items])
 
     const cancel = useCallback(async () => {
         if (requestId) await supabase.rpc('toul_cancel_approval', { p_request_id: requestId })
@@ -86,7 +98,7 @@ export function useCreditApproval({ enabled, total, customerName, dueDate, initi
                 setMessage(`Aprobado por ${data.resolved_by_name || 'el administrador'}`)
             } else if (data.status === 'rejected') {
                 setStatus('rejected')
-                setMessage(data.resolution_note ? `Rechazado: ${data.resolution_note}` : 'El administrador rechazó el crédito')
+                setMessage(data.resolution_note ? `Rechazado: ${data.resolution_note}` : 'El administrador no lo aprobó')
             } else if (data.status === 'expired' || data.status === 'cancelled') {
                 reset()
                 setMessage('La solicitud venció. Pide aprobación de nuevo.')
@@ -95,13 +107,17 @@ export function useCreditApproval({ enabled, total, customerName, dueDate, initi
         return () => clearInterval(timer)
     }, [status, requestId, reset])
 
-    // Si cambia el total o se sale del modo crédito, la aprobación deja de servir
+    // Si cambia el total, el descuento o lo que se pide (un descuento que
+    // pasa a fiado), o ya no hace falta, la aprobación deja de servir
     useEffect(() => {
         if (!enabled && status !== 'idle') { void cancel(); return }
-        if ((status === 'pending' || status === 'approved') && approvedTotal.current !== null && approvedTotal.current !== total) {
-            void cancel().then(() => setMessage('El total cambió. Pide aprobación de nuevo.'))
+        const cambio = (approvedTotal.current !== null && approvedTotal.current !== total)
+            || (approvedDiscount.current !== null && approvedDiscount.current !== discount)
+            || (approvedType.current !== null && approvedType.current !== type)
+        if ((status === 'pending' || status === 'approved') && cambio) {
+            void cancel().then(() => setMessage('La venta cambió. Pide aprobación de nuevo.'))
         }
-    }, [enabled, total, status, cancel])
+    }, [enabled, total, discount, type, status, cancel])
 
     return { status, requestId, message, request, cancel, reset }
 }
