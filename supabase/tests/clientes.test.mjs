@@ -25,9 +25,14 @@ export default async function (db) {
   })
 
   console.log('\n— Escribir el nombre tres veces NO crea tres clientes')
-  await as(O, () => q(`SELECT process_sale($1::jsonb)`, [fiar('Juan Pérez', 400000)]))
-  await as(O, () => q(`SELECT process_sale($1::jsonb)`, [fiar('juan pérez', 300000)]))
-  await as(O, () => q(`SELECT process_sale($1::jsonb)`, [fiar('  Juan   Pérez ', 200000)]))
+  // La venta cobra el precio del producto: se le pone el de cada fiado
+  const venderFiado = async (nombre, monto) => {
+    await q(`UPDATE products SET sale_price=$1 WHERE id=$2`, [monto, prod.id])
+    return as(O, () => q(`SELECT process_sale($1::jsonb)`, [fiar(nombre, monto)]))
+  }
+  await venderFiado('Juan Pérez', 400000)
+  await venderFiado('juan pérez', 300000)
+  await venderFiado('  Juan   Pérez ', 200000)
 
   const clientes = await q(`SELECT id, name, total_debt FROM customers WHERE store_id=$1`, [STORE])
   ok(clientes.length === 1, `queda un solo cliente, no tres (quedaron ${clientes.length})`)

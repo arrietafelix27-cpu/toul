@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import type { Product, CartItem } from '@/lib/types'
 import type { POSVariant, POSCombo } from './usePOSData'
+import { cabeUnaMas, loQueFalta, type Cuenta, type Unidad } from './stock'
 
 const STORAGE_KEY = 'toul_pos_cart'
 // El carrito vive en localStorage (no sessionStorage): si se cierra el navegador
@@ -44,14 +45,19 @@ export interface POSCartState {
     subtotal: number
     totalUnits: number
     isEmpty: boolean
-    addItem: (productId: string, maxStock: number) => void
+    /** Una más de la línea ('producto', 'producto:presentación' o 'combo:id'), si alcanza el stock */
+    addItem: (itemKey: string) => void
     addCombo: (comboId: string) => void
+    /** ¿Alcanza el stock para una más? Cuenta lo que ya lleva el carrito, combos incluidos */
+    canAdd: (itemKey: string) => boolean
+    /** Lo que no alcanza para una más de esta línea (null si alcanza) */
+    missingFor: (itemKey: string) => Unidad | null
     decrementItem: (productId: string) => void
     removeItem: (productId: string) => void
     clearCart: () => void
 }
 
-export function usePOSCart(products: Product[], variantsByProduct: Record<string, POSVariant[]>, combos: POSCombo[]): POSCartState {
+export function usePOSCart(products: Product[], variantsByProduct: Record<string, POSVariant[]>, combos: POSCombo[], stock: Cuenta): POSCartState {
     const [cartMap, setCartMap] = useState<Record<string, number>>(() => hydrateCart())
 
     // Persist on every change
@@ -59,14 +65,17 @@ export function usePOSCart(products: Product[], variantsByProduct: Record<string
         persistCart(cartMap)
     }, [cartMap])
 
-    const addItem = useCallback((productId: string, maxStock: number) => {
-        if (maxStock <= 0) return // Guard: zero-stock products cannot be added
+    // El tope es el stock que queda, contando lo que ya va en el carrito:
+    // un perfume suelto y el mismo perfume dentro de un combo salen del mismo stock
+    const addItem = useCallback((itemKey: string) => {
         setCartMap(prev => {
-            const current = prev[productId] || 0
-            if (current >= maxStock) return prev // Guard: stock ceiling
-            return { ...prev, [productId]: current + 1 }
+            if (!cabeUnaMas(itemKey, prev, combos, stock)) return prev
+            return { ...prev, [itemKey]: (prev[itemKey] || 0) + 1 }
         })
-    }, [])
+    }, [combos, stock])
+
+    const canAdd = useCallback((itemKey: string) => cabeUnaMas(itemKey, cartMap, combos, stock), [cartMap, combos, stock])
+    const missingFor = useCallback((itemKey: string) => loQueFalta(itemKey, cartMap, combos, stock), [cartMap, combos, stock])
 
     const decrementItem = useCallback((productId: string) => {
         setCartMap(prev => {
@@ -94,10 +103,7 @@ export function usePOSCart(products: Product[], variantsByProduct: Record<string
         try { localStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
     }, [])
 
-    const addCombo = useCallback((comboId: string) => {
-        const key = `combo:${comboId}`
-        setCartMap(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }))
-    }, [])
+    const addCombo = useCallback((comboId: string) => addItem(`combo:${comboId}`), [addItem])
 
     const cartItems: CartItem[] = useMemo(() =>
         Object.entries(cartMap)
@@ -155,8 +161,10 @@ export function usePOSCart(products: Product[], variantsByProduct: Record<string
         isEmpty,
         addItem,
         addCombo,
+        canAdd,
+        missingFor,
         decrementItem,
         removeItem,
         clearCart,
-    }), [cartMap, cartItems, subtotal, totalUnits, isEmpty, addItem, addCombo, decrementItem, removeItem, clearCart])
+    }), [cartMap, cartItems, subtotal, totalUnits, isEmpty, addItem, addCombo, canAdd, missingFor, decrementItem, removeItem, clearCart])
 }

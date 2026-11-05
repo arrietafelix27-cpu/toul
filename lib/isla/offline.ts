@@ -20,6 +20,9 @@ const STORE_PREFIX = 'toul-store-info:'
 const LEGACY_QUEUE = 'toul-pending-sales'
 const LEGACY_STORE = 'toul-store-info'
 
+/** Se avisa cada vez que cambian las ventas guardadas: la caja descuenta su stock al instante */
+export const PENDING_SALES_EVENT = 'toul-pending-sales-change'
+
 export interface PendingSale {
     clientSaleId: string
     soldAt: string
@@ -53,6 +56,7 @@ function write(storeId: string | null | undefined, sales: PendingSale[]): boolea
     if (!storeId) return false // sin tienda no hay dónde guardarla: la caja avisa
     try {
         localStorage.setItem(QUEUE_PREFIX + storeId, JSON.stringify(sales))
+        window.dispatchEvent(new CustomEvent(PENDING_SALES_EVENT, { detail: storeId }))
         return true
     } catch {
         return false // almacenamiento lleno o bloqueado

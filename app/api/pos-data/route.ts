@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getSessionContext } from '@/lib/isla/context'
 
-// Lightweight endpoint for POS: returns products with stock > 0
+// Lightweight endpoint for POS: active products, variants and combos with their stock
 export async function GET() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -17,10 +17,11 @@ export async function GET() {
         supabase.from('product_variants').select('id, product_id, name, sale_price, cpp').eq('store_id', store.id).eq('is_active', true),
         supabase.from('inventory_adjustments').select('variant_id, quantity').eq('store_id', store.id).not('variant_id', 'is', null),
         supabase.from('combos')
+            // Con el stock de lo que lleva: la caja apaga el combo al que le falta algo
             .select(`id, name, sale_price, image_url,
                 combo_items(product_id, variant_id, quantity,
-                    products!product_id(id, name, cpp),
-                    product_variants!variant_id(id, name, cpp)
+                    products!product_id(id, name, cpp, stock),
+                    product_variants!variant_id(id, product_id, name, cpp, stock)
                 )`)
             .eq('store_id', store.id)
             .eq('is_active', true)

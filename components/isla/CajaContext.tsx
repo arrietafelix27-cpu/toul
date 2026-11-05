@@ -6,10 +6,13 @@ import type { CashSession, SessionContext } from '@/lib/isla/types'
 
 export interface CajaContextValue {
     ctx: SessionContext
+    /** El turno abierto de la tienda. En el plan Básico no hay turnos: siempre null */
     session: CashSession | null
     sessionLoading: boolean
     refreshSession: KeyedMutator<CashSession | null>
     autoPrint: boolean
+    /** Plan Pro: turnos de caja, equipo y aprobaciones */
+    isPro: boolean
 }
 
 export const CajaContext = createContext<CajaContextValue | null>(null)

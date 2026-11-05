@@ -13,7 +13,7 @@ export default async function (db) {
   const err = async (fn) => { try { await fn(); return null } catch (e) { return e.message } }
 
   await q(`INSERT INTO auth.users(id,email) VALUES ($1,'o@x.com'),($2,'v@x.com')`, [O, S])
-  await q(`INSERT INTO stores(id,owner_id,name) VALUES ($1,$2,'Isla')`, [STORE, O])
+  await q(`INSERT INTO stores(id,owner_id,name,plan) VALUES ($1,$2,'Isla','pro')`, [STORE, O])
   const [p1] = await q(`INSERT INTO products(store_id,name,sale_price,cost_price,cpp) VALUES ($1,'Sauvage',400000,250000,250000) RETURNING id`, [STORE])
   const [p2] = await q(`INSERT INTO products(store_id,name,sale_price,cost_price,cpp) VALUES ($1,'Bleu',380000,240000,240000) RETURNING id`, [STORE])
   const [v1] = await q(`INSERT INTO product_variants(store_id,product_id,name,sale_price,cpp) VALUES ($1,$2,'100ml',400000,250000) RETURNING id`, [STORE, p2.id])

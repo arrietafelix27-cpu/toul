@@ -21,6 +21,16 @@ const TABS = [
     { href: '/caja/cierre', label: 'Cerrar turno', short: 'Cierre', icon: LockKeyhole },
 ]
 
+// En el plan Básico no hay turnos: ni cierre, ni estado del turno
+const TABS_BASICO = [
+    TABS[0],
+    { ...TABS[1], label: 'Ventas de hoy' },
+]
+
+/* El plan llega con los datos del negocio: el equipo lo recuerda para
+   no mostrar los turnos y quitarlos de golpe (y para cuando no hay internet) */
+const PLAN_KEY = 'toul-caja-plan:'
+
 /** Las iniciales de quien atiende, para el círculo del celular */
 function iniciales(nombre: string) {
     const partes = nombre.trim().split(/\s+/).filter(Boolean)
@@ -43,6 +53,13 @@ const CSS = `
 .cj-corto, .cj-salir-movil { display: none; }
 .cj-quien-texto { text-align: left; }
 .cj-menu-estado { display: none; }
+/* Reducir movimiento: en la caja solo cambian colores y transparencias */
+@media (prefers-reduced-motion: reduce) {
+    .cj-raiz *, .cj-raiz *::before, .cj-raiz *::after {
+        transition-property: color, background-color, border-color, opacity, box-shadow !important;
+    }
+    .cj-raiz .pos-press { transform: none !important; }
+}
 @media (max-width: 767px) {
     .cj-head { gap: 8px; padding: 8px 12px; }
     .cj-marca[data-admin="1"] { display: none !important; }
@@ -72,6 +89,8 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     const { data: ctx, isLoading } = useSessionContext()
     const { data: session, isLoading: sessionLoading, mutate: refreshSession } = useOpenCashSession(ctx?.storeId)
     const [autoPrint, setAutoPrint] = useState(true)
+    // El plan llega del servidor; mientras tanto vale el último guardado en el equipo
+    const [planServidor, setPlanServidor] = useState<{ storeId: string; plan: string } | null>(null)
     const [menuOpen, setMenuOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
     const offline = useOfflineSales(ctx?.storeId)
@@ -91,11 +110,24 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
         }
     }, [])
 
+    const tiendaId = ctx?.storeId
+    const planGuardado = useMemo(() => {
+        if (!tiendaId) return null
+        try { return localStorage.getItem(PLAN_KEY + tiendaId) } catch { return null }
+    }, [tiendaId])
+    const plan = planServidor && planServidor.storeId === tiendaId ? planServidor.plan : planGuardado
+
     useEffect(() => {
         const storeId = ctx?.storeId
         if (!storeId) return
-        createClient().from('stores').select('name, nit, address, phone, receipt_footer').eq('id', storeId).single()
-            .then(({ data }) => { if (data) cacheStoreInfo(storeId, data) })
+        createClient().from('stores').select('name, nit, address, phone, receipt_footer, plan').eq('id', storeId).single()
+            .then(({ data }) => {
+                if (!data) return
+                const { plan: elPlan, ...info } = data
+                cacheStoreInfo(storeId, info)
+                setPlanServidor({ storeId, plan: elPlan ?? 'basico' })
+                try { localStorage.setItem(PLAN_KEY + storeId, elPlan ?? 'basico') } catch { /* sin almacenamiento */ }
+            })
     }, [ctx?.storeId])
 
     useEffect(() => {
@@ -116,21 +148,32 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     // algo no se pudo cargar y no deja nada de la cuenta en el equipo
     const { cerrar: logout, dialogo: dialogoSalir } = useCerrarSesion(ctx?.storeId)
 
+    // Mientras no se sabe el plan se muestra la caja como siempre. Quien
+    // vende con su propia cuenta siempre es de un plan Pro (el equipo es Pro)
+    const isPro = plan !== 'basico' || ctx?.role === 'seller'
+    const turno = isPro ? (session ?? null) : null
+
     const value = useMemo(() => ctx ? ({
-        ctx, session: session ?? null, sessionLoading, refreshSession, autoPrint,
-    }) : null, [ctx, session, sessionLoading, refreshSession, autoPrint])
+        ctx, session: turno, sessionLoading, refreshSession, autoPrint, isPro,
+    }) : null, [ctx, turno, sessionLoading, refreshSession, autoPrint, isPro])
 
     if (isLoading || !value) return <Spinner />
 
-    const openedAt = session ? new Date(session.opened_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : null
-    const estadoTurno = session ? `Turno desde ${openedAt}` : 'Sin turno abierto'
+    const openedAt = turno ? new Date(turno.opened_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : null
+    // El turno abierto puede ser de otra persona: que se vea de quién es
+    const ajeno = !!turno && turno.opened_by !== ctx!.userId
+    const estadoTurno = !isPro ? null
+        : !turno ? 'Sin turno abierto'
+        : ajeno ? `Turno de ${turno.opened_by_name || 'otra persona'} · desde ${openedAt}`
+        : `Turno desde ${openedAt}`
+    const tabs = isPro ? TABS : TABS_BASICO
 
     return (
         <CajaContext.Provider value={value}>
             {dialogoSalir}
             <POSProvider>
                 <style>{CSS}</style>
-                <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--toul-bg)', overflow: 'hidden' }}>
+                <div className="cj-raiz" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--toul-bg)', overflow: 'hidden' }}>
                     {/* ── Barra superior ───────────────────────────── */}
                     <header className="cj-head">
                         {ctx!.role === 'admin' && <SalirDeCaja className="cj-salir-movil" />}
@@ -145,7 +188,7 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
                         </div>
 
                         <nav className="cj-tabs">
-                            {TABS.map(tab => {
+                            {tabs.map(tab => {
                                 const active = pathname === tab.href
                                 return (
                                     <Link key={tab.href} href={tab.href} className="cj-tab" aria-current={active ? 'page' : undefined} style={{
@@ -166,22 +209,23 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
 
                         <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
                             <motion.button onClick={() => setMenuOpen(o => !o)} whileTap={{ scale: 0.97 }} transition={SPRING_PRESS}
-                                className="cj-quien" aria-label={`${ctx!.displayName} · ${estadoTurno}`} aria-expanded={menuOpen}
+                                className="cj-quien" aria-label={estadoTurno ? `${ctx!.displayName} · ${estadoTurno}` : ctx!.displayName} aria-expanded={menuOpen}
                                 style={{
                                     position: 'relative', display: 'flex', alignItems: 'center', gap: 10, height: 46, padding: '0 12px 0 14px', borderRadius: 14, cursor: 'pointer',
                                     background: 'var(--toul-surface)', border: '1px solid var(--toul-border)', color: 'var(--toul-text)', fontFamily: 'inherit',
                                 }}>
-                                <span className="cj-quien-texto" aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: session ? 'var(--toul-accent)' : 'var(--toul-text-faint)', boxShadow: session ? '0 0 10px var(--toul-accent-glow)' : 'none' }} />
+                                {/* El punto verde es tu turno; el de otra persona va en amarillo */}
+                                {estadoTurno && <span className="cj-quien-texto" aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: !turno ? 'var(--toul-text-faint)' : ajeno ? 'var(--toul-warning)' : 'var(--toul-accent)', boxShadow: turno && !ajeno ? '0 0 10px var(--toul-accent-glow)' : 'none' }} />}
                                 <span className="cj-quien-texto">
                                     <span style={{ display: 'block', fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{ctx!.displayName}</span>
-                                    <span style={{ display: 'block', fontSize: 11, color: 'var(--toul-text-dim)', lineHeight: 1.2 }}>{estadoTurno}</span>
+                                    {estadoTurno && <span style={{ display: 'block', fontSize: 11, color: 'var(--toul-text-dim)', lineHeight: 1.2 }}>{estadoTurno}</span>}
                                 </span>
                                 {/* Celular: iniciales con el punto del turno encima */}
                                 <span className="cj-corto" aria-hidden style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '0.02em' }}>{iniciales(ctx!.displayName)}</span>
-                                <span className="cj-corto" aria-hidden style={{
+                                {estadoTurno && <span className="cj-corto" aria-hidden style={{
                                     position: 'absolute', top: 1, right: 1, width: 10, height: 10, borderRadius: '50%',
-                                    background: session ? 'var(--toul-accent)' : 'var(--toul-text-faint)', boxShadow: '0 0 0 2px var(--toul-bg)',
-                                }} />
+                                    background: !turno ? 'var(--toul-text-faint)' : ajeno ? 'var(--toul-warning)' : 'var(--toul-accent)', boxShadow: '0 0 0 2px var(--toul-bg)',
+                                }} />}
                                 <ChevronDown size={15} className="cj-quien-flecha" style={{ color: 'var(--toul-text-dim)', transform: menuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms var(--toul-ease)' }} />
                             </motion.button>
 
@@ -197,7 +241,7 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
                                         {/* En el celular el nombre no cabe en la barra: va aquí */}
                                         <div className="cj-menu-estado" style={{ padding: '8px 12px 10px', borderBottom: '1px solid var(--toul-divider)', marginBottom: 4 }}>
                                             <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>{ctx!.displayName}</p>
-                                            <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>{estadoTurno}</p>
+                                            {estadoTurno && <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>{estadoTurno}</p>}
                                         </div>
                                         <button onClick={toggleAutoPrint} style={menuItemStyle}>
                                             <Printer size={17} />

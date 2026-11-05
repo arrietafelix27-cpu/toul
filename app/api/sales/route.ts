@@ -45,9 +45,13 @@ export async function POST(request: Request) {
     if (error) {
         // Surface friendly error from RAISE EXCEPTION inside the RPC
         const message = error.message || 'Error al registrar la venta'
-        // Status 409 for stock conflicts, 500 otherwise
+        // 409 sin stock; 400 cuando la venta misma se rechazó (precio que
+        // cambió, pagos que no cuadran…); 500 solo si falló el servidor.
+        // La cola sin internet reintenta los 500: un rechazo definitivo
+        // como 500 se reintentaba para siempre y tapaba las de atrás.
         const isStockError = /stock insuficiente/i.test(message)
-        return NextResponse.json({ error: message }, { status: isStockError ? 409 : 500 })
+        const isRejected = error.code === 'P0001'
+        return NextResponse.json({ error: message }, { status: isStockError ? 409 : isRejected ? 400 : 500 })
     }
 
     if (!data || typeof data !== 'object' || !(data as { success?: boolean }).success) {

@@ -63,11 +63,12 @@ export function useOpenCashSession(storeId: string | null | undefined) {
 /** Cantidad de solicitudes pendientes (solo administradores). */
 export function usePendingApprovalsCount(enabled: boolean) {
     return useSWR(enabled ? 'isla-pending-approvals' : null, async () => {
-        const { count, error } = await supabase
-            .from('approval_requests')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'pending')
-        if (error) return 0
-        return count ?? 0
+        const [solicitudes, revisar] = await Promise.all([
+            supabase.from('approval_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+            // Ventas sin internet cobradas a otro precio, que nadie ha visto
+            supabase.from('sales').select('id', { count: 'exact', head: true })
+                .not('price_review', 'is', null).is('price_reviewed_at', null),
+        ])
+        return (solicitudes.error ? 0 : solicitudes.count ?? 0) + (revisar.error ? 0 : revisar.count ?? 0)
     }, { refreshInterval: 15_000, revalidateOnFocus: true })
 }

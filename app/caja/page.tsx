@@ -12,17 +12,21 @@ import { Sheet } from '@/components/isla/Sheet'
 
 export default function CajaPage() {
     const router = useRouter()
-    const { ctx, session, sessionLoading, refreshSession, autoPrint } = useCaja()
+    const { ctx, session, sessionLoading, refreshSession, autoPrint, isPro } = useCaja()
     const [openShift, setOpenShift] = useState(false)
+    // El administrador puede vender con el turno de otra persona abierto:
+    // esas ventas no entran a ese turno (TOUL las deja por fuera)
+    const turnoAjeno = !!session && session.opened_by !== ctx.userId
+    const miTurno = session && !turnoAjeno ? session.id : null
 
     const mode = useMemo<POSModeValue>(() => ({
         mode: 'caja',
         role: ctx.role,
         autoPrint,
-        cashSessionId: session?.id ?? null,
+        cashSessionId: miTurno,
         sellerName: ctx.displayName,
         onViewHistory: () => router.push('/caja/ventas'),
-    }), [ctx.role, autoPrint, session?.id, ctx.displayName, router])
+    }), [ctx.role, autoPrint, miTurno, ctx.displayName, router])
 
     if (sessionLoading) {
         return (
@@ -60,7 +64,19 @@ export default function CajaPage() {
         <POSModeProvider value={mode}>
             <POSFlowProvider enabled>
                 <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--toul-pos-bg-main)' }}>
-                    {!session && (
+                    {turnoAjeno && (
+                        <div role="status" style={{
+                            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 16px', background: 'var(--toul-warning-dim)',
+                            borderBottom: '1px solid var(--toul-border)',
+                        }}>
+                            <UserX size={16} style={{ color: 'var(--toul-warning)', flexShrink: 0 }} />
+                            <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: 'var(--toul-warning)' }}>
+                                El turno abierto es de {session?.opened_by_name || 'otra persona'}. Lo que vendas aquí no entra a su turno ni a su cuadre.
+                            </span>
+                        </div>
+                    )}
+                    {isPro && !session && (
                         <div style={{
                             flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
                             padding: '10px 16px', background: 'var(--toul-surface)',

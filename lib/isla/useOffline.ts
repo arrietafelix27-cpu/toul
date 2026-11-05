@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { listPendingSales, removePendingSale, syncPendingSales, type PendingSale } from './offline'
+import { PENDING_SALES_EVENT, listPendingSales, removePendingSale, syncPendingSales, type PendingSale } from './offline'
 
 export interface OfflineState {
     online: boolean
@@ -47,6 +47,8 @@ export function useOfflineSales(storeId: string | null | undefined): OfflineStat
         const goOffline = () => setOnline(false)
         window.addEventListener('online', goOnline)
         window.addEventListener('offline', goOffline)
+        // Una venta recién guardada se ve de una en la franja de conexión
+        window.addEventListener(PENDING_SALES_EVENT, refresh)
 
         // Reintento periódico por si el navegador no avisa del cambio de red
         const timer = setInterval(() => {
@@ -58,6 +60,7 @@ export function useOfflineSales(storeId: string | null | undefined): OfflineStat
         return () => {
             window.removeEventListener('online', goOnline)
             window.removeEventListener('offline', goOffline)
+            window.removeEventListener(PENDING_SALES_EVENT, refresh)
             clearInterval(timer)
         }
     }, [sync, refresh, storeId])

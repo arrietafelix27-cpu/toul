@@ -1,6 +1,6 @@
 'use client'
 
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { WifiOff, CloudUpload, AlertTriangle } from 'lucide-react'
 import { EASE_OUT_EMIL } from '@/components/ui'
 import type { OfflineState } from '@/lib/isla/useOffline'
@@ -8,6 +8,8 @@ import type { OfflineState } from '@/lib/isla/useOffline'
 /** Aviso de conexión: sin internet, ventas por enviar o ventas rechazadas. */
 export function OfflineBar({ offline }: { offline: OfflineState }) {
     const { online, pendingCount, failedCount, syncing, sync } = offline
+    // Con "reducir movimiento" la franja aparece sin empujar la pantalla de a poco
+    const reducir = useReducedMotion()
 
     const state = !online ? 'offline'
         : failedCount > 0 ? 'failed'
@@ -38,7 +40,8 @@ export function OfflineBar({ offline }: { offline: OfflineState }) {
     return (
         <AnimatePresence>
             <motion.div
-                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                initial={reducir ? { opacity: 0 } : { height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                exit={reducir ? { opacity: 0 } : { height: 0, opacity: 0 }}
                 transition={{ duration: 0.22, ease: EASE_OUT_EMIL }}
                 style={{ overflow: 'hidden', flexShrink: 0 }}>
                 <div style={{

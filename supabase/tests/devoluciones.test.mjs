@@ -18,7 +18,7 @@ export default async function (db) {
 
   // ── Negocio, vendedora, productos y métodos de pago ──
   await q(`INSERT INTO auth.users(id,email) VALUES ($1,'o@x.com'),($2,'v@x.com')`, [O, S])
-  await q(`INSERT INTO stores(id,owner_id,name) VALUES ($1,$2,'Tienda')`, [STORE, O])
+  await q(`INSERT INTO stores(id,owner_id,name,plan) VALUES ($1,$2,'Tienda','pro')`, [STORE, O])
   const [p1] = await q(`INSERT INTO products(store_id,name,sale_price,cpp) VALUES ($1,'Perfume',100000,60000) RETURNING id`, [STORE])
   const [p2] = await q(`INSERT INTO products(store_id,name,sale_price,cpp) VALUES ($1,'Crema',20000,8000) RETURNING id`, [STORE])
   const [efe] = await q(`INSERT INTO payment_methods(store_id,name) VALUES ($1,'Efectivo') RETURNING id`, [STORE])

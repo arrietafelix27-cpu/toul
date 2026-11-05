@@ -27,9 +27,12 @@ const CSS = `
 const supabase = createClient()
 
 export default function CajaVentasPage() {
-    const { ctx, session } = useCaja()
+    const { ctx, session, isPro } = useCaja()
     const offline = useOfflineSales(ctx.storeId)
     const [selected, setSelected] = useState<SaleListRow | null>(null)
+    // El administrador con el turno de otra persona abierto: lo suyo no entra a
+    // ese turno, y sin esto no aparecía en ningún lado de la caja
+    const turnoAjeno = !!session && session.opened_by !== ctx.userId
 
     // Con turno abierto: ventas del turno. Sin turno: mis ventas de hoy.
     const key = ['caja-ventas', ctx.storeId, session?.id ?? 'today', ctx.userId]
@@ -43,14 +46,21 @@ export default function CajaVentasPage() {
         let voidsQuery = supabase.from('sale_voids').select('*').eq('store_id', ctx.storeId).order('voided_at', { ascending: false })
         voidsQuery = session ? voidsQuery.eq('cash_session_id', session.id) : voidsQuery.gte('voided_at', todayStart.toISOString())
 
-        const [sales, voids, pending] = await Promise.all([
+        const outsideQuery = turnoAjeno
+            ? supabase.from('sales').select(SALE_LIST_SELECT).eq('store_id', ctx.storeId).eq('seller_id', ctx.userId)
+                .is('cash_session_id', null).gte('created_at', todayStart.toISOString()).order('created_at', { ascending: false })
+            : null
+
+        const [sales, voids, pending, outside] = await Promise.all([
             salesQuery,
             voidsQuery,
             supabase.from('approval_requests').select('sale_id, type').in('type', ['void_sale', 'return_sale']).eq('status', 'pending'),
+            outsideQuery,
         ])
         const pendientes = (pending.data ?? []) as { sale_id: string; type: string }[]
         return {
             sales: (sales.data ?? []) as unknown as SaleListRow[],
+            outside: (outside?.data ?? []) as unknown as SaleListRow[],
             voids: (voids.data ?? []) as SaleVoid[],
             pendingVoids: new Set(pendientes.filter(p => p.type === 'void_sale').map(p => p.sale_id)),
             pendingReturns: new Set(pendientes.filter(p => p.type === 'return_sale').map(p => p.sale_id)),
@@ -77,7 +87,7 @@ export default function CajaVentasPage() {
                 <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px' }}>
                     {session ? `Turno de ${session.opened_by_name ?? ctx.displayName}` : 'Hoy'}
                 </p>
-                <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '0 0 18px' }}>Ventas del turno</h1>
+                <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '0 0 18px' }}>{isPro ? 'Ventas del turno' : 'Ventas de hoy'}</h1>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
                     {[
@@ -100,39 +110,26 @@ export default function CajaVentasPage() {
                     <div style={{ textAlign: 'center', padding: '52px 20px' }}>
                         <ReceiptText size={32} strokeWidth={1.5} style={{ color: 'var(--toul-text-faint)', margin: '0 auto 12px' }} />
                         <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Aún no hay ventas</p>
-                        <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>Las ventas de este turno aparecen aquí.</p>
+                        <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>{isPro ? 'Las ventas de este turno aparecen aquí.' : 'Las ventas de hoy aparecen aquí.'}</p>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {data!.sales.map((sale, idx) => {
-                            const pending = data!.pendingVoids.has(sale.id)
-                            const pendingReturn = data!.pendingReturns.has(sale.id)
-                            const summary = sale.sale_items.map(i => `${i.quantity > 1 ? `${i.quantity}× ` : ''}${itemName(i)}`).join(', ')
-                            const methods = sale.sale_payments.map(p => p.payment_methods?.name).filter(Boolean).join(' + ')
-                            return (
-                                <motion.button key={sale.id}
-                                    initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.22, ease: EASE_OUT_EMIL, delay: Math.min(idx, 8) * 0.025 }}
-                                    whileTap={{ scale: 0.99 }}
-                                    onClick={() => setSelected(sale)}
-                                    className="cv-fila">
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--toul-text-dim)', width: 48, flexShrink: 0 }}>
-                                        {new Date(sale.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                    <span style={{ flex: 1, minWidth: 0 }}>
-                                        <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: 'var(--toul-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary}</span>
-                                        <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--toul-text-muted)', marginTop: 2 }}>
-                                            <span>{sale.is_credit ? `Crédito${sale.customer_name ? ` · ${sale.customer_name}` : ''}` : methods}</span>
-                                            {sale.discount > 0 && <span style={{ color: 'var(--toul-warning)' }}>Descuento −{formatCOP(sale.discount)}</span>}
-                                            {pending && <span style={{ color: 'var(--toul-warning)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> Anulación pendiente</span>}
-                                            {pendingReturn && <span style={{ color: 'var(--toul-warning)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> Devolución pendiente</span>}
-                                        </span>
-                                    </span>
-                                    <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)' }}>{formatCOP(sale.total)}</span>
-                                </motion.button>
-                            )
-                        })}
+                        {data!.sales.map((sale, idx) => <FilaVenta key={sale.id} sale={sale} idx={idx}
+                            pending={data!.pendingVoids.has(sale.id)} pendingReturn={data!.pendingReturns.has(sale.id)} onOpen={setSelected} />)}
                     </div>
+                )}
+
+                {(data?.outside.length ?? 0) > 0 && (
+                    <>
+                        <p className="toul-section-label" style={{ margin: '28px 0 4px 4px' }}>Tus ventas de hoy fuera del turno</p>
+                        <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '0 0 10px 4px' }}>
+                            {data!.outside.length} {data!.outside.length === 1 ? 'venta' : 'ventas'} · {formatCOP(data!.outside.reduce((s, v) => s + Number(v.total), 0))} · no cuentan en el cuadre de {session?.opened_by_name || 'ese turno'}
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {data!.outside.map((sale, idx) => <FilaVenta key={sale.id} sale={sale} idx={idx}
+                                pending={data!.pendingVoids.has(sale.id)} pendingReturn={data!.pendingReturns.has(sale.id)} onOpen={setSelected} />)}
+                        </div>
+                    </>
                 )}
 
                 <PendingSales offline={offline} />
@@ -167,5 +164,34 @@ export default function CajaVentasPage() {
                 onChanged={refrescar}
             />
         </div>
+    )
+}
+
+function FilaVenta({ sale, idx, pending, pendingReturn, onOpen }: {
+    sale: SaleListRow; idx: number; pending: boolean; pendingReturn: boolean; onOpen: (sale: SaleListRow) => void
+}) {
+    const summary = sale.sale_items.map(i => `${i.quantity > 1 ? `${i.quantity}× ` : ''}${itemName(i)}`).join(', ')
+    const methods = sale.sale_payments.map(p => p.payment_methods?.name).filter(Boolean).join(' + ')
+    return (
+        <motion.button
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22, ease: EASE_OUT_EMIL, delay: Math.min(idx, 8) * 0.025 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => onOpen(sale)}
+            className="cv-fila">
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--toul-text-dim)', width: 48, flexShrink: 0 }}>
+                {new Date(sale.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: 'var(--toul-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary}</span>
+                <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--toul-text-muted)', marginTop: 2 }}>
+                    <span>{sale.is_credit ? `Crédito${sale.customer_name ? ` · ${sale.customer_name}` : ''}` : methods}</span>
+                    {sale.discount > 0 && <span style={{ color: 'var(--toul-warning)' }}>Descuento −{formatCOP(sale.discount)}</span>}
+                    {pending && <span style={{ color: 'var(--toul-warning)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> Anulación pendiente</span>}
+                    {pendingReturn && <span style={{ color: 'var(--toul-warning)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> Devolución pendiente</span>}
+                </span>
+            </span>
+            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)' }}>{formatCOP(sale.total)}</span>
+        </motion.button>
     )
 }

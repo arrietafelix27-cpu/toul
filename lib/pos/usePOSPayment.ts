@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { Customer, PaymentMethodConfig, PaymentSplit, CartItem } from '@/lib/types'
 import toast from 'react-hot-toast'
+import { pareceTelefono } from './clientes'
 
 // ─── Hook ─────────────────────────────────────────────────────
 export interface POSPaymentState {
@@ -45,10 +46,18 @@ export interface POSPaymentState {
 
     // Submit
     buildSaleBody: (payload: SalePayload) => Record<string, unknown>
-    submitSale: (payload: SalePayload) => Promise<{ success: boolean; saleId?: string; networkError?: boolean }>
+    submitSale: (payload: SalePayload) => Promise<SubmitResult>
 
     // Reset
     resetPayment: () => void
+}
+
+export interface SubmitResult {
+    success: boolean
+    saleId?: string
+    networkError?: boolean
+    /** Por qué TOUL rechazó la venta (sin stock, un precio que cambió…) */
+    error?: string
 }
 
 export interface SalePayload {
@@ -175,7 +184,9 @@ export function usePOSPayment(
         if (cartIsEmpty) return false
 
         if (isCredit) {
-            const hasCustomer = !!selectedCustomer || !!customerSearch.trim()
+            // Un fiado a nombre de "300 123 4567" no le sirve a nadie: con
+            // un teléfono escrito hay que elegir o crear el cliente
+            const hasCustomer = !!selectedCustomer || (!!customerSearch.trim() && !pareceTelefono(customerSearch))
             if (!hasCustomer) return false
             // El plazo es opcional: muchos fiados se dan sin fecha
             // If there's an initial payment, splits must match
@@ -211,7 +222,7 @@ export function usePOSPayment(
     }), [paymentTarget, paymentSplits, discountAmount, total, isCredit, selectedCustomer, customerSearch, dueDate])
 
     // Submit
-    const submitSale = useCallback(async (payload: SalePayload): Promise<{ success: boolean; saleId?: string; networkError?: boolean }> => {
+    const submitSale = useCallback(async (payload: SalePayload): Promise<SubmitResult> => {
         const body = buildSaleBody(payload)
         try {
             const res = await fetch('/api/sales', {
@@ -232,7 +243,7 @@ export function usePOSPayment(
             if (err instanceof TypeError) return { success: false, networkError: true }
             const message = err instanceof Error ? err.message : 'Error desconocido'
             toast.error(message)
-            return { success: false }
+            return { success: false, error: message }
         }
     }, [buildSaleBody])
 

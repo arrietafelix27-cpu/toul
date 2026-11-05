@@ -25,9 +25,82 @@ import { useOfflineSales } from '@/lib/isla/useOffline'
 import { useSessionContext } from '@/lib/isla/useSession'
 import { getCachedStoreInfo, queueSale } from '@/lib/isla/offline'
 import type { ReceiptData } from '@/lib/isla/types'
+import { buscarClientes, clienteConTelefono, pareceTelefono } from '@/lib/pos/clientes'
 import toast from 'react-hot-toast'
 
 type DesktopSaleSnapshot = SaleSnapshot & { saleId?: string; offline?: boolean; receipt?: ReceiptData }
+
+/** Número propio de la venta (uuid v4). Si se guarda sin internet, entra a
+ *  TOUL con este mismo número y la tirilla coincide con la venta. Sin
+ *  conexión segura (por ejemplo, la caja abierta por la IP del equipo)
+ *  el navegador no trae randomUUID: se arma igual con números al azar. */
+function nuevoNumeroDeVenta(): string {
+    const c: Crypto = globalThis.crypto
+    if (typeof c.randomUUID === 'function') return c.randomUUID()
+    const b = c.getRandomValues(new Uint8Array(16))
+    b[6] = (b[6] & 0x0f) | 0x40
+    b[8] = (b[8] & 0x3f) | 0x80
+    const h = Array.from(b, (x: number) => x.toString(16).padStart(2, '0')).join('')
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+}
+
+/* Con "reducir movimiento" lo que se hunde al tocarlo se queda quieto */
+const PRESS_CSS = `@media (prefers-reduced-motion: reduce) { .pos-press { transform: none !important; } }`
+
+/* ── Mientras cargan los productos: su forma, no un spinner ──── */
+function EsqueletoProductos({ narrow }: { narrow: boolean }) {
+    if (narrow) {
+        return (
+            <div aria-hidden style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {Array.from({ length: 7 }, (_, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, minHeight: 76 }}>
+                        <span className="skeleton" style={{ width: 56, height: 56, borderRadius: 12, flexShrink: 0 }} />
+                        <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <span className="skeleton" style={{ height: 13, width: '62%', borderRadius: 6 }} />
+                            <span className="skeleton" style={{ height: 12, width: '34%', borderRadius: 6 }} />
+                        </span>
+                    </div>
+                ))}
+            </div>
+        )
+    }
+    return (
+        <div aria-hidden style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
+            {Array.from({ length: 8 }, (_, i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <span className="skeleton" style={{ width: '100%', aspectRatio: '4 / 3', borderRadius: 16 }} />
+                    <span className="skeleton" style={{ height: 13, width: '70%', borderRadius: 6 }} />
+                    <span className="skeleton" style={{ height: 13, width: '40%', borderRadius: 6 }} />
+                </div>
+            ))}
+        </div>
+    )
+}
+
+/* ── No cargó la caja y no hay copia guardada en el equipo ───── */
+function AvisoCarga({ que, onRetry }: { que: 'products' | 'other'; onRetry: () => void }) {
+    return (
+        <div role="alert" style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', marginBottom: 12,
+            borderRadius: 14, background: 'var(--toul-pos-error-dim)', border: '1px solid var(--toul-pos-error-border)',
+        }}>
+            <AlertTriangle size={18} style={{ color: 'var(--toul-pos-error)', flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--toul-pos-error)' }}>
+                    {que === 'products' ? 'No se pudieron cargar los productos' : 'No se pudieron cargar los métodos de pago y los clientes'}
+                </span>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--toul-pos-text-sec)', marginTop: 2 }}>Revisa el internet y vuelve a intentar.</span>
+            </span>
+            <button onClick={onRetry} style={{
+                height: 36, padding: '0 14px', borderRadius: 10, border: 'none', flexShrink: 0, cursor: 'pointer',
+                background: 'var(--toul-pos-error-dim-strong)', color: 'var(--toul-pos-error)', fontFamily: 'inherit',
+                fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+                <RefreshCw size={14} /> Reintentar
+            </button>
+        </div>
+    )
+}
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Desktop POS v2 — Built from mobile visual DNA
@@ -82,9 +155,9 @@ function ProductList() {
         return () => clearTimeout(t)
     }, [])
 
+    const q = search.toLowerCase().trim()
     const sorted = useMemo(() => {
         let list = [...data.products]
-        const q = search.toLowerCase().trim()
         if (q) list = list.filter(p => p.name.toLowerCase().includes(q) || p.reference?.toLowerCase().includes(q))
 
         switch (sortKey) {
@@ -107,10 +180,17 @@ function ProductList() {
             return !(cart.cartMap[p.id] || 0)
         })
         return [...inCart, ...notInCart]
-    }, [data.products, data.variantsByProduct, search, sortKey, cart.cartMap])
+    }, [data.products, data.variantsByProduct, q, sortKey, cart.cartMap])
+
+    // El buscador también encuentra combos
+    const combos = useMemo(
+        () => q ? data.combos.filter(c => c.name.toLowerCase().includes(q)) : data.combos,
+        [data.combos, q]
+    )
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: narrow ? '14px 16px 0' : '20px 24px', position: 'relative' }}>
+            <style>{PRESS_CSS}</style>
             {/* En la caja la pestaña "Vender" ya dice qué es esta pantalla: el
                 título solo quitaba espacio. Queda en el modo cajón, con su X */}
             {mode === 'drawer' && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: narrow ? 10 : 14 }}>
@@ -192,6 +272,8 @@ function ProductList() {
 
             {/* Product Grid — desktop-optimized cards with large images */}
             <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 12 }}>
+                {data.failed && <AvisoCarga que={data.failed} onRetry={data.retry} />}
+                {data.failed === 'products' ? null : data.isLoading ? <EsqueletoProductos narrow={narrow} /> : (<>
                 <div style={narrow
                     ? { display: 'flex', flexDirection: 'column', gap: 8 }
                     : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
@@ -207,7 +289,9 @@ function ProductList() {
                             const inCart = isVariantProduct
                                 ? variantList.some(v => (cart.cartMap[`${product.id}:${v.id}`] || 0) > 0)
                                 : qty > 0
-                            const oos = !isVariantProduct && product.stock <= 0
+                            // Con presentaciones: agotado si todas lo están
+                            const oos = isVariantProduct ? variantList.every(v => v.stock <= 0) : product.stock <= 0
+                            const full = !isVariantProduct && !cart.canAdd(product.id)
                             const prices = variantList.map(v => v.sale_price)
                             const priceLabel = isVariantProduct
                                 ? (Math.min(...prices) === Math.max(...prices)
@@ -219,9 +303,11 @@ function ProductList() {
                                 <div
                                     key={product.id}
                                     onClick={() => {
+                                        if (oos) return
                                         if (isVariantProduct) { setExpandedVariantProduct(product.id); return }
-                                        if (!oos && qty === 0) cart.addItem(product.id, product.stock)
+                                        if (qty === 0) cart.addItem(product.id)
                                     }}
+                                    aria-disabled={oos || undefined}
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: 12, padding: 10, minHeight: 76,
                                         borderRadius: 16,
@@ -249,13 +335,13 @@ function ProductList() {
                                         <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--toul-primary)', margin: '2px 0 0', letterSpacing: '-0.02em' }}>
                                             {priceLabel}
                                             <span style={{ fontSize: 12, fontWeight: 500, color: oos || (!isVariantProduct && product.stock <= 3) ? 'var(--toul-pos-warning)' : 'var(--toul-pos-text-sec)', marginLeft: 8 }}>
-                                                {isVariantProduct ? `${variantList.length} presentaciones` : oos ? 'Sin stock' : `${product.stock} und`}
+                                                {oos ? 'Sin stock' : isVariantProduct ? `${variantList.length} presentaciones` : `${product.stock} und`}
                                             </span>
                                         </p>
                                     </div>
 
                                     {isVariantProduct ? (
-                                        <ChevronRight size={20} style={{ color: 'var(--toul-pos-text-sec)', flexShrink: 0 }} />
+                                        !oos && <ChevronRight size={20} style={{ color: 'var(--toul-pos-text-sec)', flexShrink: 0 }} />
                                     ) : qty > 0 ? (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                                             <button
@@ -271,24 +357,25 @@ function ProductList() {
                                             </button>
                                             <span style={{ fontSize: 17, fontWeight: 700, minWidth: 20, textAlign: 'center', color: 'var(--toul-pos-text-main)' }}>{qty}</span>
                                             <button
-                                                onClick={e => { e.stopPropagation(); cart.addItem(product.id, product.stock) }}
-                                                disabled={qty >= product.stock}
+                                                onClick={e => { e.stopPropagation(); cart.addItem(product.id) }}
+                                                disabled={full}
                                                 aria-label="Agregar uno"
                                                 style={{
                                                     width: 40, height: 40, borderRadius: 12, border: 'none',
                                                     background: 'var(--toul-primary)', color: '#000',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    cursor: qty >= product.stock ? 'default' : 'pointer',
-                                                    opacity: qty >= product.stock ? 0.3 : 1,
+                                                    cursor: full ? 'default' : 'pointer',
+                                                    opacity: full ? 0.3 : 1,
                                                 }}>
                                                 <Plus size={17} strokeWidth={2.6} />
                                             </button>
                                         </div>
-                                    ) : (
+                                    ) : !oos && (
                                         <div style={{
                                             width: 40, height: 40, borderRadius: 12, flexShrink: 0,
                                             background: 'var(--toul-surface-2)', color: 'var(--toul-pos-text-main)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            opacity: full ? 0.3 : 1,
                                         }}>
                                             <Plus size={18} strokeWidth={2.4} />
                                         </div>
@@ -300,6 +387,8 @@ function ProductList() {
                         // ── Variant product card ──────────────────────────────
                         if (isVariantProduct) {
                             const anyInCart = variants.some(v => (cart.cartMap[`${product.id}:${v.id}`] || 0) > 0)
+                            // Si todas las presentaciones están agotadas, el producto también
+                            const allOut = variants.every(v => v.stock <= 0)
                             const prices = variants.map(v => v.sale_price)
                             const minP = Math.min(...prices)
                             const maxP = Math.max(...prices)
@@ -307,12 +396,16 @@ function ProductList() {
                             return (
                                 <div
                                     key={product.id}
-                                    onClick={() => setExpandedVariantProduct(product.id)}
+                                    className="pos-press"
+                                    onClick={() => { if (!allOut) setExpandedVariantProduct(product.id) }}
+                                    aria-disabled={allOut || undefined}
                                     style={{
+                                        position: 'relative',
                                         background: anyInCart ? 'var(--toul-surface-focused)' : 'var(--toul-pos-bg-card)',
                                         border: `1px solid ${anyInCart ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
                                         borderRadius: 16, overflow: 'hidden',
-                                        cursor: 'pointer',
+                                        cursor: allOut ? 'default' : 'pointer',
+                                        pointerEvents: allOut ? 'none' : 'auto',
                                         transition: 'background var(--toul-transition), border-color var(--toul-transition), transform 120ms var(--toul-ease)',
                                         display: 'flex', flexDirection: 'column',
                                     }}
@@ -320,11 +413,22 @@ function ProductList() {
                                     onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
                                     onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
                                 >
+                                    {allOut && (
+                                        <span style={{
+                                            position: 'absolute', top: 10, left: 10, zIndex: 1,
+                                            fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+                                            color: 'var(--toul-pos-text-sec)', background: 'rgba(10,10,10,0.75)',
+                                            backdropFilter: 'blur(8px)', borderRadius: 999, padding: '4px 9px',
+                                        }}>
+                                            Sin stock
+                                        </span>
+                                    )}
                                     <div style={{
                                         width: '100%', aspectRatio: '4 / 3',
                                         background: 'linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         overflow: 'hidden', position: 'relative',
+                                        opacity: allOut ? 0.38 : 1,
                                     }}>
                                         {img ? (
                                             <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
@@ -342,15 +446,17 @@ function ProductList() {
                                             </div>
                                         )}
                                     </div>
-                                    <div style={{ padding: '10px 12px 12px' }}>
+                                    <div style={{ padding: '10px 12px 12px', opacity: allOut ? 0.38 : 1 }}>
                                         <p style={{ fontSize: 14, color: 'var(--toul-pos-text-main)', fontWeight: 600, letterSpacing: '-0.01em', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {product.name}
                                         </p>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 5 }}>
                                             <span style={{ fontSize: 15, color: 'var(--toul-primary)', fontWeight: 700, letterSpacing: '-0.02em' }}>{priceLabel}</span>
-                                            <span style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', border: '1px solid var(--toul-pos-border)', padding: '2px 7px', borderRadius: 999 }}>
-                                                {variants.length} var
-                                            </span>
+                                            {!allOut && (
+                                                <span style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', border: '1px solid var(--toul-pos-border)', padding: '2px 7px', borderRadius: 999 }}>
+                                                    {variants.length} var
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -361,11 +467,13 @@ function ProductList() {
                         const qty = cart.cartMap[product.id] || 0
                         const oos = product.stock <= 0
                         const selected = qty > 0
+                        const full = !cart.canAdd(product.id)
 
                         return (
                             <div
                                 key={product.id}
-                                onClick={() => { if (!oos && !selected) cart.addItem(product.id, product.stock) }}
+                                className="pos-press"
+                                onClick={() => { if (!oos && !selected) cart.addItem(product.id) }}
                                 style={{
                                     position: 'relative',
                                     background: selected ? 'var(--toul-surface-focused)' : 'var(--toul-pos-bg-card)',
@@ -406,6 +514,7 @@ function ProductList() {
                                             }}
                                         >
                                             <button
+                                                className="pos-press"
                                                 onClick={e => { e.stopPropagation(); cart.decrementItem(product.id) }}
                                                 aria-label={qty === 1 ? 'Quitar del carrito' : 'Quitar uno'}
                                                 style={{
@@ -425,15 +534,16 @@ function ProductList() {
                                                 {qty}
                                             </span>
                                             <button
-                                                onClick={e => { e.stopPropagation(); cart.addItem(product.id, product.stock) }}
-                                                disabled={qty >= product.stock}
+                                                className="pos-press"
+                                                onClick={e => { e.stopPropagation(); cart.addItem(product.id) }}
+                                                disabled={full}
                                                 aria-label="Agregar uno"
                                                 style={{
                                                     width: 36, height: 36, borderRadius: 11, border: 'none',
                                                     background: 'var(--toul-primary)',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    cursor: qty >= product.stock ? 'default' : 'pointer',
-                                                    color: '#000', opacity: qty >= product.stock ? 0.3 : 1,
+                                                    cursor: full ? 'default' : 'pointer',
+                                                    color: '#000', opacity: full ? 0.3 : 1,
                                                     transition: 'transform 100ms var(--toul-ease)',
                                                 }}
                                                 onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.9)' }}
@@ -478,42 +588,58 @@ function ProductList() {
                         )
                     })}
                 </div>
-                {sorted.length === 0 && data.combos.length === 0 && (
+                {sorted.length === 0 && combos.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--toul-pos-text-sec)', fontSize: 13 }}>
                         Sin resultados
                     </div>
                 )}
 
                 {/* Combos section */}
-                {data.combos.length > 0 && (
+                {combos.length > 0 && (
                     <div style={{ marginTop: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                             <Layers size={14} style={{ color: 'var(--toul-pos-text-sec)' }} />
                             <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--toul-pos-text-sec)' }}>Combos</span>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
-                            {data.combos.map(combo => {
+                            {combos.map(combo => {
                                 const key = `combo:${combo.id}`
                                 const qty = cart.cartMap[key] || 0
                                 const selected = qty > 0
+                                // Lo que no alcanza, contando lo que ya va en el carrito
+                                const falta = cart.missingFor(key)
+                                const apagado = !selected && falta !== null
                                 return (
                                     <div
                                         key={combo.id}
-                                        onClick={() => { if (!selected) cart.addCombo(combo.id) }}
+                                        onClick={() => { if (!selected && !apagado) cart.addCombo(combo.id) }}
+                                        aria-disabled={apagado || undefined}
                                         style={{
                                             position: 'relative',
                                             background: selected ? 'var(--toul-surface-focused)' : 'var(--toul-pos-bg-card)',
                                             border: `1px solid ${selected ? 'var(--toul-border-focused)' : 'var(--toul-pos-border)'}`,
                                             borderRadius: 16, overflow: 'hidden',
-                                            cursor: selected ? 'default' : 'pointer',
+                                            cursor: selected || apagado ? 'default' : 'pointer',
+                                            pointerEvents: apagado ? 'none' : 'auto',
                                             transition: 'background var(--toul-transition), border-color var(--toul-transition)',
                                             display: 'flex', flexDirection: 'column',
                                         }}
                                     >
+                                        {apagado && (
+                                            <span style={{
+                                                position: 'absolute', top: 10, left: 10, zIndex: 1, maxWidth: 'calc(100% - 20px)',
+                                                fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                                color: 'var(--toul-pos-warning)', background: 'rgba(10,10,10,0.75)',
+                                                backdropFilter: 'blur(8px)', borderRadius: 999, padding: '4px 9px',
+                                            }}>
+                                                Falta {data.unitName(falta!)}
+                                            </span>
+                                        )}
                                         <div style={{
                                             width: '100%', aspectRatio: '1', background: 'var(--toul-pos-bg-main)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             overflow: 'hidden', position: 'relative',
+                                            opacity: apagado ? 0.38 : 1,
                                         }}>
                                             {combo.image_url ? (
                                                 <img src={combo.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
@@ -531,7 +657,7 @@ function ProductList() {
                                                 </div>
                                             )}
                                         </div>
-                                        <div style={{ padding: '10px 12px 8px' }}>
+                                        <div style={{ padding: '10px 12px 8px', opacity: apagado ? 0.38 : 1 }}>
                                             <p style={{ fontSize: 13, color: 'var(--toul-pos-text-main)', fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {combo.name}
                                             </p>
@@ -558,11 +684,14 @@ function ProductList() {
                                                 <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--toul-primary)' }}>{qty}</span>
                                                 <button
                                                     onClick={e => { e.stopPropagation(); cart.addCombo(combo.id) }}
+                                                    disabled={falta !== null}
+                                                    aria-label="Agregar uno"
                                                     style={{
                                                         width: 30, height: 30, borderRadius: 8, border: 'none',
                                                         background: 'var(--toul-pos-green-dark)',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        cursor: 'pointer', color: 'var(--toul-primary)',
+                                                        cursor: falta !== null ? 'default' : 'pointer', color: 'var(--toul-primary)',
+                                                        opacity: falta !== null ? 0.3 : 1,
                                                     }}
                                                 >
                                                     <Plus size={14} />
@@ -575,6 +704,7 @@ function ProductList() {
                         </div>
                     </div>
                 )}
+                </>)}
             </div>
 
             {/* Variant picker overlay */}
@@ -631,6 +761,8 @@ function ProductList() {
                                     const vQty = cart.cartMap[key] || 0
                                     const vOos = variant.stock <= 0
                                     const vSelected = vQty > 0
+                                    // También cuenta la que ya va dentro de un combo del carrito
+                                    const vFull = !cart.canAdd(key)
                                     return (
                                         <div
                                             key={key}
@@ -658,12 +790,16 @@ function ProductList() {
                                             </div>
                                             {!vSelected ? (
                                                 <button
-                                                    onClick={() => cart.addItem(key, variant.stock)}
+                                                    className="pos-press"
+                                                    onClick={() => cart.addItem(key)}
+                                                    disabled={vFull}
+                                                    aria-label="Agregar"
                                                     style={{
                                                         width: 44, height: 44, borderRadius: 13, flexShrink: 0, border: 'none',
                                                         background: 'var(--toul-primary)',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        cursor: 'pointer', color: '#000',
+                                                        cursor: vFull ? 'default' : 'pointer', color: '#000',
+                                                        opacity: vFull ? 0.3 : 1,
                                                         transition: 'transform 100ms var(--toul-ease)',
                                                     }}
                                                     onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.92)' }}
@@ -687,14 +823,15 @@ function ProductList() {
                                                     </button>
                                                     <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--toul-primary)', minWidth: 24, textAlign: 'center' }}>{vQty}</span>
                                                     <button
-                                                        onClick={() => cart.addItem(key, variant.stock)}
-                                                        disabled={vQty >= variant.stock}
+                                                        onClick={() => cart.addItem(key)}
+                                                        disabled={vFull}
+                                                        aria-label="Agregar uno"
                                                         style={{
                                                             width: 30, height: 30, borderRadius: 8, border: 'none',
                                                             background: 'var(--toul-pos-green-dark)',
                                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                            cursor: vQty >= variant.stock ? 'default' : 'pointer',
-                                                            color: 'var(--toul-primary)', opacity: vQty >= variant.stock ? 0.3 : 1,
+                                                            cursor: vFull ? 'default' : 'pointer',
+                                                            color: 'var(--toul-primary)', opacity: vFull ? 0.3 : 1,
                                                         }}
                                                     >
                                                         <Plus size={13} />
@@ -725,38 +862,62 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
     const [discType, setDiscType] = useState<'%' | '$'>('$')
     const [discValue, setDiscValue] = useState('')
     const [customerMode, setCustomerMode] = useState<'display' | 'search'>('search')
+    const [createOpen, setCreateOpen] = useState(false)
+    const [createName, setCreateName] = useState('')
     const [createPhone, setCreatePhone] = useState('')
     const [creating, setCreating] = useState(false)
     const [createError, setCreateError] = useState<string | null>(null)
+    // El que ya tenía ese teléfono, según el servidor
+    const [existing, setExisting] = useState<Customer | null>(null)
 
     const isCredit = payment.saleType === 'credito'
 
-    const filteredCustomers = useMemo(() => {
-        if (!payment.customerSearch.trim()) return data.customers.slice(0, 5)
-        const q = payment.customerSearch.toLowerCase()
-        return data.customers.filter(c => c.name.toLowerCase().includes(q))
-    }, [payment.customerSearch, data.customers])
+    // Por nombre o por teléfono
+    const query = payment.customerSearch
+    const matches = useMemo(() => buscarClientes(data.customers, query), [data.customers, query])
+
+    // Si lo que se escribió es un teléfono, se pide el nombre; si es un nombre, el teléfono
+    const porTelefono = pareceTelefono(query)
+    const newName = porTelefono ? createName : query.trim()
+    const newPhone = porTelefono ? query.trim() : createPhone
+    const duplicate = clienteConTelefono(data.customers, newPhone) ?? existing
+    const showCreate = createOpen || matches.length === 0
+
+    const resetCreate = () => {
+        setCreateOpen(false)
+        setCreateName('')
+        setCreatePhone('')
+        setCreateError(null)
+        setExisting(null)
+    }
 
     const selectCustomer = (c: Customer) => {
         payment.setSelectedCustomer(c)
         setCustomerMode('display')
+        resetCreate()
+    }
+
+    const handleSearch = (value: string) => {
+        payment.setCustomerSearch(value)
+        setExisting(null)
+        setCreateError(null)
     }
 
     const handleCreateCustomer = async () => {
-        if (!payment.customerSearch.trim() || creating) return
+        if (!newName.trim() || creating || duplicate) return
         setCreating(true)
         setCreateError(null)
         try {
             const res = await fetch('/api/customers', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: payment.customerSearch.trim(), phone: createPhone.trim() || null }),
+                body: JSON.stringify({ name: newName.trim(), phone: newPhone.trim() || null }),
             })
-            const data = await res.json()
-            if (!res.ok) { setCreateError(data.error || 'Error al crear cliente'); return }
-            payment.setSelectedCustomer(data.customer)
-            setCustomerMode('display')
-            setCreatePhone('')
+            const body = await res.json()
+            if (res.status === 409 && body.existing) { setExisting(body.existing); return }
+            if (!res.ok) { setCreateError(body.error || 'Error al crear cliente'); return }
+            selectCustomer(body.customer)
+            data.refreshCustomers()
         } catch {
             setCreateError('Error de conexión')
         } finally {
@@ -919,7 +1080,7 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                     )}
                                 </div>
                                 <button
-                                    onClick={() => { payment.setSelectedCustomer(null); payment.setCustomerSearch(''); setCustomerMode('search') }}
+                                    onClick={() => { payment.setSelectedCustomer(null); payment.setCustomerSearch(''); setCustomerMode('search'); resetCreate() }}
                                     style={{ background: 'none', border: 'none', color: 'var(--toul-pos-text-sec)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2 }}
                                 >
                                     cambiar <ChevronRight size={12} />
@@ -930,9 +1091,9 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                 <div style={{ position: 'relative' }}>
                                     <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-pos-text-sec)' }} />
                                     <input
-                                        placeholder="Buscar cliente..."
+                                        placeholder="Nombre o teléfono"
                                         value={payment.customerSearch}
-                                        onChange={e => payment.setCustomerSearch(e.target.value)}
+                                        onChange={e => handleSearch(e.target.value)}
                                         style={{
                                             width: '100%', background: 'var(--toul-pos-bg-main)', border: `1px solid ${'var(--toul-pos-border)'}`,
                                             borderRadius: 8, padding: '8px 10px 8px 36px', fontSize: 12,
@@ -940,48 +1101,84 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                                         }}
                                     />
                                 </div>
-                                {payment.customerSearch.trim() && (
-                                    <div style={{ marginTop: 6, maxHeight: 130, overflowY: 'auto', borderRadius: 8, border: `1px solid ${'var(--toul-pos-border)'}`, overflow: 'hidden' }}>
-                                        {filteredCustomers.map(c => (
-                                            <button
-                                                key={c.id}
-                                                onClick={() => selectCustomer(c)}
-                                                style={{
-                                                    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                                                    padding: '7px 10px', background: 'none', border: 'none',
-                                                    borderBottom: `1px solid ${'var(--toul-pos-border)'}`, cursor: 'pointer', textAlign: 'left',
-                                                }}
-                                            >
-                                                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--toul-pos-green-mint)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: 'var(--toul-primary)' }}>
-                                                    {c.name.trim().split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-                                                </div>
-                                                <span style={{ fontSize: 12, color: 'var(--toul-pos-text-main)' }}>{c.name}</span>
-                                            </button>
-                                        ))}
-                                        {filteredCustomers.length === 0 && (
-                                            <div style={{ padding: '10px', background: 'var(--toul-pos-green-dark)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                                <p style={{ fontSize: 11, color: 'var(--toul-primary)', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                    <UserPlus size={12} /> Crear: &quot;{payment.customerSearch}&quot;
-                                                </p>
+                                {query.trim() && (<>
+                                    {matches.length > 0 && (
+                                        <div style={{ marginTop: 6, maxHeight: 220, overflowY: 'auto', overscrollBehavior: 'contain', borderRadius: 8, border: '1px solid var(--toul-pos-border)' }}>
+                                            {matches.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => selectCustomer(c)}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                                        padding: '7px 10px', background: 'none', border: 'none',
+                                                        borderBottom: '1px solid var(--toul-pos-border)', cursor: 'pointer', textAlign: 'left',
+                                                    }}
+                                                >
+                                                    <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, background: 'var(--toul-pos-green-mint)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: 'var(--toul-primary)' }}>
+                                                        {c.name.trim().split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                                                    </div>
+                                                    <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--toul-pos-text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
+                                                    {c.phone && <span style={{ fontSize: 11, color: 'var(--toul-pos-text-sec)', flexShrink: 0 }}>{c.phone}</span>}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {!showCreate ? (
+                                        <button
+                                            onClick={() => setCreateOpen(true)}
+                                            style={{ marginTop: 6, background: 'none', border: 'none', padding: '4px 0', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--toul-primary)', display: 'flex', alignItems: 'center', gap: 4 }}
+                                        >
+                                            <UserPlus size={12} /> Crear cliente nuevo
+                                        </button>
+                                    ) : (
+                                        <div style={{ marginTop: 6, padding: '10px', borderRadius: 8, background: 'var(--toul-pos-green-dark)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                            <p style={{ fontSize: 11, color: 'var(--toul-primary)', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                <UserPlus size={12} /> {porTelefono ? `Cliente nuevo · ${query.trim()}` : `Crear: "${query.trim()}"`}
+                                            </p>
+                                            {porTelefono ? (
+                                                <input
+                                                    placeholder="Nombre"
+                                                    value={createName}
+                                                    onChange={e => { setCreateName(e.target.value); setCreateError(null) }}
+                                                    autoFocus
+                                                    style={{ width: '100%', background: 'var(--toul-pos-bg-main)', border: '1px solid var(--toul-pos-border)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: 'var(--toul-pos-text-main)', outline: 'none' }}
+                                                />
+                                            ) : (
                                                 <input
                                                     placeholder="Teléfono (opcional)"
                                                     value={createPhone}
-                                                    onChange={e => setCreatePhone(e.target.value)}
+                                                    onChange={e => { setCreatePhone(e.target.value); setExisting(null); setCreateError(null) }}
                                                     inputMode="numeric"
+                                                    type="tel"
                                                     style={{ width: '100%', background: 'var(--toul-pos-bg-main)', border: '1px solid var(--toul-pos-border)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: 'var(--toul-pos-text-main)', outline: 'none' }}
                                                 />
-                                                {createError && <p style={{ fontSize: 10, color: 'var(--toul-pos-error)', margin: 0 }}>{createError}</p>}
+                                            )}
+                                            {duplicate && (
+                                                <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, background: 'var(--toul-pos-warning-dim)' }}>
+                                                    <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: 'var(--toul-pos-warning)', lineHeight: 1.35 }}>
+                                                        Ya existe {duplicate.name}{duplicate.phone ? ` · ${duplicate.phone}` : ''}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => selectCustomer(duplicate)}
+                                                        style={{ flexShrink: 0, background: 'var(--toul-pos-warning)', color: 'var(--toul-pos-bg-main)', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                                                    >
+                                                        Usar este
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {createError && <p style={{ fontSize: 10, color: 'var(--toul-pos-error)', margin: 0 }}>{createError}</p>}
+                                            {!duplicate && (
                                                 <button
                                                     onClick={handleCreateCustomer}
-                                                    disabled={creating}
-                                                    style={{ background: creating ? 'var(--toul-pos-btn-disabled-bg)' : 'var(--toul-primary)', color: creating ? 'var(--toul-pos-text-dim)' : 'var(--toul-pos-bg-main)', border: 'none', borderRadius: 6, padding: '7px 0', fontSize: 12, fontWeight: 700, cursor: creating ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                                    disabled={creating || !newName.trim()}
+                                                    style={{ background: creating || !newName.trim() ? 'var(--toul-pos-btn-disabled-bg)' : 'var(--toul-primary)', color: creating || !newName.trim() ? 'var(--toul-pos-text-dim)' : 'var(--toul-pos-bg-main)', border: 'none', borderRadius: 6, padding: '7px 0', fontSize: 12, fontWeight: 700, cursor: creating || !newName.trim() ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                                 >
                                                     {creating ? <div style={{ width: 12, height: 12, border: '2px solid var(--toul-pos-bg-main)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} /> : 'Crear y seleccionar'}
                                                 </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                            )}
+                                        </div>
+                                    )}
+                                </>)}
                             </div>
                         )}
                     </Section>
@@ -1155,6 +1352,7 @@ function RightPanel({ onConfirm, submitting, error, onClearError, approval, need
                         : 'Pedir aprobación'
                     return (
                         <button
+                            className="pos-press"
                             onClick={awaitingApproval ? approval.request : onConfirm}
                             disabled={disabled}
                             style={{
@@ -1332,14 +1530,33 @@ function ConfirmationPanel({ sale, onNewSale, onViewHistory, onPrint, printing }
                     )}
                     <div style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '12px', margin: '8px -14px 0', borderRadius: '0 0 14px 14px',
+                        padding: '12px', margin: '8px -14px 0', borderRadius: sale.isCredit ? 0 : '0 0 14px 14px',
                         background: 'var(--toul-pos-green-surface)',
                     }}>
-                        <span style={{ fontSize: 13, color: 'var(--toul-pos-text-main)', fontWeight: 700 }}>Total cobrado</span>
+                        <span style={{ fontSize: 13, color: 'var(--toul-pos-text-main)', fontWeight: 700 }}>{sale.isCredit ? 'Total de la venta' : 'Total cobrado'}</span>
                         <span style={{ fontSize: 20, color: 'var(--toul-primary)', fontWeight: 800, fontFamily: 'monospace' }}>
                             {formatCOP(sale.total)}
                         </span>
                     </div>
+                    {/* Fiado: lo que pagó hoy y lo que queda debiendo */}
+                    {sale.isCredit && (
+                        <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--toul-pos-border)' }}>
+                                <span style={{ fontSize: 12, color: 'var(--toul-pos-text-sec)' }}>Abono recibido</span>
+                                <span style={{ fontSize: 13, color: 'var(--toul-pos-text-main)', fontWeight: 600, fontFamily: 'monospace' }}>{formatCOP(Math.round(sale.initialPayment ?? 0))}</span>
+                            </div>
+                            <div style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                padding: '12px', margin: '0 -14px', borderRadius: '0 0 14px 14px',
+                                background: 'var(--toul-pos-warning-dim)',
+                            }}>
+                                <span style={{ fontSize: 13, color: 'var(--toul-pos-warning)', fontWeight: 700 }}>Queda debiendo</span>
+                                <span style={{ fontSize: 18, color: 'var(--toul-pos-warning)', fontWeight: 800, fontFamily: 'monospace' }}>
+                                    {formatCOP(Math.max(0, Math.round(sale.total - (sale.initialPayment ?? 0))))}
+                                </span>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -1394,7 +1611,7 @@ function ConfirmationPanel({ sale, onNewSale, onViewHistory, onPrint, printing }
 export default function DesktopPOS() {
     const { closePOS } = usePOS()
     const router = useRouter()
-    const { cart, payment } = usePOSFlow()
+    const { data, cart, payment } = usePOSFlow()
     const { mutate: globalMutate } = useSWRConfig()
     const { mode, role, autoPrint, cashSessionId, sellerName, onViewHistory } = usePOSMode()
     // La tienda de quien vende: las ventas sin internet se guardan a su
@@ -1476,12 +1693,12 @@ export default function DesktopPOS() {
             payments: [...payment.paymentSplits],
             isCredit: payment.saleType === 'credito',
             customerName: payment.selectedCustomer?.name || payment.customerSearch || null,
+            initialPayment: payment.saleType === 'credito' ? Math.round(Number(payment.initialPayment) || 0) : undefined,
         }
 
-        // Identificador propio: si el envío se reintenta, el servidor no duplica la venta
-        const clientSaleId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+        // Identificador propio: si el envío se reintenta, el servidor no duplica
+        // la venta, y es el número con el que queda en TOUL
+        const clientSaleId = nuevoNumeroDeVenta()
         const soldAt = new Date().toISOString()
         const saleArgs = {
             cartItems: cart.cartItems,
@@ -1514,7 +1731,9 @@ export default function DesktopPOS() {
                 clientSaleId,
                 soldAt,
                 total: snapshot.total,
-                body: payment.buildSaleBody(saleArgs),
+                // Marcada sin internet: el servidor la acepta con el precio que tenía
+                // a la hora de la venta y avisa si se cobró otro
+                body: { ...payment.buildSaleBody(saleArgs), offline: true },
                 receipt,
             })
             if (!saved) {
@@ -1557,13 +1776,16 @@ export default function DesktopPOS() {
             }
 
             setSubmitting(false)
-            setSubmitError('No se pudo registrar la venta. Intenta de nuevo.')
+            const message = (result as { error?: string }).error
+            setSubmitError(message || 'No se pudo registrar la venta. Intenta de nuevo.')
+            // Si cambió un precio o el stock, se traen los productos de nuevo
+            if (message && /precio|stock/i.test(message)) data.refreshProducts()
         } catch (err: unknown) {
             setSubmitting(false)
             const message = err instanceof Error ? err.message : 'Error inesperado al procesar la venta.'
             setSubmitError(message)
         }
-    }, [submitting, cart, payment, globalMutate, needsApproval, approval, mode, autoPrint, handlePrint, cashSessionId, buildLocalReceipt, sync, storeId])
+    }, [submitting, cart, payment, data, globalMutate, needsApproval, approval, mode, autoPrint, handlePrint, cashSessionId, buildLocalReceipt, sync, storeId])
 
     const handleNewSale = useCallback(() => {
         setSaleSnap(null)

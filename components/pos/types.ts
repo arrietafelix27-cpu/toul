@@ -9,4 +9,6 @@ export interface SaleSnapshot {
     payments: PaymentSplit[]
     isCredit: boolean
     customerName: string | null
+    /** Crédito: lo que pagó al llevarse la mercancía */
+    initialPayment?: number
 }

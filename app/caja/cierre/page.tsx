@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -17,7 +17,7 @@ import type { CashSession, CashSessionSummary } from '@/lib/isla/types'
 
 export default function CajaCierrePage() {
     const router = useRouter()
-    const { ctx, session, refreshSession } = useCaja()
+    const { ctx, session, refreshSession, isPro } = useCaja()
     // Cerrar sesión pasa por un solo lugar: carga lo pendiente, avisa si
     // algo no se pudo cargar y no deja nada de la cuenta en el equipo
     const { cerrar: cerrarSesion, cerrando: saliendo, dialogo: dialogoSalir } = useCerrarSesion(ctx.storeId)
@@ -26,6 +26,9 @@ export default function CajaCierrePage() {
     const [confirmOpen, setConfirmOpen] = useState(false)
     const [closing, setClosing] = useState(false)
     const [result, setResult] = useState<{ summary: CashSessionSummary; session: CashSession; closedAt: string } | null>(null)
+
+    // En el plan Básico no hay turnos que cerrar
+    useEffect(() => { if (!isPro) router.replace('/caja') }, [isPro, router])
 
     async function close() {
         if (!session) return
@@ -71,6 +74,8 @@ export default function CajaCierrePage() {
             </div>
         )
     }
+
+    if (!isPro) return null
 
     if (!session) {
         return (

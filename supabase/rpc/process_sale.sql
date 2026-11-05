@@ -1,33 +1,38 @@
+-- Copia de referencia. La versión vigente se instala con
+-- supabase/deploy_caja_segura.sql (necesita su historial de precios).
 -- =================================================================
 -- RPC: process_sale(payload jsonb) RETURNS jsonb
 -- =================================================================
--- Procesa una venta completa de forma atómica.
--- TODA la lógica que antes vivía en /api/sales/route.ts ahora corre
--- dentro de una sola transacción PostgreSQL. Si cualquier paso falla,
--- ROLLBACK automático — no más ventas a medio crear ni stock huérfano.
+-- Procesa una venta completa de forma atómica. Si cualquier paso
+-- falla, ROLLBACK automático: no quedan ventas a medio crear ni stock
+-- huérfano.
 --
 -- Pasos (en orden, todos atómicos):
---   1. Resolver/crear customer (si solo viene name sin id)
---   2. INSERT sales
---   3. Por cada item del cart:
---      - Si combo: validar stock de componentes + INSERT sale_items (con combo_id, requiere migration_v9)
---                  + INSERT inventory_adjustments por cada componente
---      - Si producto/variante: validar stock + INSERT sale_items + INSERT inventory_adjustments
---   4. Por cada PaymentSplit: INSERT sale_payments + INSERT payments (ledger legacy)
---   5. Si crédito: INSERT credits + UPDATE customers.total_debt
+--   1. Quién vende, en qué tienda y en qué turno
+--   2. Cada línea con su precio de la base (ventas sin internet: lo
+--      cobrado, y si no era el precio de esa hora, queda para revisar)
+--   3. Descuento, total y pagos validados contra ese precio
+--   4. Resolver/crear el cliente
+--   5. INSERT sales (con el número que traía la caja sin internet)
+--   6. Por cada línea: validar stock + sale_items + inventory_adjustments
+--      (combos: por cada componente)
+--   7. Por cada pago: sale_payments + payments (ledger)
+--   8. Si es crédito: credits + customers.total_debt
 --
--- Ventas sin internet (migration_v11):
---   - `clientSaleId`: si la venta ya entró, devuelve la misma sin duplicar
+-- Ventas sin internet:
+--   - `clientSaleId`: si la venta ya entró, devuelve la misma sin
+--     duplicar; si es un identificador válido, es el número de la venta
 --   - `soldAt`: guarda la hora real de la venta, no la del envío
 --   - `cashSessionId`: la venta queda en el turno donde se hizo
+--   - `offline`: la caja la guardó sin internet. Una venta que llega
+--     más de 2 minutos después de hecha se trata igual (las que
+--     quedaron guardadas antes de esta versión no traen la marca)
 --
--- Modo isla (migration_v10):
+-- Modo isla:
 --   - Resuelve el negocio también para vendedores (store_members)
 --   - Registra vendedor (seller_id, seller_name) y turno (cash_session_id)
 --   - Vendedor: requiere turno abierto propio; crédito requiere aprobación
 --   - inventory_adjustments.reference_id = sale_id (permite anular la venta)
---
--- Cualquier RAISE EXCEPTION revierte TODO automáticamente.
 --
 -- SECURITY INVOKER + verificación explícita de auth.uid() — respeta RLS del caller.
 -- =================================================================
@@ -41,18 +46,25 @@ AS $$
 DECLARE
     v_user_id        uuid;
     v_store_id       uuid;
+    v_plan           text;
     v_customer_id    uuid;
     v_sale_id        uuid;
     v_primary_method text;
     v_is_credit      boolean;
+    v_subtotal       numeric;
+    v_discount       numeric;
     v_total          numeric;
+    v_client_total   numeric;
     v_paid_now       numeric;
     v_debt_amount    numeric;
+    v_amount         numeric;
     v_due_date       text;
     v_has_combo_col  boolean;
 
     -- iteration vars
     v_item           jsonb;
+    v_line           jsonb;
+    v_lines          jsonb := '[]'::jsonb;
     v_pay            jsonb;
     v_ci             record;
 
@@ -60,13 +72,18 @@ DECLARE
     v_product_id     uuid;
     v_variant_id     uuid;
     v_combo_id       uuid;
+    v_qty_raw        numeric;
     v_quantity       integer;
+    v_db_price       numeric;
+    v_client_price   numeric;
+    v_then_price     numeric;
     v_unit_price     numeric;
     v_unit_cost      numeric;
     v_product_stock  integer;
     v_variant_stock  integer;
     v_product_name   text;
-    v_variant_name   text;
+    v_line_name      text;
+    v_component_name text;
     v_total_qty      integer;
     v_short_id       text;
 
@@ -83,8 +100,10 @@ DECLARE
     v_existing_id    uuid;
     v_sold_at        timestamptz;
     v_offline_sess   uuid;
+    v_offline        boolean;
+    v_review         jsonb := '[]'::jsonb;
 BEGIN
-    -- ─── 1. Auth & store ─────────────────────────────────────────
+    -- ─── 1. Auth, store y turno ──────────────────────────────────
     v_user_id := auth.uid();
     IF v_user_id IS NULL THEN
         RAISE EXCEPTION 'Unauthorized';
@@ -97,6 +116,7 @@ BEGIN
 
     v_role        := toul_current_role();
     v_seller_name := toul_current_member_name();
+    SELECT plan INTO v_plan FROM stores WHERE id = v_store_id;
 
     -- Venta enviada desde la caja offline: si ya entró, no se duplica
     v_client_id := NULLIF(payload->>'clientSaleId', '');
@@ -114,6 +134,9 @@ BEGIN
     IF v_sold_at IS NULL OR v_sold_at > now() OR v_sold_at < now() - interval '7 days' THEN
         v_sold_at := now();
     END IF;
+
+    v_offline := COALESCE((payload->>'offline')::boolean, false)
+                 OR v_sold_at < now() - interval '2 minutes';
 
     -- Turno de caja abierto (el vendedor solo vende dentro de su turno)
     SELECT id, opened_by, opened_by_name
@@ -141,19 +164,161 @@ BEGIN
             RAISE EXCEPTION 'Hay un turno abierto por %. Pide al administrador que lo cierre.',
                 COALESCE(v_session_name, 'otra persona');
         END IF;
-    ELSIF v_session_owner IS DISTINCT FROM v_user_id THEN
-        -- Admin vendiendo fuera de la isla (ej. WhatsApp): no entra al turno de otra persona
+    ELSIF v_session_owner IS DISTINCT FROM v_user_id OR COALESCE(v_plan, 'basico') <> 'pro' THEN
+        -- Admin vendiendo fuera de la isla (ej. WhatsApp): no entra al
+        -- turno de otra persona. En el plan Básico no hay turnos.
         v_session_id := NULL;
     END IF;
 
     -- Detect whether migration_v9 (combo_id on sale_items) has been applied.
-    -- Used to decide whether combos should insert into sale_items.
     SELECT EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'sale_items' AND column_name = 'combo_id'
     ) INTO v_has_combo_col;
 
-    -- ─── 2. Resolve / create customer ────────────────────────────
+    -- ─── 2. Líneas: el precio lo pone la base, no la caja ────────
+    IF jsonb_typeof(payload->'cart') IS DISTINCT FROM 'array' OR jsonb_array_length(payload->'cart') = 0 THEN
+        RAISE EXCEPTION 'La venta no tiene productos';
+    END IF;
+
+    FOR v_item IN SELECT * FROM jsonb_array_elements(payload->'cart')
+    LOOP
+        v_combo_id   := NULL;
+        v_product_id := NULL;
+        v_variant_id := NULL;
+        v_unit_cost  := 0;
+
+        IF COALESCE((v_item->>'isCombo')::boolean, false) THEN
+            v_combo_id := NULLIF(v_item->>'comboId', '')::uuid;
+            SELECT name, sale_price INTO v_line_name, v_db_price
+              FROM combos
+             WHERE id = v_combo_id AND store_id = v_store_id;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'Combo no encontrado: %', COALESCE(v_item->'product'->>'name', '(combo)');
+            END IF;
+        ELSE
+            v_product_id := NULLIF(v_item->'product'->>'id', '')::uuid;
+            v_variant_id := NULLIF(v_item->>'variantId', '')::uuid;
+
+            SELECT name, sale_price, COALESCE(cpp, 0) INTO v_product_name, v_db_price, v_unit_cost
+              FROM products
+             WHERE id = v_product_id AND store_id = v_store_id;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'Producto no encontrado: %', COALESCE(v_item->'product'->>'name', '(producto)');
+            END IF;
+            v_line_name := v_product_name;
+
+            IF v_variant_id IS NOT NULL THEN
+                -- La presentación tiene que ser de ese producto
+                SELECT v_product_name || ' · ' || name, COALESCE(sale_price, 0), COALESCE(cpp, 0)
+                  INTO v_line_name, v_db_price, v_unit_cost
+                  FROM product_variants
+                 WHERE id = v_variant_id AND product_id = v_product_id;
+                IF NOT FOUND THEN
+                    RAISE EXCEPTION 'Esa presentación no es de %', v_product_name;
+                END IF;
+            END IF;
+        END IF;
+
+        -- Cantidad: entera y mayor que cero. Una negativa sumaba stock.
+        v_qty_raw := NULLIF(v_item->>'quantity', '')::numeric;
+        IF v_qty_raw IS NULL OR v_qty_raw <= 0 OR v_qty_raw <> trunc(v_qty_raw) OR v_qty_raw > 100000 THEN
+            RAISE EXCEPTION 'Cantidad no válida para %', v_line_name;
+        END IF;
+        v_quantity := v_qty_raw::integer;
+
+        v_db_price     := COALESCE(v_db_price, 0);
+        v_unit_price   := v_db_price;
+        v_client_price := NULLIF(v_item->>'unitPrice', '')::numeric;
+
+        IF v_client_price IS NOT NULL AND v_client_price < 0 THEN
+            RAISE EXCEPTION 'Precio no válido para %', v_line_name;
+        END IF;
+
+        IF v_client_price IS NOT NULL AND round(v_client_price) <> round(v_db_price) THEN
+            IF NOT v_offline THEN
+                -- La caja tenía un precio viejo: se rechaza y la caja se actualiza
+                RAISE EXCEPTION 'El precio de % cambió a %. Revisa la venta y vuelve a cobrar.',
+                    v_line_name, toul_cop(v_db_price);
+            END IF;
+
+            -- Sin internet lo cobrado manda: la plata ya se recibió. Si
+            -- no era el precio que tenía a esa hora, queda para revisar.
+            v_unit_price := v_client_price;
+            v_then_price := toul_price_at(
+                CASE WHEN v_combo_id IS NOT NULL THEN 'combo'
+                     WHEN v_variant_id IS NOT NULL THEN 'variant'
+                     ELSE 'product' END,
+                COALESCE(v_combo_id, v_variant_id, v_product_id),
+                v_sold_at);
+            IF v_then_price IS NULL OR round(v_then_price) <> round(v_client_price) THEN
+                v_review := v_review || jsonb_build_array(jsonb_build_object(
+                    'name', v_line_name,
+                    'quantity', v_quantity,
+                    'charged', round(v_client_price),
+                    'price', round(COALESCE(v_then_price, v_db_price))
+                ));
+            END IF;
+        END IF;
+
+        v_lines := v_lines || jsonb_build_array(jsonb_build_object(
+            'comboId', v_combo_id,
+            'productId', v_product_id,
+            'variantId', v_variant_id,
+            'name', v_line_name,
+            'quantity', v_quantity,
+            'price', v_unit_price,
+            'cost', v_unit_cost
+        ));
+    END LOOP;
+
+    -- ─── 3. Descuento, total y pagos ─────────────────────────────
+    SELECT round(COALESCE(SUM((l->>'price')::numeric * (l->>'quantity')::integer), 0))
+      INTO v_subtotal
+      FROM jsonb_array_elements(v_lines) l;
+
+    v_discount := round(COALESCE(NULLIF(payload->>'discount', '')::numeric, 0));
+    IF v_discount < 0 THEN
+        RAISE EXCEPTION 'El descuento no es válido';
+    END IF;
+    IF v_discount > v_subtotal THEN
+        RAISE EXCEPTION 'El descuento no puede ser mayor que la venta';
+    END IF;
+    v_total := v_subtotal - v_discount;
+
+    v_client_total := round(NULLIF(payload->>'total', '')::numeric);
+    IF v_client_total IS NULL OR abs(v_client_total - v_total) >= 1 THEN
+        RAISE EXCEPTION 'El total de la venta no cuadra: la caja dice % y los productos suman %. Vuelve a cobrar.',
+            toul_cop(v_client_total), toul_cop(v_total);
+    END IF;
+
+    v_paid_now := 0;
+    FOR v_pay IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'payments', '[]'::jsonb))
+    LOOP
+        v_amount := round(COALESCE(NULLIF(v_pay->>'amount', '')::numeric, 0));
+        IF v_amount < 0 THEN
+            RAISE EXCEPTION 'Un pago no puede ser negativo';
+        END IF;
+        CONTINUE WHEN v_amount = 0;
+        IF NOT EXISTS (
+            SELECT 1 FROM payment_methods
+             WHERE id = NULLIF(v_pay->>'methodId', '')::uuid AND store_id = v_store_id
+        ) THEN
+            RAISE EXCEPTION 'El método de pago % no existe', COALESCE(v_pay->>'methodName', '');
+        END IF;
+        v_paid_now := v_paid_now + v_amount;
+    END LOOP;
+
+    v_is_credit := COALESCE((payload->>'isCredit')::boolean, false);
+    IF v_is_credit THEN
+        IF v_paid_now > v_total THEN
+            RAISE EXCEPTION 'El abono no puede ser mayor que la venta';
+        END IF;
+    ELSIF abs(v_paid_now - v_total) >= 1 THEN
+        RAISE EXCEPTION 'Los pagos (%) no suman el total de la venta (%)', toul_cop(v_paid_now), toul_cop(v_total);
+    END IF;
+
+    -- ─── 4. Resolve / create customer ────────────────────────────
     v_customer_id := NULLIF(payload->>'customerId', '')::uuid;
 
     IF v_customer_id IS NULL
@@ -170,7 +335,7 @@ BEGIN
         );
     END IF;
 
-    -- ─── 3. Primary method (largest split, lowercased) ───────────
+    -- Primary method (largest split, lowercased)
     SELECT lower(p->>'methodName')
       INTO v_primary_method
       FROM jsonb_array_elements(COALESCE(payload->'payments', '[]'::jsonb)) p
@@ -179,10 +344,7 @@ BEGIN
      LIMIT 1;
     v_primary_method := COALESCE(v_primary_method, 'efectivo');
 
-    -- ─── 4. INSERT sales ─────────────────────────────────────────
-    v_is_credit := COALESCE((payload->>'isCredit')::boolean, false);
-    v_total     := round(COALESCE((payload->>'total')::numeric, 0));
-    v_due_date  := payload->>'dueDate';
+    v_due_date := payload->>'dueDate';
 
     IF v_is_credit AND v_customer_id IS NULL THEN
         RAISE EXCEPTION 'Selecciona un cliente para vender a crédito';
@@ -197,30 +359,42 @@ BEGIN
         END IF;
     END IF;
 
+    -- ─── 5. INSERT sales ─────────────────────────────────────────
+    -- La venta guardada sin internet ya tiene número (salió en su
+    -- tirilla): entra con ese mismo
+    IF v_client_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+       AND NOT EXISTS (SELECT 1 FROM sales WHERE id = v_client_id::uuid) THEN
+        v_sale_id := v_client_id::uuid;
+    ELSE
+        v_sale_id := gen_random_uuid();
+    END IF;
+
     INSERT INTO sales (
-        store_id, customer_id, customer_name, customer_phone,
+        id, store_id, customer_id, customer_name, customer_phone,
         subtotal, discount, total,
         payment_method, is_credit, initial_payment, notes,
-        seller_id, seller_name, cash_session_id, client_sale_id, created_at
+        seller_id, seller_name, cash_session_id, client_sale_id, created_at,
+        price_review
     ) VALUES (
+        v_sale_id,
         v_store_id,
         v_customer_id,
         NULLIF(trim(payload->>'customerName'), ''),
         NULLIF(trim(payload->>'customerPhone'), ''),
-        round(COALESCE((payload->>'subtotal')::numeric, 0)),
-        round(COALESCE((payload->>'discount')::numeric, 0)),
+        v_subtotal,
+        v_discount,
         v_total,
         v_primary_method,
         v_is_credit,
-        round(COALESCE((payload->>'initialPayment')::numeric, 0)),
+        v_paid_now,
         payload->>'notes',
         v_user_id,
         v_seller_name,
         v_session_id,
         v_client_id,
-        v_sold_at
-    )
-    RETURNING id INTO v_sale_id;
+        v_sold_at,
+        CASE WHEN jsonb_array_length(v_review) > 0 THEN v_review END
+    );
 
     IF v_approval_id IS NOT NULL THEN
         PERFORM toul_consume_credit_approval(v_approval_id, v_total, v_sale_id);
@@ -228,21 +402,17 @@ BEGIN
 
     v_short_id := substr(v_sale_id::text, 1, 8);
 
-    -- ─── 5. Process cart items ───────────────────────────────────
-    FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'cart', '[]'::jsonb))
+    -- ─── 6. Lines: stock, sale_items, inventory_adjustments ──────
+    FOR v_line IN SELECT * FROM jsonb_array_elements(v_lines)
     LOOP
-        v_quantity   := COALESCE((v_item->>'quantity')::integer, 0);
-        v_unit_price := COALESCE((v_item->>'unitPrice')::numeric, 0);
+        v_quantity   := (v_line->>'quantity')::integer;
+        v_unit_price := (v_line->>'price')::numeric;
+        v_unit_cost  := (v_line->>'cost')::numeric;
+        v_line_name  := v_line->>'name';
+        v_combo_id   := NULLIF(v_line->>'comboId', '')::uuid;
 
         -- ── COMBO branch ────────────────────────────────────────
-        IF COALESCE((v_item->>'isCombo')::boolean, false) = true THEN
-            v_combo_id := (v_item->>'comboId')::uuid;
-            v_product_name := COALESCE(v_item->'product'->>'name', '(combo)');
-
-            IF v_combo_id IS NULL THEN
-                RAISE EXCEPTION 'Combo sin ID: %', v_product_name;
-            END IF;
-
+        IF v_combo_id IS NOT NULL THEN
             -- Validate & decrement each component's stock
             FOR v_ci IN
                 SELECT product_id, variant_id, quantity
@@ -257,21 +427,24 @@ BEGIN
                       FROM inventory_adjustments
                      WHERE variant_id = v_ci.variant_id;
                     IF v_variant_stock < v_total_qty THEN
-                        RAISE EXCEPTION 'Stock insuficiente en componente del combo: %', v_product_name;
+                        SELECT p.name || ' · ' || v.name INTO v_component_name
+                          FROM product_variants v JOIN products p ON p.id = v.product_id
+                         WHERE v.id = v_ci.variant_id;
+                        RAISE EXCEPTION 'Stock insuficiente en el combo %: falta %', v_line_name, COALESCE(v_component_name, 'un producto');
                     END IF;
                     INSERT INTO inventory_adjustments (store_id, product_id, variant_id, quantity, reason, notes, reference_id)
                     VALUES (v_store_id,
                             (SELECT product_id FROM product_variants WHERE id = v_ci.variant_id),
                             v_ci.variant_id, -v_total_qty, 'sale',
-                            format('Combo: %s · Venta #%s', v_product_name, v_short_id), v_sale_id);
+                            format('Combo: %s · Venta #%s', v_line_name, v_short_id), v_sale_id);
                 ELSIF v_ci.product_id IS NOT NULL THEN
-                    SELECT stock INTO v_product_stock FROM products WHERE id = v_ci.product_id;
+                    SELECT stock, name INTO v_product_stock, v_component_name FROM products WHERE id = v_ci.product_id;
                     IF v_product_stock IS NULL OR v_product_stock < v_total_qty THEN
-                        RAISE EXCEPTION 'Stock insuficiente en componente del combo: %', v_product_name;
+                        RAISE EXCEPTION 'Stock insuficiente en el combo %: falta %', v_line_name, COALESCE(v_component_name, 'un producto');
                     END IF;
                     INSERT INTO inventory_adjustments (store_id, product_id, variant_id, quantity, reason, notes, reference_id)
                     VALUES (v_store_id, v_ci.product_id, NULL, -v_total_qty, 'sale',
-                            format('Combo: %s · Venta #%s', v_product_name, v_short_id), v_sale_id);
+                            format('Combo: %s · Venta #%s', v_line_name, v_short_id), v_sale_id);
                 END IF;
             END LOOP;
 
@@ -288,47 +461,21 @@ BEGIN
         END IF;
 
         -- ── PRODUCT / VARIANT branch ────────────────────────────
-        v_product_id := (v_item->'product'->>'id')::uuid;
-        v_variant_id := NULLIF(v_item->>'variantId', '')::uuid;
-        v_product_name := COALESCE(v_item->'product'->>'name', '(producto)');
-        v_variant_name := v_item->>'variantName';
-
-        SELECT stock, cpp, sale_price
-          INTO v_product_stock, v_unit_cost, v_unit_price
-          FROM products
-         WHERE id = v_product_id;
-
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'Producto no encontrado: %', v_product_name;
-        END IF;
-
-        -- Override unitPrice from payload if provided (frontend authoritative)
-        IF (v_item->>'unitPrice') IS NOT NULL THEN
-            v_unit_price := (v_item->>'unitPrice')::numeric;
-        END IF;
+        v_product_id := (v_line->>'productId')::uuid;
+        v_variant_id := NULLIF(v_line->>'variantId', '')::uuid;
 
         IF v_variant_id IS NOT NULL THEN
-            -- Variant case: use variant cpp + variant stock
-            SELECT COALESCE(cpp, 0), COALESCE(sale_price, 0)
-              INTO v_unit_cost, v_unit_price
-              FROM product_variants
-             WHERE id = v_variant_id;
-            IF (v_item->>'unitPrice') IS NOT NULL THEN
-                v_unit_price := (v_item->>'unitPrice')::numeric;
-            END IF;
-
             SELECT COALESCE(SUM(quantity), 0)
               INTO v_variant_stock
               FROM inventory_adjustments
              WHERE variant_id = v_variant_id;
             IF v_variant_stock < v_quantity THEN
-                RAISE EXCEPTION 'Stock insuficiente para % %', v_product_name,
-                    COALESCE('(' || v_variant_name || ')', '');
+                RAISE EXCEPTION 'Stock insuficiente para %. Disponible: %', v_line_name, v_variant_stock;
             END IF;
         ELSE
-            -- Pure product (no variant)
-            IF v_product_stock < v_quantity THEN
-                RAISE EXCEPTION 'Stock insuficiente para %. Disponible: %', v_product_name, v_product_stock;
+            SELECT stock INTO v_product_stock FROM products WHERE id = v_product_id;
+            IF v_product_stock IS NULL OR v_product_stock < v_quantity THEN
+                RAISE EXCEPTION 'Stock insuficiente para %. Disponible: %', v_line_name, COALESCE(v_product_stock, 0);
             END IF;
         END IF;
 
@@ -345,27 +492,21 @@ BEGIN
                 format('Venta #%s', v_short_id), v_sale_id);
     END LOOP;
 
-    -- ─── 6. Payment splits ───────────────────────────────────────
+    -- ─── 7. Payment splits ───────────────────────────────────────
     FOR v_pay IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'payments', '[]'::jsonb))
     LOOP
-        IF COALESCE((v_pay->>'amount')::numeric, 0) <= 0 THEN
-            CONTINUE;
-        END IF;
+        v_amount := round(COALESCE(NULLIF(v_pay->>'amount', '')::numeric, 0));
+        CONTINUE WHEN v_amount <= 0;
 
         INSERT INTO sale_payments (sale_id, store_id, method_id, amount)
-        VALUES (
-            v_sale_id,
-            v_store_id,
-            (v_pay->>'methodId')::uuid,
-            round((v_pay->>'amount')::numeric)
-        );
+        VALUES (v_sale_id, v_store_id, (v_pay->>'methodId')::uuid, v_amount);
 
         INSERT INTO payments (store_id, type, method, amount, reference_id, notes, cash_session_id)
         VALUES (
             v_store_id,
             'sale',
             v_pay->>'methodName',
-            round((v_pay->>'amount')::numeric),
+            v_amount,
             v_sale_id,
             format('Venta%s #%s',
                 CASE WHEN payload->>'customerName' IS NOT NULL AND length(trim(payload->>'customerName')) > 0
@@ -376,11 +517,8 @@ BEGIN
         );
     END LOOP;
 
-    -- ─── 7. Credit / debt handling ───────────────────────────────
+    -- ─── 8. Credit / debt handling ───────────────────────────────
     IF v_is_credit AND v_customer_id IS NOT NULL THEN
-        SELECT COALESCE(SUM((p->>'amount')::numeric), 0)
-          INTO v_paid_now
-          FROM jsonb_array_elements(COALESCE(payload->'payments', '[]'::jsonb)) p;
         v_debt_amount := round(GREATEST(0, v_total - v_paid_now));
 
         IF v_debt_amount > 0 THEN
@@ -404,10 +542,13 @@ BEGIN
         END IF;
     END IF;
 
-    -- ─── 8. Return ───────────────────────────────────────────────
-    RETURN jsonb_build_object('success', true, 'saleId', v_sale_id);
+    -- ─── 9. Return ───────────────────────────────────────────────
+    RETURN jsonb_build_object(
+        'success', true,
+        'saleId', v_sale_id,
+        'priceReview', jsonb_array_length(v_review) > 0
+    );
 END;
 $$;
 
--- Grant execute to authenticated users (they still need RLS to allow each underlying table)
 GRANT EXECUTE ON FUNCTION public.process_sale(jsonb) TO authenticated;
