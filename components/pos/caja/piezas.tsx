@@ -1,7 +1,7 @@
 'use client'
 
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
-import { animate, motion, useReducedMotion } from 'framer-motion'
+import { animate, motion, PresenceContext, useReducedMotion } from 'framer-motion'
 import { Minus, Plus, Trash2, Package, Layers } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
 import { onlyDigits, withThousands } from '@/lib/format/text'
@@ -47,6 +47,15 @@ export const CAJA_CSS = `
     .cj-press, .cj-press:active { transform: none !important; }
 }
 `
+
+/* ── Lo de adentro de una hoja no frena su cierre ─────────────────
+   Con framer-motion 11, un selector con layoutId que desaparece con la
+   hoja abierta (el cobro que se cambia por "Venta registrada") deja un
+   registro que nunca termina: la hoja se ve cerrada, pero su capa
+   transparente se queda encima y bloquea toda la pantalla. */
+export function SinPresencia({ children }: { children: ReactNode }) {
+    return <PresenceContext.Provider value={null}>{children}</PresenceContext.Provider>
+}
 
 /* ── Foto de un producto, o su forma si no tiene ──────────────── */
 export function Foto({ src, combo, tamaño, radio, className }: { src: string | null; combo?: boolean; tamaño: number | string; radio: number; className?: string }) {

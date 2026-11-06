@@ -9,7 +9,7 @@ import { useCaja } from '@/components/isla/CajaContext'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { useCobro, vibrar } from '@/lib/pos/useCobro'
 import { useListaProductos, type Entrada } from '@/lib/pos/useListaProductos'
-import { CAJA_CSS, Cuenta, EASE_HOJA } from './piezas'
+import { CAJA_CSS, Cuenta, EASE_HOJA, SinPresencia } from './piezas'
 import { Productos } from './Productos'
 import { Presentaciones } from './Presentaciones'
 import { Cobro } from './Cobro'
@@ -157,7 +157,9 @@ export function Caja() {
                     <motion.div key={venta ? 'lista' : 'cobro'} style={{ height: '100%' }}
                         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
                         transition={{ duration: 0.22, ease: EASE_HOJA }}>
-                        {derecha}
+                        {/* Sin esto, cambiar Contado/Crédito antes de cobrar dejaba el
+                            cobro sin salir y "Venta registrada" nunca aparecía */}
+                        <SinPresencia>{derecha}</SinPresencia>
                     </motion.div>
                 </AnimatePresence>
             </aside>

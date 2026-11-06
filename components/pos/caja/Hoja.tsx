@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { AnimatePresence, motion, useDragControls, useReducedMotion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { EASE_HOJA } from './piezas'
+import { EASE_HOJA, SinPresencia } from './piezas'
 
 /**
  * Hoja de la caja. Sube con la curva de iOS (0,32 · 0,72 · 0 · 1) en 0,4 s
@@ -86,9 +86,9 @@ export function Hoja({ open, onClose, titulo, subtitulo, children, pie, completa
                                 </div>
                             )}
                         </div>
-                        <div className="cj-scroll-y" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{children}</div>
+                        <div className="cj-scroll-y" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}><SinPresencia>{children}</SinPresencia></div>
                         {pie && (
-                            <div style={{ flexShrink: 0, padding: '12px 20px calc(16px + env(safe-area-inset-bottom, 0px))' }}>{pie}</div>
+                            <div style={{ flexShrink: 0, padding: '12px 20px calc(16px + env(safe-area-inset-bottom, 0px))' }}><SinPresencia>{pie}</SinPresencia></div>
                         )}
                     </motion.div>
                 </div>
