@@ -10,15 +10,17 @@ import { EASE_OUT_EMIL } from '@/components/ui'
 import { Foto, Contador, Cantidad, precioDe } from './piezas'
 
 /* Al cambiar de categoría los productos entran en cascada (35 ms entre
-   uno y otro). Con CSS: cientos de tarjetas con Motion pesan */
+   uno y otro). Con CSS: cientos de tarjetas con Motion pesan. Sin "to"
+   ni relleno final: cada uno termina en su propia opacidad, así lo
+   agotado se queda atenuado */
 const CSS = `
-@keyframes cj-entra { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
-.cj-cascada > * { animation: cj-entra 320ms var(--toul-ease-emil) both; animation-delay: calc(min(var(--i), 16) * 35ms); }
+@keyframes cj-entra { from { opacity: 0; transform: translateY(8px) scale(0.985); } }
+.cj-cascada > * { animation: cj-entra 320ms var(--toul-ease-emil) backwards; animation-delay: calc(min(var(--i), 16) * 35ms); }
 .cj-grilla { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 14px; }
 @media (max-width: 1240px) { .cj-grilla { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .cj-circulo-anillo { transition: box-shadow 220ms var(--toul-ease-emil); }
 @media (prefers-reduced-motion: reduce) {
-    @keyframes cj-entra { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes cj-entra { from { opacity: 0; } }
 }
 `
 
@@ -77,7 +79,12 @@ export function Productos({ lista, data, cart, narrow, onAgregar, onQuitar, busc
                             if (e.key === 'Enter' && busqueda.trim()) {
                                 e.preventDefault()
                                 const primero = entradas.find(x => !x.agotado)
-                                if (primero) { onAgregar(primero); if (!primero.conPresentaciones) setBusqueda('') }
+                                if (primero) {
+                                    onAgregar(primero)
+                                    // Con presentaciones se abre su hoja: el teclado sale del buscador para que Escape la cierre
+                                    if (primero.conPresentaciones) e.currentTarget.blur()
+                                    else setBusqueda('')
+                                }
                             }
                             if (e.key === 'Escape' && busqueda) { e.preventDefault(); e.stopPropagation(); setBusqueda('') }
                         }}
@@ -105,7 +112,7 @@ export function Productos({ lista, data, cart, narrow, onAgregar, onQuitar, busc
                 <div className="cj-scroll-x" role="tablist" aria-label="Categorías"
                     style={{ flexShrink: 0, display: 'flex', gap: 6, padding: `14px ${pad - 6}px 2px` }}>
                     {categorias.map(c => (
-                        <Circulo key={c.id} c={c} activo={c.id === categoria} onClick={() => setCategoria(c.id)} />
+                        <Circulo key={c.id} c={c} activo={!busqueda && c.id === categoria} onClick={() => { setBusqueda(''); setCategoria(c.id) }} />
                     ))}
                 </div>
             )}
@@ -117,8 +124,8 @@ export function Productos({ lista, data, cart, narrow, onAgregar, onQuitar, busc
                     <Vacio titulo="Todavía no hay productos" texto={esAdmin ? 'Agrégalos en Productos, en el panel del administrador.' : 'Pídele al administrador que los agregue.'} />
                 ) : entradas.length === 0 ? (
                     <Vacio titulo={busqueda ? `No encontramos "${busqueda.trim()}"` : 'Nada en esta categoría'}
-                        texto={categoria !== TODOS ? 'Puede estar en otra categoría.' : 'Revisa cómo se escribe o busca por la referencia.'}
-                        accion={categoria !== TODOS ? { label: 'Buscar en todas', onClick: () => setCategoria(TODOS) } : undefined} />
+                        texto={busqueda ? 'Revisa cómo se escribe o busca por la referencia.' : 'Elige otra categoría.'}
+                        accion={!busqueda && categoria !== TODOS ? { label: 'Ver todos', onClick: () => setCategoria(TODOS) } : undefined} />
                 ) : (<>
                     <h2 style={{ fontSize: 17, fontWeight: 650, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '0 0 14px' }}>{titulo}</h2>
                     {narrow ? (

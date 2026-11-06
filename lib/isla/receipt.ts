@@ -86,6 +86,9 @@ export function printReceipt(data: ReceiptData) {
     setTimeout(() => {
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
+        // El teclado vuelve a la caja: si no, Enter (nueva venta) le llega a la tirilla
+        iframe.blur()
+        window.focus()
         // Algunos navegadores no disparan afterprint
         setTimeout(cleanup, 60_000)
     }, 150)

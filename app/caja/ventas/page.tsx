@@ -87,7 +87,7 @@ export default function CajaVentasPage() {
                 <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--toul-text-dim)', margin: '0 0 4px' }}>
                     {session ? `Turno de ${session.opened_by_name ?? ctx.displayName}` : 'Hoy'}
                 </p>
-                <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '0 0 18px' }}>{isPro ? 'Ventas del turno' : 'Ventas de hoy'}</h1>
+                <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: '0 0 18px' }}>{isPro && session ? 'Ventas del turno' : 'Ventas de hoy'}</h1>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
                     {[
@@ -110,7 +110,7 @@ export default function CajaVentasPage() {
                     <div style={{ textAlign: 'center', padding: '52px 20px' }}>
                         <ReceiptText size={32} strokeWidth={1.5} style={{ color: 'var(--toul-text-faint)', margin: '0 auto 12px' }} />
                         <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>Aún no hay ventas</p>
-                        <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>{isPro ? 'Las ventas de este turno aparecen aquí.' : 'Las ventas de hoy aparecen aquí.'}</p>
+                        <p style={{ fontSize: 14, color: 'var(--toul-text-muted)', margin: '4px 0 0' }}>{isPro && session ? 'Las ventas de este turno aparecen aquí.' : 'Las ventas de hoy aparecen aquí.'}</p>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

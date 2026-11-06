@@ -130,9 +130,10 @@ export function useListaProductos(data: POSDataState, cart: POSCartState) {
     const q = normalizar(busqueda)
     const ordenadas = useMemo(() => {
         let lista = base
-        if (categoriaActiva === COMBOS) lista = lista.filter(e => e.tipo === 'combo')
-        else if (categoriaActiva !== TODOS) lista = lista.filter(e => e.categoriaId === categoriaActiva)
+        // Lo que se escribe se busca en todo: quien busca un nombre no piensa en categorías
         if (q) lista = lista.filter(e => normalizar(e.nombre).includes(q) || (e.referencia && normalizar(e.referencia).includes(q)))
+        else if (categoriaActiva === COMBOS) lista = lista.filter(e => e.tipo === 'combo')
+        else if (categoriaActiva !== TODOS) lista = lista.filter(e => e.categoriaId === categoriaActiva)
 
         const porNombre = (a: typeof lista[number], b: typeof lista[number]) => a.nombre.localeCompare(b.nombre, 'es')
         const comparar = {

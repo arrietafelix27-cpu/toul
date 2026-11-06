@@ -34,7 +34,7 @@ export function VentaLista({ cobro, narrow, onNueva, onVerVentas }: {
     onNueva: () => void
     onVerVentas: () => void
 }) {
-    const { ctx, isPro, comprobante } = useCaja()
+    const { ctx, isPro, comprobante, session } = useCaja()
     const venta = cobro.venta
     const reducir = useReducedMotion()
     if (!venta) return null
@@ -76,7 +76,9 @@ export function VentaLista({ cobro, narrow, onNueva, onVerVentas }: {
                         <Fila label="Abono" valor={venta.abono > 0 ? `${formatCOP(venta.abono)}${pagos.length === 1 ? ` · ${nombreMetodo(pagos[0].methodName)}` : ''}` : 'Sin abono'} />
                         <Fila label="Queda debiendo" valor={formatCOP(venta.debe)} tono="var(--toul-warning)" fuerte />
                     </>) : (<>
-                        <Fila label="Pagó con" valor={pagos.length === 0 ? '—' : pagos.map(p => pagos.length > 1 ? `${nombreMetodo(p.methodName)} ${formatCOP(p.amount)}` : nombreMetodo(p.methodName)).join(' · ')} />
+                        {pagos.length > 1
+                            ? pagos.map((p, n) => <Fila key={n} label={nombreMetodo(p.methodName)} valor={formatCOP(p.amount)} />)
+                            : <Fila label="Pagó con" valor={pagos.length === 0 ? '—' : nombreMetodo(pagos[0].methodName)} />}
                         {venta.customerName && <Fila label="Cliente" valor={venta.customerName} />}
                     </>)}
                     {venta.change > 0 && venta.cashReceived !== null && (<>
@@ -120,7 +122,7 @@ export function VentaLista({ cobro, narrow, onNueva, onVerVentas }: {
                     {!narrow && <kbd style={{ fontFamily: 'inherit', fontSize: 12, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'rgba(0,0,0,0.14)' }}>Enter</kbd>}
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, minHeight: 40 }}>
-                    <button type="button" onClick={onVerVentas} className="cj-btn cj-link">{isPro ? 'Ver ventas del turno' : 'Ver ventas de hoy'}</button>
+                    <button type="button" onClick={onVerVentas} className="cj-btn cj-link">{isPro && session ? 'Ver ventas del turno' : 'Ver ventas de hoy'}</button>
                     {ctx.role === 'admin' && <Deshacer key={venta.clientSaleId} cobro={cobro} />}
                 </div>
             </div>
