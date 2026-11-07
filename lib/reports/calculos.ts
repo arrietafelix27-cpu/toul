@@ -227,139 +227,33 @@ export function textoPorcentaje(parte: number, total: number): string {
     return `${Math.round(exacto)}%`
 }
 
-/* ─── El resumen del Inicio: tres vistas de lo vendido ────────────
-   Debajo de "Vendiste", una barra con sus filas que se puede alternar:
-   · Pagado y fiado: lo que te pagaron al vender y lo que quedó fiado.
-   · Ganancia y gastos: la ganancia en ventas, repartida en lo que se
-     fue en gastos y lo que ganaste.
-   · Cómo te pagaron: lo pagado por cada método, y lo fiado.
-   Lo devuelto se resta de donde salió: la plata que devolviste, de "Te
-   pagaron" (y del método por el que salió); la deuda que se le bajó al
-   cliente, de lo fiado. Así cada barra suma exacto lo que dice arriba.
-   "Ganaste" es el de Reportes, el mismo en las tres.
+/* ─── El resumen del Inicio ───────────────────────────────────────
+   Debajo de "Vendiste": "Ganaste" (el mismo de Reportes) y cuánto es
+   de lo que vendiste; los gastos del periodo y lo que quedó fiado.
+   Lo devuelto se resta de donde salió: la deuda que se le bajó al
+   cliente, de lo fiado. Lo pagado y lo fiado de cada venta (y por
+   qué método) viven en Reportes.
    ─────────────────────────────────────────────────────────────── */
 
-export type VistaInicio = 'pagado' | 'ganancia' | 'metodos'
-
-/** El color de cada parte; cuál es cada uno lo decide la pantalla */
-export type TonoParte = 'verde' | 'fiado' | 'fiadoGris' | 'gastos' | 'metodo2' | 'metodo3' | 'metodo4'
-
-export interface ParteVista { clave: string; monto: number; tono: TonoParte }
-
-export interface FilaVista {
-    clave: string
-    rotulo: string
-    monto: number
-    /** El punto de color. null: no es una parte de la barra */
-    tono: TonoParte | null
-    /** El color del monto */
-    color: 'texto' | 'verde' | 'rojo'
+export interface ResumenInicio {
+    /** Con signo: negativo es "Perdiste" */
+    ganaste: number
+    /** "42% de lo que vendiste" (sin signo también al perder). null: no hay ventas que dividir */
+    deLoVendido: string | null
+    gastos: number
+    /** Solo se muestra si es más que cero */
+    fiado: number
 }
 
-export interface Vista {
-    id: VistaInicio
-    /** Lo que se dibuja, en orden. Solo lo que es más que cero */
-    barra: ParteVista[]
-    filas: FilaVista[]
-    /** La línea fina va antes de esta fila. null: no hay */
-    linea: number | null
-    /** La línea gris de arriba agrega "ganancia en ventas $X". null: no */
-    gananciaVentas: number | null
-}
-
-/** El más grande en verde; los demás, cada vez más tenues. "Otros" va al final */
-const TONOS_METODO: TonoParte[] = ['verde', 'metodo2', 'metodo3', 'metodo4']
-
-const conMonto = (partes: ParteVista[]) => partes.filter(p => p.monto > 0)
-
-/** Ganaste, o Perdiste en rojo con el monto sin signo, como en Reportes */
-function filaGanaste(ganaste: number, tono: TonoParte | null): FilaVista {
-    if (ganaste < 0) return { clave: 'ganaste', rotulo: 'Perdiste', monto: -ganaste, tono: null, color: 'rojo' }
-    return { clave: 'ganaste', rotulo: 'Ganaste', monto: ganaste, tono, color: ganaste > 0 ? 'verde' : 'texto' }
-}
-
-/** Los métodos de mayor a menor, máximo 4 contando "Otros". Los montos
- *  vienen redondeados por método: el peso que se corra contra lo pagado
- *  lo absorbe el más grande, así suman exacto */
-function metodosDeVenta(metodos: { nombre: string; monto: number }[], pagado: number) {
-    const lista = metodos
-        .map(m => ({ nombre: String(m.nombre), monto: Number(m.monto) || 0 }))
-        .filter(m => m.monto !== 0)
-        .sort((a, b) => b.monto - a.monto)
-    const corrido = pagado - lista.reduce((s, m) => s + m.monto, 0)
-    if (corrido !== 0) {
-        if (lista.length > 0) lista[0].monto += corrido
-        else lista.push({ nombre: 'Otros', monto: corrido })
-    }
-    const esOtros = (m: { nombre: string }) => m.nombre.trim().toLowerCase() === 'otros'
-    const propios = lista.filter(m => !esOtros(m))
-    let otros = lista.filter(esOtros).reduce((s, m) => s + m.monto, 0)
-    const caben = otros !== 0 || propios.length > 4 ? 3 : 4
-    otros += propios.slice(caben).reduce((s, m) => s + m.monto, 0)
-    return [...propios.slice(0, caben), ...(otros !== 0 ? [{ nombre: 'Otros', monto: otros }] : [])]
-}
-
-/** Las tres vistas del resumen del Inicio. "Cómo te pagaron" no sale si
- *  la base de datos todavía no trae lo vendido por método */
-export function vistasInicio(r: ResumenReporte, metodosVenta?: { nombre: string; monto: number }[] | null): Vista[] {
+export function resumenInicio(r: ResumenReporte): ResumenInicio {
     // La plata devuelta sale de lo pagado; lo demás de lo devuelto bajó deuda
     const pagado = r.contado - r.devuelto
-    const fiado = r.vendiste - pagado
-    const perdio = r.ganaste < 0
-
-    const pagadoYFiado: Vista = {
-        id: 'pagado',
-        barra: conMonto([{ clave: 'pagado', monto: pagado, tono: 'verde' }, { clave: 'fiado', monto: fiado, tono: 'fiado' }]),
-        filas: [
-            { clave: 'pagado', rotulo: 'Te pagaron', monto: pagado, tono: 'verde', color: 'texto' },
-            { clave: 'fiado', rotulo: 'Quedó fiado', monto: fiado, tono: 'fiado', color: 'texto' },
-            ...(r.gastos > 0 ? [{ clave: 'gastos', rotulo: 'Gastos', monto: r.gastos, tono: null, color: 'texto' } satisfies FilaVista] : []),
-            filaGanaste(r.ganaste, null),
-        ],
-        linea: 2,
-        gananciaVentas: null,
+    return {
+        ganaste: Math.round(r.ganaste),
+        deLoVendido: r.vendiste > 0 ? `${textoPorcentaje(Math.abs(r.ganaste), r.vendiste)} de lo que vendiste` : null,
+        gastos: Math.round(r.gastos),
+        fiado: Math.round(r.vendiste - pagado),
     }
-
-    // Con pérdida no queda ganancia que repartir: toda la barra es gastos
-    const gananciaYGastos: Vista = {
-        id: 'ganancia',
-        barra: conMonto([
-            { clave: 'gastos', monto: r.gastos, tono: 'gastos' },
-            ...(perdio ? [] : [{ clave: 'ganaste', monto: r.ganaste, tono: 'verde' } satisfies ParteVista]),
-        ]),
-        filas: [
-            { clave: 'gastos', rotulo: 'Se fue en gastos', monto: r.gastos, tono: 'gastos', color: 'texto' },
-            filaGanaste(r.ganaste, 'verde'),
-        ],
-        linea: null,
-        // Sin gastos sería el mismo número de "Ganaste"
-        gananciaVentas: r.gastos > 0 ? r.gananciaVentas : null,
-    }
-
-    if (!metodosVenta) return [pagadoYFiado, gananciaYGastos]
-
-    const metodos = metodosDeVenta(metodosVenta, pagado)
-    const filasMetodos: FilaVista[] = [
-        ...metodos.map((m, i) => ({
-            clave: `metodo-${i}`, rotulo: m.nombre, monto: m.monto,
-            // Si por un método se devolvió más de lo que entró, no va en la barra
-            tono: m.monto > 0 ? TONOS_METODO[i] : null, color: 'texto' as const,
-        })),
-        // Gris y no verde: aquí el verde es del método que más entró
-        ...(fiado !== 0 ? [{ clave: 'fiado', rotulo: 'Fiado', monto: fiado, tono: fiado > 0 ? 'fiadoGris' : null, color: 'texto' } satisfies FilaVista] : []),
-    ]
-    const comoTePagaron: Vista = {
-        id: 'metodos',
-        barra: conMonto([
-            ...metodos.map((m, i) => ({ clave: `metodo-${i}`, monto: m.monto, tono: TONOS_METODO[i] })),
-            { clave: 'fiado', monto: fiado, tono: 'fiadoGris' },
-        ]),
-        filas: [...filasMetodos, filaGanaste(r.ganaste, null)],
-        linea: filasMetodos.length,
-        gananciaVentas: null,
-    }
-
-    return [pagadoYFiado, gananciaYGastos, comoTePagaron]
 }
 
 /* ─── La línea del gráfico del Inicio ─────────────────────────────

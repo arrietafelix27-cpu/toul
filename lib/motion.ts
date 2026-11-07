@@ -130,9 +130,6 @@ export const inicio = {
     grafica: { trazo: 1.2, relleno: 0.5 },
     /** Lo que tardan los montos en contar */
     cuenta: 1.1,
-    /** La barra del resumen crece de izquierda a derecha al cargar; al
-     *  cambiar de vista sus partes se acomodan y las filas se funden */
-    barra: { crece: 0.9, cambio: 0.4, fundido: 0.24 },
 }
 
 /* CSS y no JavaScript: el Inicio carga muchas cosas a la vez y una

@@ -12,13 +12,13 @@ import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { PrimerosPasos } from '@/components/dashboard/PrimerosPasos'
 import { SelectorPeriodo, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
-import { Vendiste, ResumenVistas, LlevasEnHoy, GastosSinVentas, useVistaInicio, type LlevasHoy, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
+import { Vendiste, Ganaste, LineaFina, FilasInicio, rotuloGastos, ICONO_FIADO, ICONO_GASTOS, ICONO_SEMANA, type FilaInicio, type LlevasHoy, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
 
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
 import { ENTRADA_INICIO_CSS, entrada, useEntradaInicio } from '@/lib/motion'
-import { contraQue, diasEntre, rangoAnterior } from '@/lib/periodos'
-import { lineaVentas, porcentajeTendencia, resumir, vistasInicio, type LineaInicio, type TramoLinea } from '@/lib/reports/calculos'
+import { contraQue, diasEntre, periodoEnDireccion, rangoAnterior } from '@/lib/periodos'
+import { lineaVentas, porcentajeTendencia, resumenInicio, resumir, type LineaInicio, type TramoLinea } from '@/lib/reports/calculos'
 import type { ReporteSQL } from '@/lib/reports/types'
 import type { AIInsight } from '@/lib/types'
 
@@ -40,7 +40,7 @@ interface Cabecera {
     enVivo: boolean
     /** Nunca ha vendido: sin gráfica */
     nuevo: boolean
-    /** Hoy sin ventas: cómo vas en la semana y en el mes */
+    /** Hoy sin ventas: cómo vas en la semana */
     llevas: LlevasHoy | null
 }
 
@@ -100,21 +100,13 @@ export default function DashboardPage() {
                 : null
             const nuevo = !datos.primeraVenta
 
-            // Hoy sin ventas: en lugar de la barra, cómo vas en la semana y en el mes
+            // Hoy sin ventas: debajo de los gastos de hoy, cómo vas en la semana
             let llevas: LlevasHoy | null = null
             if (period === 'today' && actual.cantidad === 0 && !nuevo) {
                 const semana = getDateRange('week')
-                const mes = getDateRange('month')
-                const [deLaSemana, delMes] = await Promise.all([
-                    supabase.rpc('toul_reporte', { p_desde: semana.from, p_hasta: semana.to }),
-                    supabase.rpc('toul_reporte', { p_desde: mes.from, p_hasta: mes.to }),
-                ])
+                const deLaSemana = await supabase.rpc('toul_reporte', { p_desde: semana.from, p_hasta: semana.to })
                 if (deLaSemana.error) throw deLaSemana.error
-                if (delMes.error) throw delMes.error
-                llevas = {
-                    semana: resumir(deLaSemana.data as ReporteSQL).vendiste,
-                    mes: resumir(delMes.data as ReporteSQL).vendiste,
-                }
+                llevas = { semana: resumir(deLaSemana.data as ReporteSQL).vendiste }
             }
 
             // 2. LAS LISTAS DE PRODUCTOS
@@ -223,8 +215,8 @@ export default function DashboardPage() {
             return {
                 clave: claveDe(period, customRange),
                 cabecera,
-                // Pagado y fiado, ganancia y gastos, y cómo te pagaron
-                vistas: vistasInicio(actual, datos.metodosVenta),
+                // Ganaste (el de Reportes), los gastos y lo que quedó fiado
+                resumen: resumenInicio(actual),
                 metrics: {
                     revenue: actual.vendiste,
                     expenses: actual.gastos,
@@ -300,12 +292,6 @@ export default function DashboardPage() {
         clave: claveDe(period, customRange),
     }), [animar, periodoTocado, period, customRange])
 
-    // La vista del resumen se recuerda por persona en este equipo
-    const { data: usuario } = useSWR('usuario-sesion',
-        async () => (await supabase.auth.getSession()).data.session?.user.id ?? null,
-        { revalidateOnFocus: false })
-    const [vista, setVista] = useVistaInicio(usuario ?? null)
-
     const metrics: MetricasInicio = {
         revenue: dashboardData?.metrics.revenue || 0,
         expenses: dashboardData?.metrics.expenses || 0,
@@ -325,7 +311,7 @@ export default function DashboardPage() {
             contra: contraQue(period, rango),
         }
     }, [dashboardData, period, customRange])
-    // Tocar lo vendido abre Reportes en el mismo periodo
+    // Tocar lo vendido o lo ganado abre Reportes en el mismo periodo
     const hrefReporte = period === 'custom' && customRange
         ? `/reportes?periodo=custom&desde=${encodeURIComponent(customRange.from)}&hasta=${encodeURIComponent(customRange.to)}`
         : `/reportes?periodo=${period}`
@@ -341,20 +327,33 @@ export default function DashboardPage() {
         <HeroChart linea={cabecera?.linea ?? null} clave={conteo.clave} enVivo={cabecera?.enVivo ?? true}
             variante={variante} alto={variante === 'movil' ? 150 : '100%'} dibujar={dibujar} />
     )
-    // Debajo de lo vendido, la barra con sus tres vistas. Sin ventas no hay
-    // barra: en Hoy, cómo vas en la semana y en el mes; en otro periodo, los
-    // gastos si los hubo
-    const vistas = dashboardData?.vistas ?? null
+    // Debajo de lo vendido: Ganaste y las filas. Los gastos del periodo
+    // siempre (llevan a Movimientos con el mismo periodo); lo que quedó
+    // fiado, solo si hubo (lleva a Clientes). Sin ventas no hay Ganaste:
+    // en Hoy, los gastos de hoy y cómo vas en la semana
+    const resumen = dashboardData?.clave === conteo.clave ? dashboardData.resumen : null
     const sinVentas = !loading && metrics.salesCount === 0
-    const abajo: ReactNode = nuevo ? null
-        : sinVentas && period === 'today' && cabecera?.llevas
-            ? <LlevasEnHoy llevas={cabecera.llevas} gastosHoy={metrics.expenses} conteo={conteo} />
-            : sinVentas
-                ? (metrics.expenses > 0 ? <GastosSinVentas gastos={metrics.expenses} conteo={conteo} /> : null)
-                : <ResumenVistas vistas={vistas} vista={vista} onCambiar={setVista} loading={loading} conteo={conteo}
-                    claveDatos={dashboardData?.clave ?? ''} />
-    // En la vista de ganancia, la línea gris de arriba dice la ganancia en ventas
-    const gananciaVentas = sinVentas ? null : vistas?.find(v => v.id === vista)?.gananciaVentas ?? null
+    const rangoActual = period === 'custom' && customRange ? customRange : getDateRange(period)
+    const filaGastos: FilaInicio = {
+        clave: 'gastos', rotulo: rotuloGastos(period), monto: resumen?.gastos ?? metrics.expenses, Icono: ICONO_GASTOS,
+        href: `/movimientos?${periodoEnDireccion(period, rangoActual)}&tipo=gastos`,
+    }
+    const filas: FilaInicio[] = sinVentas
+        ? [filaGastos, ...(period === 'today' && cabecera?.llevas
+            ? [{ clave: 'semana', rotulo: 'Esta semana llevas', monto: cabecera.llevas.semana, Icono: ICONO_SEMANA, href: '/reportes?periodo=week' }]
+            : [])]
+        : [filaGastos, ...(resumen && resumen.fiado > 0
+            ? [{ clave: 'fiado', rotulo: 'Quedó fiado', monto: resumen.fiado, Icono: ICONO_FIADO, href: '/customers', tono: 'fiado' as const }]
+            : [])]
+    const claveDatos = dashboardData?.clave ?? ''
+    const ganaste = sinVentas ? null : (
+        <Ganaste resumen={resumen} loading={loading || !resumen} conteo={conteo} href={hrefReporte} />
+    )
+    const filasInicio = (
+        <FilasInicio filas={filas} conteo={conteo} loading={loading} claveDatos={claveDatos} pegadas={sinVentas} />
+    )
+    // En el celular la gráfica va entre lo vendido y esto
+    const abajo: ReactNode = nuevo ? null : <>{ganaste}{filasInicio}</>
 
     return (
         <>
@@ -414,7 +413,6 @@ export default function DashboardPage() {
                     tendencia={tendencia}
                     hrefReporte={hrefReporte}
                     nuevo={nuevo}
-                    gananciaVentas={gananciaVentas}
                     grafica={grafica('movil')}
                     abajo={abajo}
                 />
@@ -428,33 +426,44 @@ export default function DashboardPage() {
                 <div className="in-pc-contenido">
                     <PrimerosPasos storeId={storeId} />
 
-                    {/* Arriba el saludo en una línea. Debajo, la gráfica a la izquierda
-                        y el resumen a la derecha */}
-                    <header className="in-pc-cabeza">
-                        <div {...entrada(0, animar, 'in-pc-arriba')}>
-                            <h1 className="in-pc-saludo" suppressHydrationWarning>{greeting}, {storeName || 'Mi negocio'}</h1>
-                            <Link href="/settings" className="in-pc-ajustes" aria-label="Ajustes">
-                                <Settings size={20} strokeWidth={1.9} />
-                            </Link>
-                        </div>
-                        {/* La gráfica a la izquierda; a la derecha el resumen, agrupado arriba */}
-                        <div className="in-pc-cuerpo" data-nuevo={nuevo || undefined}>
-                            {!nuevo && (
-                                <div {...entrada(1, animar, 'in-pc-grafica')}>
-                                    {grafica('pc')}
+                    {/* Arriba el saludo en una línea */}
+                    <header {...entrada(0, animar, 'in-pc-arriba')}>
+                        <h1 className="in-pc-saludo" suppressHydrationWarning>{greeting}, {storeName || 'Mi negocio'}</h1>
+                        <Link href="/settings" className="in-pc-ajustes" aria-label="Ajustes">
+                            <Settings size={20} strokeWidth={1.9} />
+                        </Link>
+                    </header>
+
+                    {/* El alto que sobra se reparte por igual arriba y abajo del
+                        bloque de la gráfica y el resumen */}
+                    <div className="in-pc-aire" aria-hidden />
+
+                    {/* La gráfica a la izquierda; a la derecha el resumen, alineado
+                        arriba. La gráfica mide lo que el resumen (mínimo 240 px) y
+                        crece con la pantalla hasta 380 px */}
+                    <section className="in-pc-cuerpo" aria-label="Resumen del periodo" data-nuevo={nuevo || undefined}>
+                        {!nuevo && (
+                            <div {...entrada(1, animar, 'in-pc-grafica')}>
+                                {grafica('pc')}
+                            </div>
+                        )}
+                        <div className="in-pc-resumen">
+                            <div {...entrada(2, animar)}>
+                                <Vendiste metrics={metrics} loading={loading} period={period} conteo={conteo}
+                                    tendencia={tendencia} href={hrefReporte} nuevo={nuevo}
+                                    selector={<SelectorPeriodo variante="pc" forma="pildora" period={period} setPeriod={cambiarPeriodo}
+                                        rango={customRange} setRango={cambiarRango} />} />
+                            </div>
+                            {abajo && (
+                                <div {...entrada(3, animar)}>
+                                    {ganaste && <LineaFina />}
+                                    {abajo}
                                 </div>
                             )}
-                            <div className="in-pc-resumen">
-                                <div {...entrada(2, animar)}>
-                                    <Vendiste metrics={metrics} loading={loading} period={period} conteo={conteo}
-                                        tendencia={tendencia} href={hrefReporte} nuevo={nuevo} gananciaVentas={gananciaVentas}
-                                        selector={<SelectorPeriodo variante="pc" forma="pildora" period={period} setPeriod={cambiarPeriodo}
-                                            rango={customRange} setRango={cambiarRango} />} />
-                                </div>
-                                {abajo && <div {...entrada(3, animar)}>{abajo}</div>}
-                            </div>
                         </div>
-                    </header>
+                    </section>
+
+                    <div className="in-pc-aire in-pc-aire-abajo" aria-hidden />
 
                     <div className="in-pc-abajo">
                         <InsightsRow
@@ -478,15 +487,14 @@ export default function DashboardPage() {
 /* Lo del computador que no cabe en clases de Tailwind: la pantalla que se
    llena de arriba abajo y el encabezado de dos columnas */
 const PC_CSS = ENTRADA_INICIO_CSS + `
-/* La pantalla se llena sin franja vacía abajo. Lo que sobra se reparte
-   en proporción, para que nada se vea estirado a la fuerza:
-   · dos tercios para el encabezado: el gráfico crece (nunca menos de
-     240 px ni menos que el resumen, que va agrupado arriba, sin huecos
-     por dentro);
-   · un tercio para el aire entre el encabezado y la fila de abajo, que
-     queda pegada al final de la pantalla.
-   La fila de abajo (plata pendiente, tus productos y acciones) mide lo
-   que mide su contenido y nunca se estira */
+/* La pantalla se llena sin franja vacía abajo:
+   · la gráfica crece con la pantalla, desde lo que mide el resumen
+     (nunca menos de 240 px) hasta 380 px;
+   · el alto que sobre después se reparte por igual arriba y abajo del
+     bloque de la gráfica y el resumen, para que no quede un hueco
+     grande en un solo lugar;
+   · la fila de abajo (plata pendiente, tus productos y acciones) queda
+     pegada al final y mide lo que mide su contenido: nunca se estira */
 .in-pc {
     position: relative;
     --in-pc-hueco: clamp(24px, 3.8vh, 56px);
@@ -498,7 +506,7 @@ const PC_CSS = ENTRADA_INICIO_CSS + `
     min-height: calc(100dvh - 2rem); display: flex; flex-direction: column;
     padding: clamp(20px, 2.6vh, 32px) 24px 16px; }
 
-.in-pc-arriba { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 40px; }
+.in-pc-arriba { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 40px; }
 .in-pc-saludo { min-width: 0; font-size: 14px; font-weight: 400; letter-spacing: -0.01em; color: var(--toul-text-subtle); margin: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .in-pc-ajustes { flex-shrink: 0; width: 40px; height: 40px; margin-right: -8px; border-radius: 12px;
@@ -506,16 +514,20 @@ const PC_CSS = ENTRADA_INICIO_CSS + `
     transition: color 160ms var(--toul-ease-emil), background-color 160ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
 .in-pc-ajustes:active { transform: scale(0.94); }
 
-.in-pc-cabeza { flex: 2 1 auto; min-height: 0; display: flex; flex-direction: column; }
+/* Los dos aires crecen igual desde su mínimo. La gráfica crece mucho
+   más rápido (1000 a 1): se llena primero y, al llegar a 380 px, lo
+   que queda se va a los aires */
+.in-pc-aire { flex: 1 1 6px; min-height: 6px; }
+.in-pc-aire-abajo { flex-basis: var(--in-pc-hueco); min-height: var(--in-pc-hueco); }
 /* La gráfica, cerca del 60% desde el borde izquierdo; el resumen, el
    resto, a 40 px */
-.in-pc-cuerpo { flex: 1; min-height: 240px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
-    grid-template-rows: 1fr; column-gap: 40px; margin-top: 6px; }
+.in-pc-cuerpo { flex: 1000 1 auto; max-height: 380px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+    grid-template-rows: 1fr; column-gap: 40px; }
 /* Sin ventas en toda su historia no hay gráfica: el resumen va solo */
-.in-pc-cuerpo[data-nuevo] { grid-template-columns: minmax(0, 1fr); }
-.in-pc-grafica { min-width: 0; min-height: 0; }
-.in-pc-resumen { min-width: 0; display: flex; flex-direction: column; gap: clamp(12px, 2vh, 18px); }
-.in-pc-abajo { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: flex-end; margin-top: var(--in-pc-hueco); }
+.in-pc-cuerpo[data-nuevo] { grid-template-columns: minmax(0, 1fr); flex-grow: 0; }
+.in-pc-grafica { min-width: 0; min-height: 240px; }
+.in-pc-resumen { min-width: 0; align-self: start; display: flex; flex-direction: column; gap: 16px; }
+.in-pc-abajo { flex: 0 0 auto; }
 @media (hover: hover) and (pointer: fine) {
     .in-pc-ajustes:hover { color: var(--toul-text); background: var(--toul-surface); }
 }

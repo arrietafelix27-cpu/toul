@@ -417,6 +417,17 @@ Diseño en `diseno/movimientos/` (prototipo + LEEME). Con esto quedan los 3 paso
 - **Reportes**: "Tú y tu negocio" dentro de Tu plata (Metiste / Sacaste para ti). Desde el 7 de noviembre sale siempre, con los $0 en gris tenue (decisión de Félix: es informativo)
 - **Pruebas**: 8 chequeos nuevos en `movimientos.test.mjs`. En `offline-conteo.test.mjs` la prueba "compra sin método queda General" ahora espera que se rechace (es la regla nueva, aprobada)
 
+### 7 de noviembre de 2026 — Inicio: resumen nuevo ✅ publicado
+
+Especificación de Félix. El gráfico no se tocó.
+
+- **Se fueron del Inicio** la barra de colores, los puntos y las tres vistas (Pagado y fiado, Ganancia y gastos, Cómo te pagaron): eso vive en Reportes
+- **Vendiste** (42 px) con la cantidad de ventas y la tendencia; **línea fina**; **Ganaste** (42 px, verde; "Perdiste" en rojo, sin signo, como en Reportes) con "42% de lo que vendiste" ("menos de 1%" si no alcanza). Tocar cualquiera de los dos abre Reportes en el mismo periodo
+- **Filas con ícono**: "Gastos de hoy / de la semana / del mes" (siempre; en $0 gris tenue) lleva a Movimientos filtrado por Gastos en el mismo periodo; "Quedó fiado" (amarillo, solo si es más de $0) lleva a Clientes. Entran con un fundido hacia arriba cuando cuentan los montos
+- **Sin ventas**: $0 tenue y la frase de siempre, sin Ganaste. En Hoy: "Gastos de hoy" y "Esta semana llevas" (lleva a Reportes de la semana); se quitó "Este mes llevas". En otro periodo, solo sus gastos. Una tienda que nunca vendió sigue como antes
+- **PC**: el resumen a la derecha, alineado arriba. La gráfica mide lo que el resumen (mínimo 240 px) y crece con la pantalla hasta 380 px; lo que sobre se reparte igual arriba y abajo del bloque. La fila de abajo sigue al final sin estirarse. **Celular**: Vendiste arriba de la gráfica; Ganaste y las filas debajo (sin línea fina: los separa la gráfica)
+- Código: `resumenInicio` reemplaza a `vistasInicio` en `lib/reports/calculos.ts`. Pruebas: 4 nuevas en `calculos.test.ts`; en la tienda de prueba salieron los 6 chequeos de las tres vistas (la función ya no existe, ningún valor esperado cambió) y entraron: Ganaste del Inicio = Reportes ($270.000), "42% de lo que vendiste", Quedó fiado y Gastos = Movimientos filtrado por Gastos ($40.000)
+
 ### 7 de noviembre de 2026 — Caja, Fase 4: cobrar y "Venta registrada" ✅ publicado
 
 Diseño en `diseno/caja/`. No se tocó cómo se registra la venta (`process_sale`) ni la cola sin internet.

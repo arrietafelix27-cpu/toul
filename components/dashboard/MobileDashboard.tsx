@@ -14,9 +14,9 @@ import type { AIInsight } from '@/lib/types'
 
    Nada encerrado en cajas: lo separa el espacio. De arriba abajo,
    lo que se mira primero: el saludo, el periodo, cuánto vendiste,
-   la gráfica de borde a borde, la barra con sus tres vistas (en Hoy sin
-   ventas, cómo vas en la semana); luego lo que se hace a diario
-   (acciones y TOUL AI), tus productos y la plata pendiente.
+   la gráfica, cuánto ganaste con los gastos y lo fiado (en Hoy sin
+   ventas, los gastos de hoy y cómo vas en la semana); luego lo que se
+   hace a diario (acciones y TOUL AI), tus productos y la plata pendiente.
    ══════════════════════════════════════════════════════════════ */
 
 const CSS = ENTRADA_INICIO_CSS + `
@@ -31,7 +31,7 @@ const CSS = ENTRADA_INICIO_CSS + `
 export default function MobileDashboard({
     storeName, saludo, period, setPeriod, rango, setRango,
     metrics, products, pending, insight, loading, primeraCarga, insightsLoading,
-    animar, conteo, tendencia, hrefReporte, nuevo, gananciaVentas, grafica, abajo,
+    animar, conteo, tendencia, hrefReporte, nuevo, grafica, abajo,
 }: {
     storeName: string
     saludo: string
@@ -55,11 +55,9 @@ export default function MobileDashboard({
     hrefReporte: string
     /** Nunca ha vendido: sin gráfica ni ganancia */
     nuevo: boolean
-    /** En la vista de ganancia, la línea gris la agrega */
-    gananciaVentas: number | null
     /** La gráfica (null si nunca ha vendido) */
     grafica: ReactNode
-    /** Debajo de la gráfica: la barra con sus tres vistas, o cómo vas en la semana */
+    /** Debajo de la gráfica: Ganaste y las filas (gastos, lo fiado, cómo vas en la semana) */
     abajo: ReactNode
 }) {
     return (
@@ -75,7 +73,7 @@ export default function MobileDashboard({
                 </div>
                 <div {...entrada(2, animar, undefined, { marginTop: 18 })}>
                     <Vendiste metrics={metrics} loading={loading} period={period} conteo={conteo} tendencia={tendencia}
-                        href={hrefReporte} nuevo={nuevo} gananciaVentas={gananciaVentas} />
+                        href={hrefReporte} nuevo={nuevo} />
                 </div>
                 {grafica && <div {...entrada(3, animar, 'md-grafica')}>{grafica}</div>}
                 {abajo && <div {...entrada(4, animar)}>{abajo}</div>}

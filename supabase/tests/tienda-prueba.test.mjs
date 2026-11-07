@@ -9,7 +9,7 @@
 // decir cuál.
 //
 // Solo corre en la base de pruebas en memoria (PGlite), nunca en producción.
-import { deCada100, lineaVentas, porcentajeTendencia, resumir, tramoEn, vistasInicio } from '../../lib/reports/calculos.ts'
+import { deCada100, lineaVentas, porcentajeTendencia, resumenInicio, resumir, tramoEn } from '../../lib/reports/calculos.ts'
 import { instanteDeDia, rangoAnterior, rangoPeriodo } from '../../lib/periodos.ts'
 
 const O = '11111111-1111-1111-1111-111111111111'
@@ -289,16 +289,21 @@ export default async function (db) {
   igual('Inicio: Gastos', 40000, inicio.gastos)
   igual('Inicio: Ganancia después de gastos', 270000, inicio.ganaste)
 
-  // Las tres vistas del resumen, con lo que trae la base de datos
-  const sumaBarra = (v) => v.barra.reduce((s, p) => s + p.monto, 0)
-  const vistasOct = vistasInicio(inicio, rep.metodosVenta)
-  si('el Inicio tiene las tres vistas', vistasOct.length === 3)
+  // El resumen del Inicio: Ganaste es el de Reportes y los gastos son los
+  // de Movimientos filtrado por Gastos, en el mismo periodo
   igual('lo vendido por método suma De contado menos lo devuelto en plata', inicio.contado - inicio.devuelto,
     rep.metodosVenta.reduce((s, m) => s + Number(m.monto), 0))
-  igual('Pagado y fiado: Te pagaron + Quedó fiado = Vendiste', 640000, sumaBarra(vistasOct[0]))
-  igual('Ganancia y gastos: Se fue en gastos + Ganaste = Ganancia en ventas', 310000, sumaBarra(vistasOct[1]))
-  igual('Cómo te pagaron: los métodos + Fiado = Vendiste', 640000, sumaBarra(vistasOct[2]))
-  si('Ganaste es el mismo en las tres vistas y en Reportes', vistasOct.every(v => v.filas.find(f => f.clave === 'ganaste').monto === res.ganaste))
+  const resumenOct = resumenInicio(inicio)
+  igual('Inicio: Ganaste = Ganaste de Reportes', res.ganaste, resumenOct.ganaste)
+  igual('Inicio: Ganaste', 270000, resumenOct.ganaste)
+  si('Inicio: "42% de lo que vendiste"', resumenOct.deLoVendido === '42% de lo que vendiste', resumenOct.deLoVendido)
+  igual('Inicio: Quedó fiado = lo vendido que no se pagó', inicio.vendiste - (inicio.contado - inicio.devuelto), resumenOct.fiado)
+  // Lo mismo que lee Movimientos: el libro de plata, gastos del periodo
+  const gastosMovimientos = Number((await q(
+    `SELECT COALESCE(SUM(amount), 0) s FROM payments WHERE store_id=$1 AND type='expense' AND created_at >= $2 AND created_at <= $3`,
+    [STORE, octubre.from, octubre.to]))[0].s)
+  igual('Inicio: Gastos = Movimientos filtrado por Gastos', gastosMovimientos, resumenOct.gastos)
+  igual('Inicio: Gastos', 40000, resumenOct.gastos)
 
   console.log('\n— La auditoría (A4) sobre esta tienda')
   const auditoria = await comoDueno(() => q(`SELECT * FROM toul_auditoria()`))
@@ -406,10 +411,11 @@ export default async function (db) {
   igual('la devolución sale como plata', 100000, conDevolucion.devuelto)
   igual('Ganaste', 0, conDevolucion.ganaste)
   const repDevolucion = await r(`SELECT toul_reporte($1,$2) r`, [noviembre.from, noviembre.to])
-  const vistasDevolucion = vistasInicio(conDevolucion, repDevolucion.metodosVenta)
   si('lo devuelto en plata sale del método por el que se devolvió', repDevolucion.metodosVenta.length === 0,
     JSON.stringify(repDevolucion.metodosVenta))
-  si('con la devolución las tres barras quedan en cero', vistasDevolucion.every(v => sumaBarra(v) === 0))
+  const resumenDevolucion = resumenInicio(conDevolucion)
+  si('con todo devuelto: Ganaste 0, nada fiado y sin % de lo vendido',
+    resumenDevolucion.ganaste === 0 && resumenDevolucion.fiado === 0 && resumenDevolucion.deLoVendido === null, JSON.stringify(resumenDevolucion))
   const lineaDevolucion = (await r(`SELECT toul_reporte($1,$2,'dia') r`, [noviembre.from, noviembre.to])).serie
   si('la línea sube el 1 y baja el 2 con la devolución', JSON.stringify(lineaDevolucion.map(t => Number(t.acumulado))) === JSON.stringify([100000, 0]))
   const mesesConDevolucion = await r(`SELECT toul_reporte_meses(6, '2026-11-01') r`)

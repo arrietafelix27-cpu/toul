@@ -1,7 +1,7 @@
 // npm run test:calculos
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { conOtros, deCada100, formatoCorto, lineaVentas, porcentajeTendencia, proyeccion, resumir, textoPorcentaje, tramoEn, vistasInicio, type Vista } from './calculos.ts'
+import { conOtros, deCada100, formatoCorto, lineaVentas, porcentajeTendencia, proyeccion, resumir, textoPorcentaje, tramoEn, resumenInicio } from './calculos.ts'
 
 /** Una fecha y hora de Colombia (UTC−5), sin depender de la zona del equipo que corre la prueba */
 const co = (ano: number, mes: number, dia: number, hora = 0, minuto = 0, segundo = 0) => new Date(Date.UTC(ano, mes, dia, hora, minuto, segundo) + 5 * 3_600_000)
@@ -45,84 +45,35 @@ const reporte = ({ ventas, contado = ventas, costo, gastos = 0, devuelto = 0, re
     devoluciones: { total: devuelto, costo: costoDevuelto, reembolsado },
     abonos: 0, gastos, mercanciaPagada: 0,
 })
-const suma = (v: Vista) => v.barra.reduce((s, p) => s + p.monto, 0)
-const fila = (v: Vista, clave: string) => v.filas.find(f => f.clave === clave)
 
-test('Inicio, pagado y fiado: Te pagaron + Quedó fiado = Vendiste, también con devoluciones', () => {
+test('Inicio: "Ganaste" es el mismo de Reportes, con cuánto es de lo que vendiste', () => {
     const casos = [
-        reporte({ ventas: 150_500, costo: 69_800 }),
         reporte({ ventas: 640_000, contado: 410_000, costo: 330_000, gastos: 40_000 }),
-        // Devolvió 30.000: 20.000 en plata y 10.000 que se le bajaron de la deuda
-        reporte({ ventas: 640_000, contado: 410_000, costo: 330_000, devuelto: 30_000, reembolsado: 20_000, costoDevuelto: 12_000 }),
+        reporte({ ventas: 150_500, costo: 69_800 }),
+        reporte({ ventas: 640_000, contado: 410_000, costo: 330_000, gastos: 40_000, devuelto: 30_000, reembolsado: 20_000, costoDevuelto: 12_000 }),
     ]
-    for (const r of casos) {
-        const [pagado] = vistasInicio(r, [])
-        const pagaron = fila(pagado, 'pagado')!.monto
-        const fiado = fila(pagado, 'fiado')!.monto
-        assert.equal(pagaron + fiado, r.vendiste, JSON.stringify(r))
-        assert.equal(suma(pagado), r.vendiste)
-    }
-    const [conDevolucion] = vistasInicio(casos[2], [])
-    assert.equal(fila(conDevolucion, 'pagado')!.monto, 390_000)
-    assert.equal(fila(conDevolucion, 'fiado')!.monto, 220_000)
+    for (const r of casos) assert.equal(resumenInicio(r).ganaste, r.ganaste, JSON.stringify(r))
+    // 270.000 de 640.000 = 42,2%
+    assert.equal(resumenInicio(casos[0]).deLoVendido, '42% de lo que vendiste')
+    assert.equal(resumenInicio(casos[0]).gastos, 40_000)
 })
 
-test('Inicio, pagado y fiado: "Gastos" solo si hubo gastos', () => {
-    assert.equal(fila(vistasInicio(reporte({ ventas: 150_500, costo: 69_800 }))[0], 'gastos'), undefined)
-    assert.equal(fila(vistasInicio(reporte({ ventas: 150_500, costo: 69_800, gastos: 5_000 }))[0], 'gastos')!.monto, 5_000)
+test('Inicio: con pérdida la cifra lleva su signo y el % va sin signo', () => {
+    const i = resumenInicio(reporte({ ventas: 100_000, costo: 70_000, gastos: 45_000 }))
+    assert.equal(i.ganaste, -15_000)
+    assert.equal(i.deLoVendido, '15% de lo que vendiste')
 })
 
-test('Inicio, ganancia y gastos: Se fue en gastos + Ganaste = Ganancia en ventas', () => {
-    const r = reporte({ ventas: 640_000, contado: 410_000, costo: 330_000, gastos: 40_000 })
-    const [, ganancia] = vistasInicio(r)
-    assert.equal(suma(ganancia), r.gananciaVentas)
-    assert.equal(fila(ganancia, 'gastos')!.monto + fila(ganancia, 'ganaste')!.monto, r.gananciaVentas)
-    assert.equal(ganancia.gananciaVentas, 310_000)
-    // Sin gastos, "ganancia en ventas" sería el mismo número de Ganaste
-    assert.equal(vistasInicio(reporte({ ventas: 150_500, costo: 69_800 }))[1].gananciaVentas, null)
+test('Inicio: lo que casi no alcanza al 1% dice "menos de 1%", y sin ventas no hay %', () => {
+    assert.equal(resumenInicio(reporte({ ventas: 1_000_000, costo: 996_000 })).deLoVendido, 'menos de 1% de lo que vendiste')
+    assert.equal(resumenInicio(reporte({ ventas: 0, costo: 0, gastos: 5_000 })).deLoVendido, null)
 })
 
-test('Inicio, ganancia y gastos con pérdida: toda la barra es gastos y dice Perdiste', () => {
-    const r = reporte({ ventas: 100_000, costo: 70_000, gastos: 45_000 })
-    const [pagado, ganancia, metodos] = vistasInicio(r, [{ nombre: 'Efectivo', monto: 100_000 }])
-    assert.deepEqual(ganancia.barra.map(p => p.clave), ['gastos'])
-    for (const v of [pagado, ganancia, metodos]) {
-        const ultima = v.filas[v.filas.length - 1]
-        assert.deepEqual([ultima.rotulo, ultima.monto, ultima.color], ['Perdiste', 15_000, 'rojo'])
-    }
-})
-
-test('Inicio, cómo te pagaron: los métodos + Fiado = Vendiste', () => {
-    const r = reporte({ ventas: 640_000, contado: 410_000, costo: 330_000, devuelto: 30_000, reembolsado: 20_000 })
-    // Pagado al vender 410.000, menos 20.000 que se devolvieron en efectivo
-    const [, , metodos] = vistasInicio(r, [{ nombre: 'Nequi', monto: 250_000 }, { nombre: 'Efectivo', monto: 140_000 }])
-    assert.equal(suma(metodos), r.vendiste)
-    assert.deepEqual(metodos.filas.map(f => f.rotulo), ['Nequi', 'Efectivo', 'Fiado', 'Ganaste'])
-    assert.equal(metodos.barra[0].tono, 'verde')
-    assert.equal(metodos.linea, 3)
-})
-
-test('Inicio, cómo te pagaron: máximo 4 métodos contando "Otros", y el peso redondeado no descuadra', () => {
-    const r = reporte({ ventas: 1_000_000, costo: 500_000 })
-    const [, , metodos] = vistasInicio(r, [
-        { nombre: 'Nequi', monto: 400_000 }, { nombre: 'Efectivo', monto: 300_000 }, { nombre: 'Daviplata', monto: 150_000 },
-        { nombre: 'Bancolombia', monto: 100_000 }, { nombre: 'Otros', monto: 30_000 }, { nombre: 'Tarjeta', monto: 19_999 },
-    ])
-    assert.deepEqual(metodos.filas.map(f => [f.rotulo, f.monto]), [
-        ['Nequi', 400_001], ['Efectivo', 300_000], ['Daviplata', 150_000], ['Otros', 149_999], ['Ganaste', 500_000],
-    ])
-    assert.equal(suma(metodos), r.vendiste)
-})
-
-test('Inicio: "Ganaste" es el mismo en las tres vistas y en Reportes', () => {
-    const r = reporte({ ventas: 640_000, contado: 410_000, costo: 330_000, gastos: 40_000, devuelto: 30_000, reembolsado: 20_000, costoDevuelto: 12_000 })
-    const vistas = vistasInicio(r, [{ nombre: 'Efectivo', monto: 390_000 }])
-    assert.equal(vistas.length, 3)
-    for (const v of vistas) assert.equal(fila(v, 'ganaste')!.monto, r.ganaste)
-})
-
-test('Inicio: sin lo vendido por método no hay "Cómo te pagaron"', () => {
-    assert.deepEqual(vistasInicio(reporte({ ventas: 150_500, costo: 69_800 })).map(v => v.id), ['pagado', 'ganancia'])
+test('Inicio: "Quedó fiado" es lo vendido que no se pagó, menos la deuda que bajó una devolución', () => {
+    assert.equal(resumenInicio(reporte({ ventas: 640_000, contado: 410_000, costo: 330_000 })).fiado, 230_000)
+    // Devolvió 30.000: 20.000 en plata y 10.000 que se le bajaron de la deuda
+    assert.equal(resumenInicio(reporte({ ventas: 640_000, contado: 410_000, costo: 330_000, devuelto: 30_000, reembolsado: 20_000, costoDevuelto: 12_000 })).fiado, 220_000)
+    assert.equal(resumenInicio(reporte({ ventas: 150_500, costo: 69_800 })).fiado, 0, 'todo de contado')
 })
 
 test('La tendencia se esconde cuando antes no hubo ganancia', () => {
