@@ -144,7 +144,9 @@ function nombreDia(iso: string): string {
     if (atras === 0) return 'Hoy'
     if (atras === 1) return 'Ayer'
     const mismoAno = enColombia(iso).ano === enColombia(new Date()).ano
+    // es-CO dice "4 de nov." y el diseño pide "4 nov"
     return formatoColombia(iso, mismoAno ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' })
+        .replace(/\bde\s+/g, '').replace(/\./g, '')
 }
 const hora = (iso: string) => new Date(iso).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', timeZone: ZONA_COLOMBIA })
 

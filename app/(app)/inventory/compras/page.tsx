@@ -234,13 +234,20 @@ export default function ComprasPage() {
         setAbierta(data as PurchaseDetailData)
     }
 
-    // Desde Movimientos ("Ver la compra") se llega con ?compra=<id>: abre de una
+    // Desde Movimientos ("Ver la compra") se llega con ?compra=<id>: abre de una.
+    // La dirección se limpia solo cuando ya abrió
     useEffect(() => {
         const id = new URLSearchParams(window.location.search).get('compra')
         if (!id) return
-        window.history.replaceState(null, '', window.location.pathname)
-        abrir(id)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        let vivo = true
+        ;(async () => {
+            const { data, error } = await supabase.rpc('toul_purchase_detail', { p_purchase_id: id })
+            if (!vivo) return
+            window.history.replaceState(null, '', window.location.pathname)
+            if (error || !data) { toast.error('No se pudo abrir esa compra'); return }
+            setAbierta(data as PurchaseDetailData)
+        })()
+        return () => { vivo = false }
     }, [])
 
     // La búsqueda corre sobre lo cargado: por proveedor o por producto

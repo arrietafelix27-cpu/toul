@@ -162,9 +162,11 @@ export function DetalleMovimiento({ movimiento, onCerrar, onEditar, onBorrado, o
 }
 
 function Contenido({ m, entra, nota }: { m: Movimiento; entra: boolean; nota: string | null }) {
-    const fecha = new Date(m.created_at).toLocaleString('es-CO', {
+    // "Sábado, 7 de noviembre de 2026, 2:04 p. m.": solo la primera en mayúscula
+    const largo = new Date(m.created_at).toLocaleString('es-CO', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: ZONA_COLOMBIA,
     })
+    const fecha = largo.charAt(0).toUpperCase() + largo.slice(1)
     return (
         <div>
             <p className="dm-monto" style={{ color: entra ? 'var(--toul-accent)' : 'var(--toul-text)' }}>
@@ -174,7 +176,7 @@ function Contenido({ m, entra, nota }: { m: Movimiento; entra: boolean; nota: st
 
             <div className="dm-datos">
                 <div className="dm-dato"><span>Cuenta</span><span>{m.cuenta}</span></div>
-                <div className="dm-dato"><span>Fecha</span><span style={{ textTransform: 'capitalize' }}>{fecha}</span></div>
+                <div className="dm-dato"><span>Fecha</span><span>{fecha}</span></div>
                 {m.type === 'expense' && m.categoria && (
                     <div className="dm-dato"><span>Categoría</span><span>{m.categoria}</span></div>
                 )}
