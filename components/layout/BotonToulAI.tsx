@@ -111,7 +111,7 @@ const CSS = `
 .tai-chispa { color: color-mix(in srgb, var(--toul-accent-menta) 22%, var(--toul-text)); animation: tai-respira 2.6s ease-in-out infinite; }
 @keyframes tai-respira { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.14) rotate(14deg); } }
 
-.tai-texto { min-width: 0; }
+.tai-texto { min-width: 0; line-height: 1.25; }
 .tai-titulo { display: block; font-size: 14px; font-weight: 600; letter-spacing: -0.1px; color: var(--toul-text); white-space: nowrap; }
 .tai-sub { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12px; color: var(--toul-accent-claro); white-space: nowrap; }
 /* El punto que late: la onda crece y se apaga */
