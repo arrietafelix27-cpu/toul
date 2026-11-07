@@ -14,6 +14,7 @@ import { useOfflineSales, type OfflineState } from '@/lib/isla/useOffline'
 import { cacheStoreInfo, getCachedStoreInfo, type CachedStoreInfo } from '@/lib/isla/offline'
 import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { permisosDe } from '@/lib/pos/permisos'
+import { tirillaAutomaticaInicial } from '@/lib/pos/comprobante'
 import { createClient } from '@/lib/supabase/client'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 import { RegistrarMovimiento } from '@/components/movimientos/RegistrarMovimiento'
@@ -98,7 +99,8 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     const pathname = usePathname()
     const { data: ctx, isLoading } = useSessionContext()
     const { data: session, isLoading: sessionLoading, mutate: refreshSession } = useOpenCashSession(ctx?.storeId)
-    const [autoPrint, setAutoPrint] = useState(true)
+    // Apagada hasta saber qué equipo es (ver abajo)
+    const [autoPrint, setAutoPrint] = useState(false)
     // Los datos del negocio llegan del servidor; mientras tanto (o sin
     // internet) vale lo último guardado en el equipo
     const [servidor, setServidor] = useState<{ storeId: string; plan: string; info: CachedStoreInfo } | null>(null)
@@ -109,11 +111,13 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     const menuRef = useRef<HTMLDivElement>(null)
     const offline = useOfflineSales(ctx?.storeId)
 
+    // Tirilla automática: lo que este equipo eligió en el menú; si nunca
+    // eligió, prendida en el computador y apagada en el celular
     useEffect(() => {
-        try {
-            const stored = localStorage.getItem(AUTO_PRINT_KEY)
-            if (stored !== null) setAutoPrint(stored === '1')
-        } catch { /* almacenamiento bloqueado: se usa el valor por defecto */ }
+        let stored: string | null = null
+        try { stored = localStorage.getItem(AUTO_PRINT_KEY) } catch { /* almacenamiento bloqueado */ }
+        const esCelular = typeof window.matchMedia === 'function' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
+        setAutoPrint(tirillaAutomaticaInicial(stored, esCelular))
     }, [])
 
     // La caja debe abrir aunque no haya internet, y la tirilla necesita

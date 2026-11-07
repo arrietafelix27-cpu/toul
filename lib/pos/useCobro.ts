@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useSWRConfig } from 'swr'
 import toast from 'react-hot-toast'
 import { usePOSFlow } from '@/components/pos/POSFlowProvider'
@@ -13,7 +13,7 @@ import type { ReceiptData } from '@/lib/isla/types'
 import type { CartItem, PaymentSplit } from '@/lib/types'
 import { formatCOP } from '@/lib/utils'
 import { revisarVenta, type Revision } from './permisos'
-import { mensajeComprobante, enlaceWhatsApp } from './comprobante'
+import { mensajeComprobante, enlaceWhatsApp, cuandoSeVea } from './comprobante'
 
 /* ══════════════════════════════════════════════════════════════
    Cobrar: enviar la venta (o guardarla sin internet), pedir la
@@ -160,16 +160,40 @@ export function useCobro(): CobroState {
         return { texto: normal, accion: 'cobrar', deshabilitado: !!razon, razon, espera: false }
     }, [esFiado, payment.total, enviando, necesita, aprobacion.status, razon])
 
+    // La tirilla sale con la venta como quedó en el servidor; sin ella,
+    // con lo que hay en el equipo
+    const datosTirilla = useCallback((saleId: string | null, respaldo: ReceiptData): Promise<ReceiptData> =>
+        saleId ? loadReceiptData(createClient(), saleId).catch(() => respaldo) : Promise.resolve(respaldo), [])
+
     const imprimirServidor = useCallback(async (saleId: string, respaldo: ReceiptData) => {
         setImprimiendo(true)
         try {
-            printReceipt(await loadReceiptData(createClient(), saleId))
-        } catch {
-            // Sin la venta del servidor, la tirilla sale con lo que hay en el equipo
-            printReceipt(respaldo)
+            printReceipt(await datosTirilla(saleId, respaldo))
         } finally {
             setImprimiendo(false)
         }
+    }, [datosTirilla])
+
+    // La automática: se busca ya y se imprime cuando la pantalla esté lista.
+    // Deshacer la cancela si todavía no salió
+    const tirillaEnEspera = useRef<{ cancelada: boolean } | null>(null)
+    const tirillaAutomatica = useCallback((saleId: string | null, respaldo: ReceiptData) => {
+        if (tirillaEnEspera.current) tirillaEnEspera.current.cancelada = true
+        const esta = { cancelada: false }
+        tirillaEnEspera.current = esta
+        setImprimiendo(true)
+        void Promise.all([datosTirilla(saleId, respaldo), cuandoSeVea()]).then(([datos]) => {
+            if (esta.cancelada) return
+            tirillaEnEspera.current = null
+            setImprimiendo(false)
+            printReceipt(datos)
+        })
+    }, [datosTirilla])
+    const cancelarTirilla = useCallback(() => {
+        if (!tirillaEnEspera.current) return
+        tirillaEnEspera.current.cancelada = true
+        tirillaEnEspera.current = null
+        setImprimiendo(false)
     }, [])
 
     const enviar = useCallback(async () => {
@@ -241,10 +265,7 @@ export function useCobro(): CobroState {
             aprobacion.reset()
             payment.rememberMethod()
             vibrar([12, 50, 18])
-            if (autoPrint && isPro) {
-                if (saleId) void imprimirServidor(saleId, hecha.receipt)
-                else printReceipt(hecha.receipt)
-            }
+            if (autoPrint && isPro) tirillaAutomatica(saleId, hecha.receipt)
             cart.clearCart()
             payment.resetPayment()
             globalMutate(() => true)
@@ -310,7 +331,7 @@ export function useCobro(): CobroState {
             setEnviando(false)
             setError(err instanceof Error ? err.message : 'Error inesperado al registrar la venta.')
         }
-    }, [enviando, cart, razon, necesita, aprobacion, payment, esFiado, tienda, ctx.storeName, ctx.displayName, miTurno, autoPrint, isPro, imprimirServidor, globalMutate, storeId, offline, data])
+    }, [enviando, cart, razon, necesita, aprobacion, payment, esFiado, tienda, ctx.storeName, ctx.displayName, miTurno, autoPrint, isPro, tirillaAutomatica, globalMutate, storeId, offline, data])
 
     const accionar = useCallback(() => {
         if (boton.deshabilitado || !boton.accion) return
@@ -332,6 +353,8 @@ export function useCobro(): CobroState {
     const deshacer = useCallback(async () => {
         if (!venta || !esAdmin || deshaciendo) return
         setDeshaciendo(true)
+        // Si la tirilla todavía no salió, ya no sale
+        cancelarTirilla()
         try {
             const enCola = listPendingSales(storeId).some(s => s.clientSaleId === venta.clientSaleId)
             if (enCola) {
@@ -351,13 +374,15 @@ export function useCobro(): CobroState {
         } finally {
             setDeshaciendo(false)
         }
-    }, [venta, esAdmin, deshaciendo, storeId, cart, data, globalMutate])
+    }, [venta, esAdmin, deshaciendo, storeId, cart, data, globalMutate, cancelarTirilla])
 
     const imprimir = useCallback(async () => {
         if (!venta) return
+        // Si la automática está por salir, sale ya (no dos veces)
+        cancelarTirilla()
         if (venta.saleId && !venta.offline) await imprimirServidor(venta.saleId, venta.receipt)
         else printReceipt(venta.receipt)
-    }, [venta, imprimirServidor])
+    }, [venta, imprimirServidor, cancelarTirilla])
 
     // Comprobante por WhatsApp: directo al chat del cliente si tiene celular;
     // si no, el menú de compartir del equipo

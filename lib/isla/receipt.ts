@@ -68,30 +68,60 @@ function receiptHtml(r: ReceiptData): string {
 </body></html>`
 }
 
-/** Imprime la tirilla en un iframe oculto (no afecta la pantalla de la caja). */
+/* ── Imprimir sin trabar la caja ─────────────────────────────────
+   La tirilla se arma en un iframe fuera de la pantalla y se imprime
+   cuando terminó de cargar. Tiene tamaño real: oculto o en 0×0, hay
+   navegadores que la imprimen en blanco o dejan la página quieta.
+   Al cerrar el cuadro de imprimir, el teclado vuelve a la caja (si no,
+   Enter le llega a la tirilla). El iframe no se quita al terminar: en
+   algunos navegadores "terminó" llega con el cuadro todavía abierto, y
+   quitarlo ahí lo traba. Se cambia por el de la siguiente tirilla. */
+
+let tirillaAnterior: HTMLIFrameElement | null = null
+
+/** Imprime la tirilla sin tocar la pantalla de la caja */
 export function printReceipt(data: ReceiptData) {
+    imprimirHtml(receiptHtml(data), 'Tirilla')
+}
+
+function imprimirHtml(html: string, titulo: string) {
+    if (typeof document === 'undefined') return
+    // Una tirilla a la vez: la anterior ya se imprimió o se canceló
+    tirillaAnterior?.remove()
+
     const iframe = document.createElement('iframe')
+    tirillaAnterior = iframe
     iframe.setAttribute('aria-hidden', 'true')
-    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.tabIndex = -1
+    iframe.title = titulo
+    iframe.style.cssText = 'position:fixed;top:0;left:-10000px;width:80mm;height:600px;border:0;pointer-events:none;'
+
+    const devolverControl = () => {
+        if (document.activeElement === iframe) iframe.blur()
+        try { window.focus() } catch { /* sin foco */ }
+    }
+
+    let impresa = false
+    const imprimir = () => {
+        if (impresa || !iframe.isConnected) return
+        impresa = true
+        const w = iframe.contentWindow
+        if (!w) return
+        w.addEventListener('afterprint', devolverControl)
+        try {
+            w.focus()
+            w.print()
+        } catch { /* el navegador no dejó imprimir: la caja sigue igual */ }
+        devolverControl()
+        // Donde el cuadro no detiene la página, el foco vuelve a la tirilla al cerrarlo
+        w.addEventListener('focus', () => setTimeout(devolverControl, 0))
+    }
+
+    iframe.addEventListener('load', () => setTimeout(imprimir, 30), { once: true })
+    iframe.srcdoc = html
     document.body.appendChild(iframe)
-
-    const doc = iframe.contentWindow?.document
-    if (!doc) { iframe.remove(); return }
-    doc.open()
-    doc.write(receiptHtml(data))
-    doc.close()
-
-    const cleanup = () => setTimeout(() => iframe.remove(), 1000)
-    iframe.contentWindow?.addEventListener('afterprint', cleanup)
-    setTimeout(() => {
-        iframe.contentWindow?.focus()
-        iframe.contentWindow?.print()
-        // El teclado vuelve a la caja: si no, Enter (nueva venta) le llega a la tirilla
-        iframe.blur()
-        window.focus()
-        // Algunos navegadores no disparan afterprint
-        setTimeout(cleanup, 60_000)
-    }, 150)
+    // Por si "cargó" nunca llega
+    setTimeout(imprimir, 2500)
 }
 
 interface SaleRow {
@@ -193,11 +223,5 @@ export function printCashClose(meta: { storeName: string; openedBy: string; open
   ${s.changeCount ? line(`Vueltos entregados (${s.changeCount})`, formatCOP(s.changeTotal ?? 0)) : ''}
   <div class="sign">Firma responsable</div>
 </body></html>`
-    const iframe = document.createElement('iframe')
-    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'
-    document.body.appendChild(iframe)
-    const doc = iframe.contentWindow?.document
-    if (!doc) { iframe.remove(); return }
-    doc.open(); doc.write(html); doc.close()
-    setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); setTimeout(() => iframe.remove(), 60_000) }, 150)
+    imprimirHtml(html, 'Cierre de caja')
 }

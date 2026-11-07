@@ -398,7 +398,7 @@ Félix pidió rehacer Movimientos en 3 pasos con su aprobación entre cada uno (
 - **Turnos**: con turno abierto, Metí plata en efectivo suma al efectivo esperado; Saqué plata, gastos y compras en efectivo restan. Lo de un turno cerrado solo deja cambiar nota o categoría
 - **Gasto en una sola transacción** (`toul_registrar_gasto`): antes eran dos escrituras sueltas. El vendedor solo con el permiso nuevo **"Registrar gastos"** (por defecto no), con cuenta y nunca con Plata mía
 - **Capital propio viejo** copiado al libro como Metí plata atado a su compra/gasto/pago. La tabla vieja queda de respaldo y sin escritura. Sube "Mercancía que pagaste" en meses viejos (aprobado por Félix)
-- **Reportes**: `toul_reporte` trae `metiste` y `sacaste`; el Excel y el PDF tienen "Entre tú y tu negocio" (no sale si los dos son 0). TOUL AI sabe que no es ganancia ni gasto
+- **Reportes**: `toul_reporte` trae `metiste` y `sacaste`; el Excel y el PDF tienen "Tú y tu negocio" (siempre, aunque esté en 0). TOUL AI sabe que no es ganancia ni gasto
 - **Auditoría**: 3 chequeos por mes (Metiste, Sacaste, no cambian Ganaste) y 3 generales (Plata mía atada, turnos cuentan su efectivo, turnos cerrados no cambian)
 - **Pruebas**: `movimientos.test.mjs` (97) y escenario 2 de la tienda de prueba con los valores de Félix: todos cuadran
 
@@ -414,8 +414,20 @@ Diseño en `diseno/movimientos/` (prototipo + LEEME). Con esto quedan los 3 paso
 - **Una sola hoja para anotar** (`components/movimientos/RegistrarMovimiento.tsx`): la usan Movimientos, Gastos y la caja. Las cuentas salen de `payment_methods` (`CuentaChips.tsx`) y la última usada sale marcada
 - **Siempre se dice con qué se pagó**: Gasto, Compra (lo que se paga hoy) y Pagar proveedor piden la cuenta o "Plata mía". La base lo exige (`supabase/deploy_movimientos_cuentas.sql`); lo viejo "Sin cuenta" se sigue viendo y se puede corregir sin elegir cuenta
 - **Caja**: "Gasto" en el menú de la persona, solo con el permiso "Registrar gastos", sin Plata mía y sin internet no deja
-- **Reportes**: "Entre tú y tu negocio" dentro de Tu plata (Metiste / Sacaste para ti); no sale si los dos son 0
+- **Reportes**: "Tú y tu negocio" dentro de Tu plata (Metiste / Sacaste para ti). Desde el 7 de noviembre sale siempre, con los $0 en gris tenue (decisión de Félix: es informativo)
 - **Pruebas**: 8 chequeos nuevos en `movimientos.test.mjs`. En `offline-conteo.test.mjs` la prueba "compra sin método queda General" ahora espera que se rechace (es la regla nueva, aprobada)
+
+### 7 de noviembre de 2026 — Caja, Fase 4: cobrar y "Venta registrada" ✅ publicado
+
+Diseño en `diseno/caja/`. No se tocó cómo se registra la venta (`process_sale`) ni la cola sin internet.
+
+- **Imprimir ya no traba la caja** (`lib/isla/receipt.ts`): la tirilla se arma en un iframe fuera de la pantalla con tamaño real, se imprime cuando terminó de cargar y el teclado vuelve a la caja al cerrar el cuadro. El iframe no se quita al "terminar" (en algunos navegadores eso llega con el cuadro abierto); lo reemplaza la siguiente. El cierre de caja usa lo mismo
+- **La automática sale cuando la pantalla está lista** (`lib/pos/useCobro.ts`): espera 0,9 s a que "Venta registrada" termine de aparecer (antes salía a mitad de la animación y la pantalla quedaba a medias hasta cambiar de pestaña). Con la caja en otra pestaña espera a que vuelva. Deshacer la cancela si no ha salido; mientras espera, el botón dice "Preparando la tirilla…"
+- **Tirilla automática por equipo** (`app/caja/layout.tsx`): si el equipo nunca eligió, prendida en el computador y apagada en el celular; solo en plan Pro. Se cambia en el menú como antes
+- **"Venta registrada" como el diseño**: chulo grande, "Venta registrada" / "Venta fiada registrada" encima del total, "Pagado con", "Abono recibido", botones a lo ancho "Enviar comprobante por WhatsApp" (o "Enviar a Marta por WhatsApp" si el cliente tiene celular) e "Imprimir tirilla", y abajo "¿Te equivocaste? Deshacer" con la barra verde de 5 s (solo administrador; al vencer deja su espacio para que "Nueva venta" no se mueva)
+- **Cobro**: "Cliente" con "opcional" u "obligatorio" (ámbar en crédito), el total dice "Total · desc. −$X" y, aprobada la venta, "Aprobada por el administrador" en verde bajo el botón
+- **Pruebas**: 4 nuevas en `lib/pos/cobro.test.ts` (texto del botón de WhatsApp, tirilla por equipo, la espera y la pestaña oculta)
+- **Falta probar en equipo real**: imprimir con impresora (PC y celular) y la vista del vendedor
 
 ### Sesión 14 — 30 de septiembre de 2026 ✅ Catálogo, de verdad unificado
 
@@ -631,7 +643,7 @@ Rama `feat/modo-isla`. `npm run build` pasa. SQL probado en PGlite reproduciendo
 
 **Fase 2 — Después de abrir:** ventas por vendedor, alertas de stock bajo, exportar datos, devolución parcial, lector de código de barras
 
-**Fase 4 de la caja — anotado por Félix el 7 de noviembre:** la impresión automática de la tirilla traba la pantalla hasta abrir otra pestaña. Debe arreglarse para que imprimir nunca bloquee la caja, ni en PC ni en celular. Diseño en `diseno/caja/` (caja.html, caja.js, LEEME).
+**Fase 4 de la caja:** ✅ hecha el 7 de noviembre (ver arriba). Falta que Félix pruebe la impresión con impresora real en PC y celular.
 
 **Pendiente de infraestructura:** monitoreo de errores (Sentry o similar), exportar/respaldar datos, facturación electrónica DIAN, cobro por suscripción
 

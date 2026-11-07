@@ -76,3 +76,46 @@ export function enlaceWhatsApp(telefono: string | null | undefined, mensaje: str
     const numero = telefonoWhatsApp(telefono)
     return numero ? `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}` : null
 }
+
+/** El botón de WhatsApp de "Venta registrada": con el celular del
+ *  cliente va directo a su chat, y lo dice con su primer nombre */
+export function textoBotonWhatsApp(cliente: string | null | undefined, telefono: string | null | undefined): string {
+    const primerNombre = cliente?.trim().split(/\s+/)[0] ?? ''
+    return primerNombre && telefonoWhatsApp(telefono)
+        ? `Enviar a ${primerNombre} por WhatsApp`
+        : 'Enviar comprobante por WhatsApp'
+}
+
+/* ── Tirilla automática ────────────────────────────────────────────
+   Cada equipo decide en el menú de la caja. Si nunca eligió: prendida
+   en el computador, apagada en el celular (ahí casi nunca hay
+   impresora). En el plan Básico no hay tirilla: eso lo decide la caja. */
+export function tirillaAutomaticaInicial(guardado: string | null, esCelular: boolean): boolean {
+    return guardado !== null ? guardado === '1' : !esCelular
+}
+
+/* La tirilla automática sale cuando "Venta registrada" ya terminó de
+   aparecer. El cuadro de imprimir detiene la página: si llega a mitad
+   de la animación, la caja se queda a medias hasta cambiar de pestaña.
+   Con la caja en otra pestaña, espera a que vuelva a verse. */
+export const ESPERA_TIRILLA_MS = 900
+
+interface Pagina {
+    visibilityState: string
+    addEventListener(tipo: 'visibilitychange', fn: () => void): void
+    removeEventListener(tipo: 'visibilitychange', fn: () => void): void
+}
+
+export function cuandoSeVea(ms = ESPERA_TIRILLA_MS, pagina: Pagina = document): Promise<void> {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            if (pagina.visibilityState === 'visible') { resolve(); return }
+            const alVolver = () => {
+                if (pagina.visibilityState !== 'visible') return
+                pagina.removeEventListener('visibilitychange', alVolver)
+                setTimeout(resolve, ms)
+            }
+            pagina.addEventListener('visibilitychange', alVolver)
+        }, ms)
+    })
+}

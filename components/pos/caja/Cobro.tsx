@@ -105,7 +105,11 @@ export function Cobro({ cobro, narrow }: { cobro: CobroState; narrow: boolean })
                         {online && sinFiar && <p style={{ fontSize: 13, color: 'var(--toul-text-subtle)', margin: '8px 2px 0' }}>No tienes permiso para fiar.</p>}
                     </section>
 
-                    <Seccion titulo={esFiado ? 'Cliente' : 'Cliente (opcional)'}>
+                    <Seccion titulo="Cliente" extra={
+                        <span style={{ fontSize: 12.5, color: esFiado ? 'var(--toul-warning)' : 'var(--toul-text-subtle)' }}>
+                            {esFiado ? 'obligatorio' : 'opcional'}
+                        </span>
+                    }>
                         <Cliente data={data} payment={payment} esFiado={esFiado}
                             puedeCrear={esAdmin || permisos.crear_clientes === 'solo'} />
                     </Seccion>
@@ -400,19 +404,17 @@ function Pie({ cobro, narrow }: { cobro: CobroState; narrow: boolean }) {
     const { boton } = cobro
     const vacio = cart.isEmpty
     const activo = !boton.deshabilitado && !vacio
+    const aprobada = !vacio && !!cobro.necesita && cobro.aprobacion.status === 'approved'
 
     return (
         <div style={{
             flexShrink: 0, padding: `14px ${narrow ? 20 : 24}px calc(${narrow ? 14 : 18}px + env(safe-area-inset-bottom, 0px))`,
             borderTop: '1px solid var(--toul-divider)', background: 'var(--toul-bg)',
         }}>
-            {payment.discountAmount > 0 && (
-                <p className="cj-num" style={{ fontSize: 13, color: 'var(--toul-text-subtle)', margin: '0 0 4px', textAlign: 'right' }}>
-                    {formatCOP(cart.subtotal)} · descuento −{formatCOP(payment.discountAmount)}
-                </p>
-            )}
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-                <span style={{ fontSize: 15, color: 'var(--toul-text-muted)' }}>Total</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                <span className="cj-num" style={{ fontSize: 15, color: 'var(--toul-text-muted)', minWidth: 0 }}>
+                    {payment.discountAmount > 0 ? `Total · desc. −${formatCOP(payment.discountAmount)}` : 'Total'}
+                </span>
                 <Cuenta valor={payment.total} style={{ fontSize: 30, fontWeight: 750, color: 'var(--toul-text)', letterSpacing: '-0.035em' }} />
             </div>
             <button type="button" onClick={cobro.accionar} disabled={!activo} className="cj-btn cj-press-suave"
@@ -426,12 +428,13 @@ function Pie({ cobro, narrow }: { cobro: CobroState; narrow: boolean }) {
                 {boton.espera && <span aria-hidden style={{ width: 16, height: 16, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />}
                 {boton.texto}
             </button>
-            {!vacio && boton.razon && (
+            {!vacio && boton.razon ? (
                 <p style={{ fontSize: 13, color: 'var(--toul-text-subtle)', margin: '9px 0 0', textAlign: 'center' }}>{boton.razon}</p>
-            )}
-            {!narrow && !boton.razon && (
+            ) : aprobada ? (
+                <p style={{ fontSize: 13, fontWeight: 550, color: 'var(--toul-accent)', margin: '9px 0 0', textAlign: 'center' }}>Aprobada por el administrador</p>
+            ) : !narrow && !boton.razon ? (
                 <p style={{ fontSize: 12, color: 'var(--toul-text-faint)', margin: '9px 0 0', textAlign: 'center' }}>Enter para cobrar · / para buscar</p>
-            )}
+            ) : null}
         </div>
     )
 }

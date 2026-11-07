@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { repartir, sugerenciasEfectivo, vuelto, esEfectivo, tipoDeMetodo, type MetodoElegido } from './pagos.ts'
 import { leerPermisos, revisarVenta, descuentoPermitido, permisosDe, PERMISOS_POR_DEFECTO, PERMISOS_ADMIN } from './permisos.ts'
-import { mensajeComprobante, enlaceWhatsApp, telefonoWhatsApp } from './comprobante.ts'
+import { mensajeComprobante, enlaceWhatsApp, telefonoWhatsApp, textoBotonWhatsApp, tirillaAutomaticaInicial, cuandoSeVea } from './comprobante.ts'
 
 const efectivo: MetodoElegido = { methodId: 'e', methodName: 'Efectivo', methodColor: '', escrito: null }
 const nequi = (escrito: number | null): MetodoElegido => ({ methodId: 'n', methodName: 'Nequi', methodColor: '', escrito })
@@ -105,4 +105,52 @@ test('WhatsApp directo al cliente cuando tiene un número que sirve', () => {
     assert.equal(telefonoWhatsApp(null), null)
     assert.equal(enlaceWhatsApp('3001234567', 'Hola'), 'https://wa.me/573001234567?text=Hola')
     assert.equal(enlaceWhatsApp('', 'Hola'), null)
+})
+
+test('El botón de WhatsApp dice a quién va', () => {
+    assert.equal(textoBotonWhatsApp('Marta Gómez', '300 123 4567'), 'Enviar a Marta por WhatsApp')
+    assert.equal(textoBotonWhatsApp('  Ana  ', '3001234567'), 'Enviar a Ana por WhatsApp')
+    assert.equal(textoBotonWhatsApp('Marta', null), 'Enviar comprobante por WhatsApp', 'sin celular, al menú de compartir')
+    assert.equal(textoBotonWhatsApp('Marta', '6012345'), 'Enviar comprobante por WhatsApp', 'un número que no sirve')
+    assert.equal(textoBotonWhatsApp(null, '3001234567'), 'Enviar comprobante por WhatsApp', 'sin nombre')
+})
+
+test('Tirilla automática: lo que eligió el equipo; si nunca eligió, solo en el computador', () => {
+    assert.equal(tirillaAutomaticaInicial(null, false), true, 'computador: prendida')
+    assert.equal(tirillaAutomaticaInicial(null, true), false, 'celular: apagada')
+    assert.equal(tirillaAutomaticaInicial('1', true), true, 'el celular la prendió en el menú')
+    assert.equal(tirillaAutomaticaInicial('0', false), false, 'el computador la apagó en el menú')
+})
+
+function paginaFalsa(visible: boolean) {
+    const oyentes = new Set<() => void>()
+    return {
+        visibilityState: visible ? 'visible' : 'hidden',
+        addEventListener: (_: 'visibilitychange', fn: () => void) => { oyentes.add(fn) },
+        removeEventListener: (_: 'visibilitychange', fn: () => void) => { oyentes.delete(fn) },
+        mostrar() { this.visibilityState = 'visible'; for (const fn of [...oyentes]) fn() },
+        oyentes,
+    }
+}
+
+test('La tirilla automática espera a que "Venta registrada" termine de aparecer', async () => {
+    const pagina = paginaFalsa(true)
+    let lista = false
+    const inicio = Date.now()
+    await cuandoSeVea(40, pagina).then(() => { lista = true })
+    assert.ok(lista)
+    assert.ok(Date.now() - inicio >= 35, 'no sale antes de tiempo')
+})
+
+test('Con la caja en otra pestaña, la tirilla espera a que vuelva a verse', async () => {
+    const pagina = paginaFalsa(false)
+    let lista = false
+    const espera = cuandoSeVea(20, pagina).then(() => { lista = true })
+    await new Promise(r => setTimeout(r, 60))
+    assert.equal(lista, false, 'oculta: no imprime')
+    pagina.mostrar()
+    assert.equal(pagina.oyentes.size, 0, 'deja de escuchar al volver')
+    assert.equal(lista, false, 'al volver todavía espera que se pinte')
+    await espera
+    assert.ok(lista)
 })

@@ -66,8 +66,8 @@ const EJEMPLO_NOTA: Record<TipoMovimiento, string> = {
 
 const QUE_HACE: Record<TipoMovimiento, string> = {
     gasto: 'Resta de lo que ganaste. Lo verás en Reportes, en "En qué gastaste".',
-    meti: 'No cambia lo que ganaste. Lo verás en Reportes, en "Entre tú y tu negocio".',
-    saque: 'No cambia lo que ganaste. Es plata que tomas para ti, y la verás en Reportes, en "Entre tú y tu negocio".',
+    meti: 'No cambia lo que ganaste. Lo verás en Reportes, en "Tú y tu negocio".',
+    saque: 'No cambia lo que ganaste. Es plata que tomas para ti, y la verás en Reportes, en "Tú y tu negocio".',
 }
 
 const TURNO_CERRADO = 'Esto quedó en un turno que ya se cerró: solo puedes cambiar la nota o la categoría. Para corregirlo, anota un movimiento nuevo'
