@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diseño · Menú y TOUL AI</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<style>
+body{margin:0;background:#000;font-family:system-ui,-apple-system,sans-serif;padding:24px 12px}
+.tg{display:flex;gap:6px;justify-content:center;margin-bottom:14px}
+.tg button{font-size:13px;padding:7px 13px;border-radius:8px;border:1px solid #333;background:transparent;color:#999;cursor:pointer}
+.tg button.on{background:#222;color:#fff}
+.sb{width:264px;height:680px;margin:0 auto;background:#0b0b0b;border:6px solid #1a1a1a;border-radius:16px;display:flex;flex-direction:column;padding:18px 12px 12px;color:#fff}
+.logo{display:flex;align-items:center;gap:10px;padding:0 8px 16px}
+.lg{width:30px;height:30px;border-radius:9px;background:#32d74b;color:#0a0a0a;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px}
+.nv{display:flex;align-items:center;justify-content:center;gap:8px;height:42px;border-radius:12px;background:#32d74b;color:#0a0a0a;font-weight:600;font-size:14px;margin:0 2px 14px;box-shadow:0 6px 20px rgba(50,215,75,.22);cursor:pointer;transition:transform .15s}
+.nv:active{transform:scale(.97)}
+.nav{position:relative;flex:1}
+.it{position:relative;z-index:1;display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:11px;font-size:15px;color:rgba(255,255,255,.82);cursor:pointer;transition:color .2s;margin-bottom:2px}
+.it:hover{color:#fff}
+.it i{font-size:19px;color:rgba(255,255,255,.5);transition:color .2s}
+.it.on{color:#fff;font-weight:600}
+.it.on i{color:#32d74b}
+.ind{position:absolute;left:0;right:0;height:40px;border-radius:11px;background:rgba(255,255,255,.08);transition:top .38s cubic-bezier(.23,1,.32,1);z-index:0}
+.bd{margin-left:auto;font-size:11px;font-weight:700;background:#ff453a;color:#fff;border-radius:99px;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.ai{position:relative;border-radius:15px;padding:1px;overflow:hidden;isolation:isolate;cursor:pointer;transition:transform .2s cubic-bezier(.23,1,.32,1),box-shadow .3s}
+.ai::before{content:"";position:absolute;inset:-160%;background:conic-gradient(from 0deg,transparent 0deg,rgba(50,215,75,.15) 40deg,#32d74b 90deg,#9ff5c9 130deg,rgba(50,215,75,.15) 170deg,transparent 210deg,transparent 360deg);animation:spin 4.5s linear infinite;z-index:-1}
+.ai:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(50,215,75,.22)}
+.ai:hover::before{animation-duration:2s}
+.ai:active{transform:scale(.98)}
+.in{position:relative;border-radius:14px;background:radial-gradient(130% 160% at 0% 0%,rgba(50,215,75,.18),rgba(12,14,12,.97) 55%);display:flex;align-items:center;gap:11px;padding:11px 13px;overflow:hidden}
+.in::after{content:"";position:absolute;top:0;bottom:0;width:45%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.09),transparent);animation:sweep 5s ease-in-out infinite}
+.orb{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 35% 30%,rgba(159,245,201,.45),rgba(50,215,75,.18) 55%,rgba(50,215,75,.05));box-shadow:0 0 16px rgba(50,215,75,.35)}
+.spark{color:#eafff2;animation:tw 2.6s ease-in-out infinite}
+.at{font-size:14px;font-weight:600;color:#fff;letter-spacing:-.1px}
+.as{font-size:12px;color:#7ee89a;display:flex;align-items:center;gap:6px;margin-top:2px}
+.pd{width:6px;height:6px;border-radius:50%;background:#32d74b;box-shadow:0 0 0 0 rgba(50,215,75,.6);animation:pl 1.8s ease-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes sweep{0%,62%{left:-60%}100%{left:135%}}
+@keyframes tw{0%,100%{transform:scale(1) rotate(0)}50%{transform:scale(1.14) rotate(14deg)}}
+@keyframes pl{0%{box-shadow:0 0 0 0 rgba(50,215,75,.6)}100%{box-shadow:0 0 0 7px rgba(50,215,75,0)}}
+.acct{display:flex;align-items:center;gap:10px;padding:12px 10px 4px;border-top:1px solid rgba(255,255,255,.06);margin-top:12px;cursor:pointer}
+.avt{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.ph{width:340px;max-width:100%;height:700px;margin:0 auto;background:#0a0a0a;border:6px solid #1a1a1a;border-radius:38px;color:#fff;display:flex;flex-direction:column;overflow:hidden}
+.sc{flex:1;overflow:auto;padding:24px 16px 10px;scrollbar-width:none}
+.h1{font-size:32px;font-weight:700;letter-spacing:-1px}
+.store{display:flex;align-items:center;gap:12px;margin:18px 0 18px;cursor:pointer}
+.store .avt{width:46px;height:46px;font-size:15px}
+.ai.big .in{padding:16px}
+.ai.big .orb{width:44px;height:44px}
+.ai.big .at{font-size:16px}
+.row{display:flex;align-items:center;gap:14px;padding:11px 0;font-size:16px;cursor:pointer;color:#fff}
+.ri{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ri i{font-size:19px;color:rgba(255,255,255,.85)}
+.chev{margin-left:auto;font-size:17px;color:rgba(255,255,255,.3)}
+.sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
+.navb{display:flex;justify-content:space-around;align-items:center;border-top:1px solid rgba(255,255,255,.06);padding:10px 0 16px}
+.ni{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:rgba(255,255,255,.45)}
+.ni.on{color:#32d74b}
+.fab{width:48px;height:48px;border-radius:50%;background:#32d74b;display:flex;align-items:center;justify-content:center;box-shadow:0 0 22px rgba(50,215,75,.4)}
+@media (prefers-reduced-motion:reduce){.ai::before,.in::after,.spark,.pd{animation:none}.ind{transition:none}}
+</style></head><body>
+<div class="tg"><button id="b1" class="on" onclick="show(1)">Barra lateral (PC)</button><button id="b2" onclick="show(2)">Más (celular)</button></div>
+<div id="v1">
+<div class="sb">
+<div class="logo"><div class="lg">T</div><span style="font-size:17px;font-weight:700;letter-spacing:-.3px">TOUL</span><i class="ti ti-layout-sidebar-left-collapse" style="margin-left:auto;font-size:18px;color:rgba(255,255,255,.35)"></i></div>
+<div class="nv"><i class="ti ti-plus" style="font-size:17px"></i>Nueva venta</div>
+<div class="nav" id="nav"><div class="ind" id="ind"></div>
+<div class="it on" onclick="act(this)"><i class="ti ti-home"></i>Inicio</div>
+<div class="it" onclick="act(this)"><i class="ti ti-box"></i>Catálogo</div>
+<div class="it" onclick="act(this)"><i class="ti ti-stack-2"></i>Inventario</div>
+<div class="it" onclick="act(this)"><i class="ti ti-arrows-exchange"></i>Movimientos</div>
+<div class="it" onclick="act(this)"><i class="ti ti-users"></i>Clientes</div>
+<div class="it" onclick="act(this)"><i class="ti ti-truck"></i>Proveedores</div>
+<div class="it" onclick="act(this)"><i class="ti ti-chart-bar"></i>Reportes</div>
+<div class="it" onclick="act(this)"><i class="ti ti-building-store"></i>Punto físico<span class="bd">2</span></div>
+</div>
+<div class="ai"><div class="in"><div class="orb"><i class="ti ti-sparkles spark" style="font-size:17px"></i></div><div><div class="at">Pregúntale a TOUL AI</div><div class="as"><span class="pd"></span>1 observación nueva</div></div></div></div>
+<div class="acct"><div class="avt">TP</div><div style="min-width:0"><div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Tienda de perfumes</div><div style="font-size:12px;color:rgba(255,255,255,.45)">Plan Pro</div></div><i class="ti ti-selector" style="margin-left:auto;font-size:16px;color:rgba(255,255,255,.35)"></i></div>
+</div></div>
+<div id="v2" style="display:none"><div class="ph"><div class="sc">
+<div class="h1">Más</div>
+<div class="store"><div class="avt">TP</div><div><div style="font-size:16px;font-weight:600">Tienda de perfumes</div><div style="font-size:13px;color:rgba(255,255,255,.45)">Plan Pro · Ajustes</div></div><i class="ti ti-chevron-right chev"></i></div>
+<div class="ai big"><div class="in"><div class="orb"><i class="ti ti-sparkles spark" style="font-size:22px"></i></div><div><div class="at">Pregúntale a TOUL AI</div><div class="as"><span class="pd"></span>Tienes 1 observación nueva</div></div><i class="ti ti-chevron-right" style="margin-left:auto;font-size:18px;color:rgba(255,255,255,.4)"></i></div></div>
+<div style="margin-top:14px">
+<div class="row"><span class="ri"><i class="ti ti-stack-2"></i></span>Inventario<i class="ti ti-chevron-right chev"></i></div>
+<div class="row"><span class="ri"><i class="ti ti-users"></i></span>Clientes<i class="ti ti-chevron-right chev"></i></div>
+<div class="row"><span class="ri"><i class="ti ti-truck"></i></span>Proveedores<i class="ti ti-chevron-right chev"></i></div>
+<div class="row"><span class="ri"><i class="ti ti-chart-bar"></i></span>Reportes<i class="ti ti-chevron-right chev"></i></div>
+<div class="row"><span class="ri"><i class="ti ti-building-store"></i></span>Punto físico<span class="bd" style="margin-left:auto">2</span><i class="ti ti-chevron-right" style="font-size:17px;color:rgba(255,255,255,.3)"></i></div>
+<div class="sep"></div>
+<div class="row"><span class="ri"><i class="ti ti-settings"></i></span>Ajustes<i class="ti ti-chevron-right chev"></i></div>
+<div class="row" style="color:#ff453a"><span class="ri"><i class="ti ti-logout" style="color:#ff453a"></i></span>Cerrar sesión</div>
+</div></div>
+<div class="navb"><div class="ni"><i class="ti ti-home" style="font-size:21px"></i>Inicio</div><div class="ni"><i class="ti ti-box" style="font-size:21px"></i>Catálogo</div><div class="fab"><i class="ti ti-plus" style="font-size:23px;color:#0a0a0a"></i></div><div class="ni"><i class="ti ti-arrows-exchange" style="font-size:21px"></i>Movimientos</div><div class="ni on"><i class="ti ti-dots" style="font-size:21px"></i>Más</div></div>
+</div></div>
+<script>
+const ind=document.getElementById('ind');
+function act(el){document.querySelectorAll('.it').forEach(i=>i.classList.remove('on'));el.classList.add('on');ind.style.top=el.offsetTop+'px'}
+act(document.querySelector('.it.on'));
+function show(n){document.getElementById('v1').style.display=n===1?'block':'none';document.getElementById('v2').style.display=n===2?'block':'none';document.getElementById('b1').className=n===1?'on':'';document.getElementById('b2').className=n===2?'on':''}
+</script>
+</body></html>

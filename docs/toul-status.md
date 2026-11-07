@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 7 de noviembre de 2026 (Movimientos, paso 3 — pantallas)*
+*Última actualización: 7 de noviembre de 2026 (Menú nuevo, Punto físico y TOUL AI)*
 
 ---
 
@@ -416,6 +416,19 @@ Diseño en `diseno/movimientos/` (prototipo + LEEME). Con esto quedan los 3 paso
 - **Caja**: "Gasto" en el menú de la persona, solo con el permiso "Registrar gastos", sin Plata mía y sin internet no deja
 - **Reportes**: "Tú y tu negocio" dentro de Tu plata (Metiste / Sacaste para ti). Desde el 7 de noviembre sale siempre, con los $0 en gris tenue (decisión de Félix: es informativo)
 - **Pruebas**: 8 chequeos nuevos en `movimientos.test.mjs`. En `offline-conteo.test.mjs` la prueba "compra sin método queda General" ahora espera que se rechace (es la regla nueva, aprobada)
+
+### 7 de noviembre de 2026 — Menú nuevo: Ventas y Gastos dentro de Movimientos ✅ publicado
+
+Diseño en `diseno/menu/menu.html`. Íconos de Lucide (no los del prototipo); degradados y brillos de TOUL AI como el prototipo. No se tocó `app/(app)/layout.tsx`; la barra lateral no se cierra (decisión de Félix, por ahora).
+
+- **Barra lateral (PC)** (`components/layout/BottomNav.tsx`): "Nueva venta" igual; una sola lista sin títulos: Inicio, Catálogo, Inventario, Movimientos, Clientes, Proveedores, Reportes y Punto físico (solo Pro, con el contador rojo de aprobaciones). Filas de 40 px, texto blanco al 82 %, íconos al 50 %; el activo en blanco fuerte con el ícono verde y un fondo que se desliza con resorte. Movimientos queda marcado también en Ventas; Punto físico en Turnos y Aprobaciones
+- **Botón de TOUL AI** (`components/layout/BotonToulAI.tsx`), encima de la tienda: borde de luz que gira (4,5 s; 2 s con el mouse encima, sin saltar), brillo verde desde la esquina, brillo blanco que cruza cada 5 s, chispa que respira. Con "reducir movimiento" queda quieto. Colores nuevos en `globals.css`: `--toul-accent-menta` (#9ff5c9) y `--toul-accent-claro` (#7ee89a)
+- **"1 observación nueva"**: es la observación que el Inicio ya calculó (guardada en el equipo, vale 6 horas). Cuenta como nueva hasta abrirla en el Inicio o entrar a TOUL AI (se guarda cuál se vio en `toul-ai-vista:<tienda>`). El menú nunca la calcula. Con una nueva, el botón abre el chat con la pregunta sobre ella ya escrita. Si el equipo no tiene la observación guardada, no sale la línea
+- **Celular**: abajo Inicio, Catálogo, +, Movimientos (en lugar de Ventas) y Más. "Más" es una pantalla completa (`app/(app)/mas/page.tsx`): la tienda (lleva a Ajustes), TOUL AI grande ("Tienes 1 observación nueva"), Inventario, Clientes, Proveedores, Reportes, Punto físico, Ajustes y Cerrar sesión en rojo. Lo que se abre desde ahí deja "Más" marcado abajo. El punto rojo de aprobaciones sigue en "Más"
+- **Punto físico** (`app/(app)/punto-fisico/page.tsx`): Turnos de caja ("Caja abierta desde las 9:12 a. m." o "Caja cerrada") y Aprobaciones ("2 por revisar" o "Nada pendiente", con el contador). Turnos y Aprobaciones tienen flecha para volver
+- **Ventas en Movimientos**: tocar una venta, devolución o anulación abre la venta completa ahí mismo (`components/ventas/VentaAbierta.tsx`: detalle, tirilla, devolver una parte, anular, cambiar el cliente; la misma de Ventas). Con el filtro Ventas sale "Ver todas las ventas" (las fiadas sin abono y las anuladas no son plata que se movió), que abre Ventas en el mismo periodo. Ventas sigue igual (búsqueda por producto y vendedor, anuladas, filtros) con una flecha para volver a Movimientos. En el detalle de un movimiento se quitó "Ver la venta"
+- **Gastos en Movimientos**: con el filtro Gastos sale "Gastaste este mes $X" y las categorías con su monto para filtrar (lista fija, como antes). Movimientos entiende `?categoria=` y `?nuevo=gasto` (abre el formulario). `/expenses` quedó como redirección a Movimientos > Gastos con el mismo periodo y categoría. Llegar con `tipo=gastos` (Inicio, Reportes) abre el filtro Gastos en vez de la píldora; con una cuenta puesta sigue la píldora
+- **Enlaces**: Reportes (Gastos y cada categoría) → Movimientos; "Gasto" del Inicio → Movimientos con el formulario abierto. Los de Reportes a Ventas siguen
 
 ### 7 de noviembre de 2026 — Inicio: resumen nuevo ✅ publicado
 

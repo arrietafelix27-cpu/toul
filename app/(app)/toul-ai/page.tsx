@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useStore } from '@/lib/hooks/useData'
+import { marcarObservacionVista } from '@/components/layout/BotonToulAI'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Sparkles, Brain, User, ArrowLeft, Trash2, TrendingUp, Wallet, Package, Target, AlertTriangle } from 'lucide-react'
 import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
@@ -160,6 +161,9 @@ function ChatInterface({ storeId, storeName }: { storeId: string, storeName: str
     useEffect(() => {
         inputRef.current?.focus()
     }, [])
+
+    // Entrar a TOUL AI cuenta como ver la observación: el menú deja de decir "nueva"
+    useEffect(() => { marcarObservacionVista(storeId) }, [storeId])
 
     // Si se llega desde una observación del inicio, la pregunta ya viene escrita
     const searchParams = useSearchParams()

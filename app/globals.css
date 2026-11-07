@@ -37,6 +37,9 @@
   --toul-accent-hover: #28b73f;
   --toul-accent-dim: rgba(50, 215, 75, 0.12);
   --toul-accent-glow: rgba(50, 215, 75, 0.25);
+  /* Brillos de TOUL AI: menta para el borde que gira, verde claro para el texto */
+  --toul-accent-menta: #9ff5c9;
+  --toul-accent-claro: #7ee89a;
   --toul-secondary: #bf5af2;
 
   /* ─── Semantic (iOS system palette) ─── */

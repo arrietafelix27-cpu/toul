@@ -4,12 +4,13 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Receipt, ShoppingBag, Truck, Undo2, X, type LucideIcon } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, ChevronRight, Megaphone, Receipt, ShoppingBag, Truck, Undo2, X, Zap, type LucideIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatPrecio } from '@/lib/utils'
-import { diasEntre, enColombia, formatoColombia, periodoDeDireccion, rangoPeriodo, tramoDeDias, ZONA_COLOMBIA, type Periodo, type Rango } from '@/lib/periodos'
+import { diasEntre, enColombia, formatoColombia, periodoDeDireccion, periodoEnDireccion, rangoPeriodo, textoRango, tramoDeDias, ZONA_COLOMBIA, type Periodo, type Rango } from '@/lib/periodos'
 import { nombreMetodo } from '@/lib/format/text'
-import { nombreCategoria } from '@/lib/types'
+import { nombreCategoria, type SaleDetailData } from '@/lib/types'
 import { useStore } from '@/lib/hooks/useData'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { SelectorPeriodo } from '@/components/dashboard/Desplegable'
@@ -17,6 +18,7 @@ import { SPRING_PRESS } from '@/components/ui'
 import { PLATA_MIA } from '@/components/movimientos/CuentaChips'
 import { RegistrarMovimiento, TIPOS_MOVIMIENTO, type MovimientoAEditar, type MovimientoGuardado, type TipoMovimiento } from '@/components/movimientos/RegistrarMovimiento'
 import { DetalleMovimiento, type Movimiento } from '@/components/movimientos/DetalleMovimiento'
+import { VentaAbierta, cargarVenta } from '@/components/ventas/VentaAbierta'
 
 /* ══════════════════════════════════════════════════════════════
    Movimientos: toda la plata del negocio, día por día.
@@ -28,6 +30,10 @@ import { DetalleMovimiento, type Movimiento } from '@/components/movimientos/Det
    Desde Reportes (o cualquier número que traiga aquí) se llega con
    un filtro puesto: sale como una píldora más, con su total, para
    ver que suma lo mismo. Al quitarla, vuelve la vista normal.
+
+   Aquí viven también las ventas y los gastos (ya no están en el
+   menú): tocar una venta la abre completa, con devolver y anular,
+   y con "Gastos" se ve cuánto se gastó y en qué categoría.
    ══════════════════════════════════════════════════════════════ */
 
 const supabase = createClient()
@@ -78,10 +84,31 @@ const CSS = `
 .mv-monto { margin-left: auto; padding-left: 8px; flex-shrink: 0; font-size: 15px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .mv-vacio { padding: 30px 0; text-align: center; font-size: 13px; color: var(--toul-text-subtle); }
 
+/* Gastos: cuánto y en qué */
+.mv-gastos { margin: 16px 0 2px; }
+.mv-gastos-rotulo { margin: 0; font-size: 13px; color: var(--toul-text-subtle); }
+.mv-gastos-total { margin: 4px 0 0; font-size: 30px; font-weight: 700; letter-spacing: -1px; line-height: 1.1;
+    color: var(--toul-text); font-variant-numeric: tabular-nums; }
+.mv-cats { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.mv-cat { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; border: none; font: inherit;
+    font-size: 13px; cursor: pointer; white-space: nowrap; color: var(--toul-text-muted);
+    background: color-mix(in srgb, var(--toul-text) 6%, transparent);
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    transition: background-color 200ms var(--toul-ease-emil), color 200ms var(--toul-ease-emil), transform 140ms var(--toul-ease-emil); }
+.mv-cat b { font-weight: 600; color: var(--toul-text); font-variant-numeric: tabular-nums; transition: color 200ms var(--toul-ease-emil); }
+.mv-cat:active { transform: scale(0.97); }
+.mv-cat[aria-pressed="true"] { background: var(--toul-text); color: var(--toul-bg); }
+.mv-cat[aria-pressed="true"] b { color: var(--toul-bg); }
+@media (hover: hover) and (pointer: fine) { .mv-cat:not([aria-pressed="true"]):hover { background: color-mix(in srgb, var(--toul-text) 9%, transparent); } }
+
+/* Ventas: las fiadas sin abono y las anuladas no son plata que se movió; están en Ventas */
+.mv-todas { text-decoration: none; margin-top: 10px; }
+.mv-abriendo { opacity: 0.55; }
+
 /* La fila que se acaba de guardar entra desde arriba */
 .mv-nueva { animation: mv-entra 500ms cubic-bezier(0.23, 1, 0.32, 1); }
 @keyframes mv-entra { from { opacity: 0; transform: translateY(-10px); } }
-@media (prefers-reduced-motion: reduce) { .mv-nueva { animation: none; } .mv-fila:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .mv-nueva { animation: none; } .mv-fila:active, .mv-cat:active { transform: none; } }
 `
 
 /** Salidas de plata. Todo lo demás entra */
@@ -96,6 +123,14 @@ const ICONOS: Record<string, LucideIcon> = {
     expense: Receipt, purchase: Truck, provider_payment: Truck,
     owner_in: ArrowDownLeft, owner_out: ArrowUpRight,
     transfer_in: ArrowLeftRight, transfer_out: ArrowLeftRight, capital: ArrowDownLeft,
+}
+
+/** Cada categoría de gasto con su ícono, todas en el mismo gris */
+const ICONO_CATEGORIA: Record<string, LucideIcon> = {
+    publicidad: Megaphone, transporte: Truck, compras: ShoppingBag, servicios: Zap, otros: Receipt,
+}
+const TEXTO_PERIODO: Partial<Record<Periodo, string>> = {
+    today: 'hoy', week: 'esta semana', month: 'este mes', year: 'este año', total: 'en total',
 }
 
 type Filtro = 'todo' | 'ventas' | 'abonos' | 'gastos' | 'compras' | 'tu'
@@ -182,22 +217,33 @@ function Movimientos() {
         const p = periodoDeDireccion(params)
         const tipo = params.get('tipo')
         const metodo = params.get('metodo')
+        const categoria = params.get('categoria')?.trim() ?? ''
+        // Los gastos (con o sin categoría) abren la vista de Gastos, que
+        // ya trae su total; con una cuenta puesta, sigue siendo la píldora
+        const gastos = !metodo && (tipo === 'gastos' || (!tipo && !!categoria))
         return {
             periodo: (p?.periodo ?? 'month') as Periodo,
             rango: p?.periodo === 'custom' ? tramoDeDias(p.desde, p.hasta) as Rango : null,
-            deAfuera: ES_DE_AFUERA(tipo) || metodo ? { tipo: ES_DE_AFUERA(tipo) ? tipo : 'todos' as TipoDeAfuera, metodo: metodo ?? '' } : null,
+            filtro: (gastos ? 'gastos' : 'todo') as Filtro,
+            categoria: !tipo || tipo === 'gastos' ? categoria : '',
+            deAfuera: gastos ? null
+                : ES_DE_AFUERA(tipo) || metodo ? { tipo: ES_DE_AFUERA(tipo) ? tipo : 'todos' as TipoDeAfuera, metodo: metodo ?? '' } : null,
         }
     })
     const [periodo, setPeriodo] = useState<Periodo>(inicial.periodo)
     const [rango, setRango] = useState<Rango>(inicial.rango)
-    const [filtro, setFiltro] = useState<Filtro>('todo')
+    const [filtro, setFiltro] = useState<Filtro>(inicial.filtro)
     const [deAfuera, setDeAfuera] = useState(inicial.deAfuera)
+    const [categoria, setCategoria] = useState(inicial.categoria)
     const [limite, setLimite] = useState(POR_PAGINA)
 
     const [anotar, setAnotar] = useState<TipoMovimiento | null>(null)
     const [editar, setEditar] = useState<MovimientoAEditar | null>(null)
     const [abierto, setAbierto] = useState<Movimiento | null>(null)
     const [nueva, setNueva] = useState<{ paymentId?: string; expenseId?: string } | null>(null)
+    // Una venta tocada se abre completa, como en Ventas
+    const [venta, setVenta] = useState<SaleDetailData | null>(null)
+    const [abriendo, setAbriendo] = useState<string | null>(null)
 
     const tramo = useMemo(() => rangoPeriodo(periodo, rango), [periodo, rango])
 
@@ -224,7 +270,26 @@ function Movimientos() {
         }
     }, { revalidateOnFocus: false })
 
-    const { visibles, total } = useMemo(() => {
+    // La categoría de cada gasto está en la tabla de gastos: se pide para
+    // todos los del periodo, porque el reparto tiene que sumarlos todos
+    const verGastos = deAfuera ? deAfuera.tipo === 'gastos' : filtro === 'gastos'
+    const idsGastos = useMemo(() => [...new Set((data ?? [])
+        .filter(f => f.type === 'expense' && f.reference_id).map(f => f.reference_id as string))].sort(), [data])
+    const { data: categorias, mutate: mutateCategorias } = useSWR(
+        storeId && verGastos && idsGastos.length ? ['categorias-gastos', storeId, idsGastos.join(',')] : null,
+        async () => {
+            const mapa = new Map<string, string>()
+            for (let i = 0; i < idsGastos.length; i += 150) {
+                const { data, error } = await supabase.from('expenses').select('id, category').in('id', idsGastos.slice(i, i + 150))
+                if (error) throw error
+                for (const g of (data ?? []) as { id: string; category: string | null }[]) mapa.set(g.id, g.category?.trim() || 'otros')
+            }
+            return mapa
+        },
+        { revalidateOnFocus: false, keepPreviousData: true },
+    )
+
+    const { visibles, total, porCategoria } = useMemo(() => {
         const filas = data ?? []
         // Una venta anulada deja su entrada y su devolución: se anulan entre
         // sí y no cuentan como venta, igual que en Reportes
@@ -263,10 +328,22 @@ function Movimientos() {
                 }
             })
         }
+        // Gastos: el reparto sale de todos; la lista y el total, de la categoría elegida
+        const porCategoria: { valor: string; monto: number }[] = []
+        if (verGastos && categorias) {
+            const suma = new Map<string, number>()
+            for (const f of lista) {
+                const c = (f.reference_id && categorias.get(f.reference_id)) || 'otros'
+                suma.set(c, (suma.get(c) ?? 0) + Math.abs(f.signed))
+            }
+            suma.forEach((monto, valor) => porCategoria.push({ valor, monto: Math.round(monto) }))
+            porCategoria.sort((a, b) => b.monto - a.monto)
+            if (categoria) lista = lista.filter(f => ((f.reference_id && categorias.get(f.reference_id)) || 'otros') === categoria)
+        }
         // El total de la píldora: lo que suma ese número allá (Metí y Saqué plata no)
         const cuentan = lista.filter(f => !DE_TU_NEGOCIO.includes(f.type))
-        return { visibles: lista, total: Math.round(cuentan.reduce((s, f) => s + Math.abs(f.signed), 0)) }
-    }, [data, filtro, deAfuera])
+        return { visibles: lista, total: Math.round(cuentan.reduce((s, f) => s + Math.abs(f.signed), 0)), porCategoria }
+    }, [data, filtro, deAfuera, verGastos, categorias, categoria])
 
     const pagina = useMemo(() => visibles.slice(0, limite), [visibles, limite])
     const detalles = useDetalles(pagina)
@@ -338,13 +415,14 @@ function Movimientos() {
         return () => obs.disconnect()
     }, [hayMas])
 
-    const verFiltro = useCallback((f: Filtro) => { setFiltro(f); setDeAfuera(null); setLimite(POR_PAGINA) }, [])
+    const verFiltro = useCallback((f: Filtro) => { setFiltro(f); setDeAfuera(null); setCategoria(''); setLimite(POR_PAGINA) }, [])
+    const verCategoria = useCallback((c: string) => { setCategoria(c); setLimite(POR_PAGINA) }, [])
     const cambiarPeriodo = useCallback((p: Periodo) => { setPeriodo(p); setLimite(POR_PAGINA) }, [])
     // Quitar el filtro que vino de afuera: vuelve la vista normal
     const quitarDeAfuera = useCallback(() => {
-        setDeAfuera(null); setFiltro('todo'); setLimite(POR_PAGINA)
+        setDeAfuera(null); setFiltro('todo'); setCategoria(''); setLimite(POR_PAGINA)
         const url = new URL(window.location.href)
-        url.searchParams.delete('tipo'); url.searchParams.delete('metodo')
+        url.searchParams.delete('tipo'); url.searchParams.delete('metodo'); url.searchParams.delete('categoria')
         window.history.replaceState(null, '', url.pathname + (url.search || ''))
     }, [])
 
@@ -352,16 +430,44 @@ function Movimientos() {
     const guardado = useCallback((r: MovimientoGuardado) => {
         if (!r.editado) {
             // Que se vea: si el filtro no la muestra, se vuelve a "Todo"
-            const seVe = !deAfuera && (filtro === 'todo' || (filtro === 'gastos' && r.tipo === 'gasto') || (filtro === 'tu' && r.tipo !== 'gasto'))
-            if (!seVe) { setDeAfuera(null); setFiltro('todo') }
+            const seVe = !deAfuera && !categoria && (filtro === 'todo' || (filtro === 'gastos' && r.tipo === 'gasto') || (filtro === 'tu' && r.tipo !== 'gasto'))
+            if (!seVe) { setDeAfuera(null); setFiltro('todo'); setCategoria('') }
             setNueva({ paymentId: r.paymentId, expenseId: r.expenseId })
             setTimeout(() => setNueva(null), 2300)
         } else if (r.expenseId) {
             // Un gasto corregido puede cambiar de categoría
             detalles.olvidar([r.expenseId])
+            mutateCategorias()
         }
         mutate()
-    }, [deAfuera, filtro, mutate, detalles])
+    }, [deAfuera, filtro, categoria, mutate, detalles, mutateCategorias])
+
+    // Desde el Inicio ("Gasto") se llega con ?nuevo=gasto: el formulario abre de una
+    useEffect(() => {
+        const url = new URL(window.location.href)
+        if (url.searchParams.get('nuevo') !== 'gasto') return
+        const t = setTimeout(() => {
+            url.searchParams.delete('nuevo')
+            window.history.replaceState(null, '', url.pathname + url.search)
+            setEditar(null)
+            setAnotar('gasto')
+        }, 0)
+        return () => clearTimeout(t)
+    }, [])
+
+    // Una venta, una devolución o una anulación abren la venta completa.
+    // Si la venta ya no está, se ve el movimiento solo
+    const tocar = useCallback(async (m: Movimiento) => {
+        if ((m.type === 'sale' || m.type === 'sale_refund') && m.reference_id && storeId) {
+            setAbriendo(m.id)
+            const encontrada = await cargarVenta(storeId, m.reference_id)
+            setAbriendo(null)
+            if (encontrada) { setVenta(encontrada); return }
+        }
+        setAbierto(m)
+    }, [storeId])
+    const cerrarVenta = useCallback(() => setVenta(null), [])
+    const ventaCambio = useCallback(() => { mutate() }, [mutate])
 
     const abrirEdicion = useCallback((m: Movimiento) => {
         setAbierto(null)
@@ -431,6 +537,47 @@ function Movimientos() {
                 ))}
             </div>
 
+            {verGastos && !isLoading && (
+                <div className="mv-gastos">
+                    <p className="mv-gastos-rotulo">
+                        Gastaste{categoria ? ` en ${nombreCategoria(categoria).toLowerCase()}` : ''}{' '}
+                        {periodo === 'custom' && tramo.from && tramo.to
+                            ? `del ${textoRango(new Date(tramo.from), new Date(tramo.to))}`
+                            : TEXTO_PERIODO[periodo] ?? ''}
+                    </p>
+                    <p className="mv-gastos-total">{formatPrecio(total)}</p>
+                    {porCategoria.length > 0 && (
+                        <div className="mv-cats" role="group" aria-label="Categoría">
+                            {categoria && (
+                                <button type="button" className="mv-cat" onClick={() => verCategoria('')}>Todas</button>
+                            )}
+                            {porCategoria.map(c => {
+                                const Icono = ICONO_CATEGORIA[c.valor] ?? Receipt
+                                const activa = categoria === c.valor
+                                return (
+                                    <button key={c.valor} type="button" className="mv-cat" aria-pressed={activa}
+                                        onClick={() => verCategoria(activa ? '' : c.valor)}>
+                                        <Icono size={14} strokeWidth={2} aria-hidden />
+                                        {nombreCategoria(c.valor)} <b>{formatPrecio(c.monto)}</b>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {(deAfuera ? deAfuera.tipo === 'ventas' : filtro === 'ventas') && (
+                <Link href={`/ventas?${periodoEnDireccion(periodo, tramo)}`} className="mv-fila mv-todas">
+                    <span className="mv-icono"><Receipt size={18} strokeWidth={2} style={{ color: 'var(--toul-text-muted)' }} /></span>
+                    <span className="mv-textos">
+                        <span className="mv-t">Ver todas las ventas</span>
+                        <span className="mv-s">También las fiadas sin abono y las anuladas</span>
+                    </span>
+                    <ChevronRight size={18} style={{ color: 'var(--toul-text-faint)', flexShrink: 0 }} aria-hidden />
+                </Link>
+            )}
+
             {isLoading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 22 }}>
                     {[0, 1, 2, 3, 4].map(i => <div key={i} className="skeleton" style={{ height: 56, borderRadius: 14 }} />)}
@@ -445,7 +592,8 @@ function Movimientos() {
                             {filas.map(m => {
                                 const entra = m.signed > 0
                                 return (
-                                    <button key={m.id} type="button" className={`mv-fila${esNueva(m) ? ' mv-nueva' : ''}`} onClick={() => setAbierto(m)}>
+                                    <button key={m.id} type="button" onClick={() => tocar(m)} aria-busy={abriendo === m.id}
+                                        className={`mv-fila${esNueva(m) ? ' mv-nueva' : ''}${abriendo === m.id ? ' mv-abriendo' : ''}`}>
                                         <span className="mv-icono">
                                             <m.Icon size={18} strokeWidth={2} style={{ color: entra ? 'var(--toul-accent)' : 'var(--toul-text-muted)' }} />
                                         </span>
@@ -473,6 +621,8 @@ function Movimientos() {
 
             <DetalleMovimiento movimiento={abierto} onCerrar={() => setAbierto(null)}
                 onEditar={abrirEdicion} onBorrado={() => { setAbierto(null); mutate() }} onVerPadre={verPadre} />
+
+            <VentaAbierta venta={venta} storeId={storeId} onCerrar={cerrarVenta} onCambio={ventaCambio} />
         </div>
     )
 }

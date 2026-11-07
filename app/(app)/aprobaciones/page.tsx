@@ -4,7 +4,8 @@ import { useState } from 'react'
 import useSWR, { useSWRConfig } from 'swr'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { Ban, CreditCard, Check, X, Inbox, Undo2, Tag, Percent } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, Ban, CreditCard, Check, X, Inbox, Undo2, Tag, Percent } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useSessionContext } from '@/lib/isla/useSession'
@@ -102,7 +103,12 @@ export default function AprobacionesPage() {
     return (
         <div className="px-4 md:px-8 pt-6 pb-8" style={{ position: 'relative', maxWidth: 860 }}>
             <div className="toul-ambient" />
-            <div className="mb-5" style={{ position: 'relative' }}>
+            <div className="mb-5 flex items-center gap-3" style={{ position: 'relative' }}>
+                <Link href="/punto-fisico" aria-label="Volver a Punto físico"
+                    className="flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                    style={{ width: 36, height: 36, borderRadius: 12, background: 'color-mix(in srgb, var(--toul-text) 7%, transparent)', color: 'var(--toul-text-muted)' }}>
+                    <ArrowLeft size={18} strokeWidth={2} />
+                </Link>
                 <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Aprobaciones</h1>
             </div>
 

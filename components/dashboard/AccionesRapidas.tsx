@@ -8,6 +8,8 @@ import { Sheet } from '@/components/isla/Sheet'
 import { DevolucionSheet } from '@/components/ventas/DevolucionSheet'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 import { PANEL_CSS } from './panelStyles'
+import { useStore } from '@/lib/hooks/useData'
+import { marcarObservacionVista } from '@/components/layout/BotonToulAI'
 import type { AIInsight } from '@/lib/types'
 
 /* ══════════════════════════════════════════════════════════════
@@ -23,7 +25,7 @@ import type { AIInsight } from '@/lib/types'
    ══════════════════════════════════════════════════════════════ */
 
 const ACCIONES = [
-    { key: 'gasto', label: 'Gasto', Icon: Receipt, href: '/expenses?nuevo=1' },
+    { key: 'gasto', label: 'Gasto', Icon: Receipt, href: '/movimientos?nuevo=gasto' },
     { key: 'compra', label: 'Compra', Icon: Truck, href: '/inventory/purchase' },
     { key: 'devolucion', label: 'Devolución', Icon: Undo2, href: null },
 ] as const
@@ -158,6 +160,9 @@ const TONO: Record<string, { color: string; dim: string }> = {
 export function ObservacionAI({ insight, loading }: { insight: AIInsight | null; loading: boolean }) {
     const [abierta, setAbierta] = useState(false)
     const cerrar = useCallback(() => setAbierta(false), [])
+    const { data: store } = useStore()
+    // Abrirla la marca como vista: el menú deja de decir "1 observación nueva"
+    const abrir = useCallback(() => { setAbierta(true); marcarObservacionVista(store?.id) }, [store?.id])
     const visible = !loading && !!insight && insight.id !== 'starting'
     const tono = TONO[insight?.severity ?? 'info'] ?? TONO.info
 
@@ -166,7 +171,7 @@ export function ObservacionAI({ insight, loading }: { insight: AIInsight | null;
             <style>{CSS}</style>
             <AnimatePresence initial={false}>
                 {visible && (
-                    <motion.button type="button" className="oa-linea" onClick={() => setAbierta(true)}
+                    <motion.button type="button" className="oa-linea" onClick={abrir}
                         initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.12 } }}
                         transition={{ duration: 0.22, ease: EASE_OUT_EMIL }}>
                         <Sparkles size={18} style={{ color: 'var(--toul-accent)', flexShrink: 0 }} />

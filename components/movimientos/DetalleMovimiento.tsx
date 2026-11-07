@@ -15,8 +15,9 @@ import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
    El detalle de un movimiento de Movimientos.
 
    Gastos, Metí plata y Saqué plata se corrigen o se borran aquí.
-   Ventas, compras, abonos y pagos a proveedor llevan a su pantalla:
-   ahí es donde se anulan o se corrigen, con todo lo que arrastran.
+   Compras, abonos y pagos a proveedor llevan a su pantalla: ahí es
+   donde se anulan o se corrigen, con todo lo que arrastran. Las
+   ventas no pasan por aquí: Movimientos abre la venta completa.
    ══════════════════════════════════════════════════════════════ */
 
 /** Un movimiento ya listo para mostrar */
@@ -118,7 +119,6 @@ export function DetalleMovimiento({ movimiento, onCerrar, onEditar, onBorrado, o
     const corrige = !!m && SE_CORRIGE_AQUI(m)
     const entra = !!m && m.signed > 0
     const enlace = !m ? null
-        : (m.type === 'sale' || m.type === 'sale_refund') && m.reference_id ? { href: `/ventas?venta=${m.reference_id}`, texto: 'Ver la venta' }
         : m.type === 'purchase' && m.reference_id ? { href: `/inventory/compras?compra=${m.reference_id}`, texto: 'Ver la compra' }
         : m.type === 'provider_payment' && m.reference_id ? { href: `/providers/${m.reference_id}`, texto: 'Ver el proveedor' }
         : esAbono && cliente && cliente.ref === m.reference_id ? { href: `/customers/${cliente.id}`, texto: 'Ver el cliente' }

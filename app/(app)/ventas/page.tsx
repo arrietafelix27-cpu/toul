@@ -4,14 +4,10 @@ import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange } from '@/lib/utils'
-import { ZONA_COLOMBIA, instanteDeDia, periodoDeDireccion } from '@/lib/periodos'
+import { ZONA_COLOMBIA, instanteDeDia, periodoDeDireccion, periodoEnDireccion } from '@/lib/periodos'
 import { nombreMetodo } from '@/lib/format/text'
-import { Clock, Ban, Search, SlidersHorizontal, Receipt } from 'lucide-react'
+import { ArrowLeft, Clock, Ban, Search, SlidersHorizontal, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { VoidSaleDialog } from '@/components/isla/VoidSaleDialog'
-import { Sheet } from '@/components/isla/Sheet'
-import { PANEL_CSS } from '@/components/dashboard/panelStyles'
-import { explainError } from '@/lib/errors'
 import type { SaleVoid } from '@/lib/isla/types'
 import { motion, AnimatePresence } from 'framer-motion'
 import { staggerContainer, staggerItem, fadeUp, t } from '@/lib/motion'
@@ -20,8 +16,7 @@ import { useStore } from '@/lib/hooks/useData'
 import useSWR from 'swr'
 import type { SaleDetailData as VentaData } from '@/lib/types'
 import { SALE_DETAIL_SELECT } from '@/lib/types'
-import { SaleDetail } from '@/components/ventas/SaleDetail'
-import { DevolucionSheet } from '@/components/ventas/DevolucionSheet'
+import { VentaAbierta, cargarVenta } from '@/components/ventas/VentaAbierta'
 
 type Period = 'today' | 'week' | 'month' | 'year' | 'total' | 'custom'
 
@@ -66,6 +61,11 @@ const VT_CSS = `
     .vt-num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 @media (hover: hover) and (pointer: fine) { .vt-fila:hover { background: var(--toul-surface-3); } }
+.vt-volver { width: 36px; height: 36px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--toul-text) 7%, transparent); color: var(--toul-text-muted);
+    -webkit-tap-highlight-color: transparent; transition: transform 140ms var(--toul-ease-emil), background-color 160ms var(--toul-ease-emil); }
+.vt-volver:active { transform: scale(0.94); }
+@media (hover: hover) and (pointer: fine) { .vt-volver:hover { background: color-mix(in srgb, var(--toul-text) 10%, transparent); color: var(--toul-text); } }
 `
 
 type Kind = 'todas' | 'contado' | 'credito' | 'descuento'
@@ -111,56 +111,11 @@ function Ventas() {
     const [hasMore, setHasMore] = useState(true)
     // Las ventas siguen cargando solas al llegar al final de la lista
     const sentinelRef = useRef<HTMLDivElement | null>(null)
-    const [customerEdit, setCustomerEdit] = useState<VentaData | null>(null)
-    const [savingCustomer, setSavingCustomer] = useState(false)
-
-    const { data: customerList } = useSWR(
-        storeId && customerEdit ? ['clientes-venta', storeId] : null,
-        async () => {
-            // Lo que debe cada uno sale de los movimientos, igual que en Cuentas por cobrar
-            const [{ data }, { data: cartera }] = await Promise.all([
-                supabase.from('customers').select('id, name').eq('store_id', storeId!).eq('is_active', true).order('name'),
-                supabase.rpc('toul_receivables'),
-            ])
-            const saldos = new Map(((cartera as { clientes?: { id: string; saldo: number }[] } | null)?.clientes ?? [])
-                .map(c => [c.id, Number(c.saldo)]))
-            return (data ?? []).map(c => ({ ...c, total_debt: saldos.get(c.id) ?? 0 }))
-        },
-        { revalidateOnFocus: false },
-    )
-
-    async function changeSaleCustomer(customerId: string | null) {
-        if (!customerEdit) return
-        setSavingCustomer(true)
-        const { data, error } = await supabase.rpc('toul_change_sale_customer', {
-            p_sale_id: customerEdit.id,
-            p_customer_id: customerId,
-        })
-        setSavingCustomer(false)
-        if (error) { toast.error(explainError(error, 'No se pudo cambiar el cliente.')); return }
-        setCustomerEdit(null)
-        setSelectedSale(null)
-        mutate()
-
-        if (data?.changed === false) {
-            toast('Esa venta ya estaba a nombre de ese cliente')
-        } else if (customerId === null) {
-            toast.success('La venta quedó sin cliente')
-        } else {
-            const movida = Number(data?.movedDebt ?? 0)
-            toast.success(movida > 0
-                ? `La venta quedó a nombre de ${data?.name}. Se le pasaron ${formatCOP(movida)} de deuda.`
-                : `La venta quedó a nombre de ${data?.name}`)
-        }
-    }
     const [view, setView] = useState<'ventas' | 'anuladas'>('ventas')
     const [seller, setSeller] = useState<string>('todos')
     const [kind, setKind] = useState<Kind>(inicial.kind)
     const [query, setQuery] = useState('')
     const [showFilters, setShowFilters] = useState(false)
-    const [voidOpen, setVoidOpen] = useState(false)
-    const [devolverOpen, setDevolverOpen] = useState(false)
-    const cerrarDevolucion = useCallback(() => setDevolverOpen(false), [setDevolverOpen])
 
     // Using SWR for caching and consistency
     const { data: sales, isLoading, isValidating, mutate } = useSWR<VentaData[]>(
@@ -199,7 +154,8 @@ function Ventas() {
         { revalidateOnFocus: false, dedupingInterval: 30000 }
     )
 
-    const devolucionHecha = useCallback(() => { setSelectedSale(null); mutate() }, [mutate])
+    const cerrarVenta = useCallback(() => setSelectedSale(null), [])
+    const ventaCambio = useCallback(() => { mutate() }, [mutate])
 
     // Nombres reales de los métodos de pago del negocio (Datáfono, Addi, etc.)
     const { data: methodNames } = useSWR(storeId ? ['method-names', storeId] : null, async () => {
@@ -213,27 +169,25 @@ function Ventas() {
     // El nombre como está en Ajustes, con mayúscula inicial al mostrarlo
     const methodLabel = (raw: string) => nombreMetodo(methodNames?.[raw?.toLowerCase()] ?? raw)
 
-    // Desde Movimientos ("Ver la venta") se llega con ?venta=<id>: abre de una.
-    // La dirección se limpia solo cuando la venta ya abrió: si la pantalla
-    // se vuelve a montar mientras carga, lo intenta otra vez
+    // Desde la ficha del cliente ("Abrir en Ventas") se llega con ?venta=<id>:
+    // abre de una. La dirección se limpia solo cuando la venta ya abrió: si
+    // la pantalla se vuelve a montar mientras carga, lo intenta otra vez
     useEffect(() => {
         if (!storeId) return
         const id = new URLSearchParams(window.location.search).get('venta')
         if (!id) return
         let vivo = true
         ;(async () => {
-            const run = (select: string) => supabase.from('sales').select(select).eq('store_id', storeId).eq('id', id).maybeSingle()
-            let { data, error } = await run(`${SALE_DETAIL_SELECT}, seller_name`)
-            if (error) ({ data, error } = await run(SALE_DETAIL_SELECT))
+            const venta = await cargarVenta(storeId, id)
             if (!vivo) return
             const url = new URL(window.location.href)
             url.searchParams.delete('venta')
             window.history.replaceState(null, '', url.pathname + url.search)
-            if (error || !data) { toast.error('No se pudo abrir esa venta'); return }
-            setSelectedSale(data as unknown as VentaData)
+            if (!venta) { toast.error('No se pudo abrir esa venta'); return }
+            setSelectedSale(venta)
         })()
         return () => { vivo = false }
-    }, [storeId, supabase])
+    }, [storeId])
 
     const { data: sellers } = useSWR(storeId ? ['sellers', storeId] : null, async () => {
         const { data } = await supabase.from('store_members').select('display_name').eq('store_id', storeId).order('created_at')
@@ -379,7 +333,12 @@ function Ventas() {
             <style>{VT_CSS}</style>
             <div className="toul-ambient" />
             {/* Header */}
-            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="mb-5" style={{ position: 'relative' }}>
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="mb-5 flex items-center gap-3" style={{ position: 'relative' }}>
+                {/* Ventas ya no está en el menú: se llega desde Movimientos y se vuelve allá */}
+                <Link href={`/movimientos?${periodoEnDireccion(period, getRange(period, fromDate, toDate))}`}
+                    aria-label="Volver a Movimientos" className="vt-volver">
+                    <ArrowLeft size={18} strokeWidth={2} />
+                </Link>
                 <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>Historial de ventas</h1>
             </motion.div>
 
@@ -678,84 +637,9 @@ function Ventas() {
                 </>
             )}
 
-            {/* El resumen vive en components/ventas: la ficha del cliente
-                abre exactamente este mismo */}
-            <SaleDetail
-                sale={selectedSale}
-                onClose={() => setSelectedSale(null)}
-                onChangeCustomer={setCustomerEdit}
-                onVoid={() => setVoidOpen(true)}
-                onDevolver={() => setDevolverOpen(true)}
-            />
-
-            {/* Devolver una parte: lo demás de la venta sigue igual */}
-            <DevolucionSheet
-                open={devolverOpen}
-                onClose={cerrarDevolucion}
-                saleId={selectedSale?.id ?? null}
-                isAdmin
-                onDone={devolucionHecha}
-            />
-
-            {/* Corregir a quién se le vendió */}
-            <Sheet
-                open={!!customerEdit}
-                onClose={() => setCustomerEdit(null)}
-                title="¿A quién fue esta venta?"
-                subtitle={customerEdit ? formatCOP(customerEdit.total) : undefined}>
-                <style>{PANEL_CSS}</style>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 340, overflowY: 'auto' }}>
-                    {!customerEdit?.is_credit && (
-                        <button className="pnl-row" style={{ border: '1px solid var(--toul-border)', background: 'var(--toul-surface)' }}
-                            disabled={savingCustomer} onClick={() => changeSaleCustomer(null)}>
-                            <span style={{ flex: 1, fontSize: 14.5, color: 'var(--toul-text-dim)', textAlign: 'left' }}>Sin cliente</span>
-                        </button>
-                    )}
-                    {(customerList ?? []).map(person => {
-                        const actual = customerEdit?.customer_id === person.id
-                        return (
-                            <button key={person.id} className="pnl-row"
-                                style={{
-                                    border: `1px solid ${actual ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
-                                    background: actual ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
-                                }}
-                                disabled={savingCustomer || actual} onClick={() => changeSaleCustomer(person.id)}>
-                                <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                                    <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600, color: actual ? 'var(--toul-accent)' : 'var(--toul-text)' }}>
-                                        {person.name}
-                                    </span>
-                                    {actual && (
-                                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--toul-accent)' }}>
-                                            esta venta ya es de esta persona
-                                        </span>
-                                    )}
-                                </span>
-                                {Number(person.total_debt) > 0 && (
-                                    <span style={{ fontSize: 12.5, color: 'var(--toul-warning)', flexShrink: 0 }}>
-                                        debe {formatCOP(Number(person.total_debt))}
-                                    </span>
-                                )}
-                            </button>
-                        )
-                    })}
-                    {customerEdit?.is_credit && (
-                        <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '4px 2px 0', lineHeight: 1.5 }}>
-                            Esta venta fue a crédito: al cambiar el cliente, la deuda se le pasa al nuevo.
-                        </p>
-                    )}
-                </div>
-            </Sheet>
-
-            {selectedSale && (
-                <VoidSaleDialog
-                    open={voidOpen}
-                    onClose={() => setVoidOpen(false)}
-                    saleId={selectedSale.id}
-                    total={selectedSale.total}
-                    isAdmin
-                    onDone={() => { setVoidOpen(false); setSelectedSale(null); mutate() }}
-                />
-            )}
+            {/* La venta abierta, con devolver, anular y cambiar el cliente:
+                es la misma que se abre desde Movimientos */}
+            <VentaAbierta venta={selectedSale} storeId={storeId} onCerrar={cerrarVenta} onCambio={ventaCambio} />
         </div>
     )
 }

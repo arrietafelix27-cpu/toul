@@ -6,7 +6,7 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { Lock, Printer, Store } from 'lucide-react'
+import { ArrowLeft, Lock, Printer, Store } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useSessionContext } from '@/lib/isla/useSession'
@@ -129,8 +129,13 @@ export default function TurnosPage() {
             <div style={{ position: 'relative', maxWidth: 820, margin: '0 auto' }}>
 
                 <motion.div variants={fadeUp} initial="hidden" animate="visible"
-                    className="flex items-start justify-between gap-3 mb-7">
-                    <div>
+                    className="flex items-center justify-between gap-3 mb-7">
+                    <div className="flex items-center gap-3" style={{ minWidth: 0 }}>
+                        <Link href="/punto-fisico" aria-label="Volver a Punto físico"
+                            className="flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                            style={{ width: 36, height: 36, borderRadius: 12, background: 'color-mix(in srgb, var(--toul-text) 7%, transparent)', color: 'var(--toul-text-muted)' }}>
+                            <ArrowLeft size={18} strokeWidth={2} />
+                        </Link>
                         <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', margin: 0 }}>
                             Turnos de caja
                         </h1>

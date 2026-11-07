@@ -251,8 +251,9 @@ function enlacesDe(periodo: Periodo, tramo: Tramo) {
         fiado: `/ventas?${q}&tipo=credito`,
         contado: `/movimientos?${q}&tipo=ventas`,
         abonos: `/movimientos?${q}&tipo=abonos`,
-        gastos: `/expenses?${q}`,
-        categoria: (c: string) => `/expenses?${q}&categoria=${encodeURIComponent(c)}`,
+        // Gastos vive dentro de Movimientos, con su total y sus categorías
+        gastos: `/movimientos?${q}&tipo=gastos`,
+        categoria: (c: string) => `/movimientos?${q}&tipo=gastos&categoria=${encodeURIComponent(c)}`,
         mercancia: `/movimientos?${q}&tipo=mercancia`,
         devoluciones: `/movimientos?${q}&tipo=devoluciones`,
         // Los abonos de antes no tenían método: salen como "Abonos"
