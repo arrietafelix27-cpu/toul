@@ -26,6 +26,12 @@ export interface ReporteSQL {
     metodosVenta?: { nombre: string; monto: number }[]
     /** Los 5 que más te dejaron, ya restado lo devuelto */
     productos: { id: string; nombre: string; ventas: number; ganancia: number; margen: number }[]
+    /** Entre tú y tu negocio: "Metí plata" del periodo. No es ganancia ni
+     *  entra en la plata que entró. No viene si la base no tiene Movimientos */
+    metiste?: number
+    /** Entre tú y tu negocio: "Saqué plata" del periodo. No es gasto ni
+     *  entra en la plata que salió */
+    sacaste?: number
 }
 
 /** Una barra de "Mes a mes": toul_reporte_meses() */

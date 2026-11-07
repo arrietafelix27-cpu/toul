@@ -99,6 +99,8 @@ export function PermisosEquipo({ storeId }: { storeId: string }) {
                 <Opciones label="Ver el efectivo esperado al cerrar" valor={permisos.ver_efectivo} opciones={SI_NO}
                     nota="Si no, cuenta el efectivo sin saber cuánto debería haber." onChange={v => set('ver_efectivo', v)} />
                 <Opciones label="Crear clientes" valor={permisos.crear_clientes} opciones={SI_NO} onChange={v => set('crear_clientes', v)} />
+                <Opciones label="Registrar gastos" valor={permisos.registrar_gastos} opciones={SI_NO}
+                    nota="Desde la caja y con una cuenta del negocio. Nunca puede anotar Metí plata ni Saqué plata." onChange={v => set('registrar_gastos', v)} />
 
                 <button onClick={save} disabled={saving} className="toul-btn-primary">{saving ? 'Guardando…' : 'Guardar permisos'}</button>
             </div>

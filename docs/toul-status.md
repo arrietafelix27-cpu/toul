@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 30 de septiembre de 2026 (sesión 14 — catálogo con una sola tarjeta y una sola grilla)*
+*Última actualización: 7 de noviembre de 2026 (Movimientos, paso 2 — datos y reglas)*
 
 ---
 
@@ -388,6 +388,21 @@ Modals base rediseñados:
 ⚠️ **Acción requerida antes de publicar:** ejecutar `supabase/rpc/process_purchase.sql` en el SQL Editor de Supabase. Sin eso, las compras fallan con la versión nueva del código.
 
 `npm run build` pasa sin errores.
+
+### 7 de noviembre de 2026 — Movimientos, paso 2: datos y reglas ✅ desplegado
+
+Félix pidió rehacer Movimientos en 3 pasos con su aprobación entre cada uno (1 almacenamiento ✅, 2 datos y reglas ✅, 3 pantallas pendiente). Tres tipos: **Gasto** (resta de lo que ganaste), **Metí plata** y **Saqué plata** (plata entre el dueño y su negocio: nunca cambian Ganaste, margen, ni Plata que entró/salió).
+
+- **Un solo libro (`payments`)**: tipos nuevos `owner_in`/`owner_out`, la cuenta por número (`method_id`, el nombre es solo copia), `own_money` ("Plata mía"), `linked_payment_id` (el Metí plata atado), quién lo anotó. Sin saldos ni traslados nuevos (los viejos se ven como "Traslado")
+- **Plata mía** en gasto, compra o pago a proveedor: la base crea su Metí plata atado por el mismo monto y lo mantiene al corregir o borrar
+- **Turnos**: con turno abierto, Metí plata en efectivo suma al efectivo esperado; Saqué plata, gastos y compras en efectivo restan. Lo de un turno cerrado solo deja cambiar nota o categoría
+- **Gasto en una sola transacción** (`toul_registrar_gasto`): antes eran dos escrituras sueltas. El vendedor solo con el permiso nuevo **"Registrar gastos"** (por defecto no), con cuenta y nunca con Plata mía
+- **Capital propio viejo** copiado al libro como Metí plata atado a su compra/gasto/pago. La tabla vieja queda de respaldo y sin escritura. Sube "Mercancía que pagaste" en meses viejos (aprobado por Félix)
+- **Reportes**: `toul_reporte` trae `metiste` y `sacaste`; el Excel y el PDF tienen "Entre tú y tu negocio" (no sale si los dos son 0). TOUL AI sabe que no es ganancia ni gasto
+- **Auditoría**: 3 chequeos por mes (Metiste, Sacaste, no cambian Ganaste) y 3 generales (Plata mía atada, turnos cuentan su efectivo, turnos cerrados no cambian)
+- **Pruebas**: `movimientos.test.mjs` (97) y escenario 2 de la tienda de prueba con los valores de Félix: todos cuadran
+
+✅ `supabase/deploy_movimientos.sql` ejecutado en Supabase el 7 de noviembre: 4 registros de capital viejo pasaron a Metí plata y la auditoría de todas las tiendas dio 0 descuadres.
 
 ### Sesión 14 — 30 de septiembre de 2026 ✅ Catálogo, de verdad unificado
 

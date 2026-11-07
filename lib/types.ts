@@ -121,8 +121,20 @@ export interface Database {
                 Row: {
                     id: string
                     store_id: string
-                    type: 'sale' | 'expense' | 'transfer_in' | 'transfer_out' | 'credit_payment'
+                    /** owner_in = "Metí plata", owner_out = "Saqué plata". Los
+                     *  traslados (transfer_*) y credit_payment son de antes: solo se leen */
+                    type: 'sale' | 'sale_payment' | 'sale_refund' | 'expense' | 'purchase' | 'provider_payment'
+                        | 'owner_in' | 'owner_out' | 'transfer_in' | 'transfer_out' | 'credit_payment'
+                    /** Copia del nombre de la cuenta. La cuenta de verdad es method_id */
                     method: string
+                    method_id: string | null
+                    /** "Plata mía": lo pagó el dueño de su bolsillo */
+                    own_money: boolean
+                    /** El "Metí plata" atado a lo que se pagó con plata mía */
+                    linked_payment_id: string | null
+                    created_by: string | null
+                    created_by_name: string | null
+                    cash_session_id: string | null
                     amount: number
                     reference_id: string | null
                     notes: string | null

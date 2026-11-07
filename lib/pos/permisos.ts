@@ -18,6 +18,8 @@ export interface PermisosVendedor {
     descuento_max: number
     ver_efectivo: SiNo
     crear_clientes: SiNo
+    /** Anotar gastos desde la caja (nunca Metí plata ni Saqué plata) */
+    registrar_gastos: SiNo
 }
 
 /** Lo de siempre: fiar, anular y devolver con aprobación, cierre a ciegas */
@@ -28,11 +30,12 @@ export const PERMISOS_POR_DEFECTO: PermisosVendedor = {
     descuento_max: 10,
     ver_efectivo: 'no',
     crear_clientes: 'solo',
+    registrar_gastos: 'no',
 }
 
 /** Todo permitido: así trabaja el administrador */
 export const PERMISOS_ADMIN: PermisosVendedor = {
-    fiar: 'solo', anular: 'solo', devolver: 'solo', descuento_max: 100, ver_efectivo: 'solo', crear_clientes: 'solo',
+    fiar: 'solo', anular: 'solo', devolver: 'solo', descuento_max: 100, ver_efectivo: 'solo', crear_clientes: 'solo', registrar_gastos: 'solo',
 }
 
 /** La base todavía no tiene permisos guardados (falta correr el SQL): todo
@@ -53,6 +56,7 @@ export function leerPermisos(raw: unknown): PermisosVendedor {
         descuento_max: Number.isFinite(max) && r.descuento_max !== null && r.descuento_max !== '' ? Math.min(100, Math.max(0, Math.round(max))) : d.descuento_max,
         ver_efectivo: siNo(r.ver_efectivo, d.ver_efectivo),
         crear_clientes: siNo(r.crear_clientes, d.crear_clientes),
+        registrar_gastos: siNo(r.registrar_gastos, d.registrar_gastos),
     }
 }
 

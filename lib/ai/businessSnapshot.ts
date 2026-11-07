@@ -247,7 +247,14 @@ FLUJO DE CAJA
 • Plata que entró (30d): $${fmt(cashIn)} (de contado + abonos)
 • Plata que salió (30d): $${fmt(cashOut)} (gastos + mercancía pagada + devoluciones)
 • Flujo neto: $${fmt(netCashFlow)} ${netCashFlow >= 0 ? '✅' : '⚠️'}
-
+${r30.metiste > 0 || r30.sacaste > 0 ? `
+═══════════════════════════════════════════════════
+ENTRE EL DUEÑO Y SU NEGOCIO (30d)
+═══════════════════════════════════════════════════
+• Metiste (plata del dueño que entró al negocio): $${fmt(r30.metiste)}
+• Sacaste para ti (plata que el dueño sacó para él): $${fmt(r30.sacaste)}
+• No es ganancia ni gasto: ya está fuera de la ganancia, los gastos y el flujo de caja de arriba
+` : ''}
 ═══════════════════════════════════════════════════
 INVENTARIO
 ═══════════════════════════════════════════════════

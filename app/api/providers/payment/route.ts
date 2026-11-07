@@ -14,16 +14,20 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { providerId, amount, notes } = await request.json().catch(() => ({}))
+    const { providerId, amount, notes, methodId, plataMia } = await request.json().catch(() => ({}))
 
     if (!providerId || !amount || Number(amount) <= 0) {
         return NextResponse.json({ error: 'Escribe cuánto le pagaste' }, { status: 400 })
     }
 
+    // "¿Con qué pagaste?": una cuenta de la tienda (por su número) o "Plata
+    // mía". Con plata mía la base anota su "Metí plata" en la misma transacción
     const { data, error } = await supabase.rpc('toul_pagar_proveedor', {
         p_provider_id: providerId,
         p_amount: Math.round(Number(amount)),
         p_notes: notes ?? null,
+        p_method_id: methodId || null,
+        p_plata_mia: plataMia === true,
     })
 
     if (error) {

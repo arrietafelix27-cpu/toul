@@ -119,10 +119,11 @@ export default async function (db) {
   // 8–9. Abonos
   await abonar('2026-10-15 10:00', 'Ana', 70000, neq)
   await abonar('2026-10-18 10:00', 'Carla', 40000, efe)
-  // 10. Gastos (lo mismo que hace /api/expenses)
+  // 10. Gastos, con la misma función que usa /api/expenses
   for (const [cuando, categoria, monto] of [['2026-10-20 10:00', 'transporte', 25000], ['2026-10-21 10:00', 'publicidad', 15000]]) {
-    const [g] = await q(`INSERT INTO expenses(store_id,category,description,amount,created_at) VALUES ($1,$2,$2,$3,$4) RETURNING id`, [STORE, categoria, monto, co(cuando)])
-    await q(`INSERT INTO payments(store_id,type,method,amount,reference_id,notes,created_at) VALUES ($1,'expense','General',$2,$3,'Gasto',$4)`, [STORE, monto, g.id, co(cuando)])
+    const g = await r(`SELECT toul_registrar_gasto($1::text,$2,$1::text,NULL,false) r`, [categoria, monto])
+    await q(`UPDATE expenses SET created_at = $2 WHERE id = $1`, [g.expenseId, co(cuando)])
+    await q(`UPDATE payments SET created_at = $2 WHERE reference_id = $1`, [g.expenseId, co(cuando)])
   }
   // 11. Pago al proveedor por $120.000, con la misma función que usa la app
   await r(`SELECT toul_pagar_proveedor($1,120000,NULL) r`, [prov.id])
@@ -433,6 +434,41 @@ export default async function (db) {
   si('con todos los casos nuevos, la auditoría sigue cuadrando', auditoriaNueva.every(f => f.ok),
     auditoriaNueva.filter(f => !f.ok).map(f => `${f.periodo} ${f.chequeo}: ${f.esperado} vs ${f.obtenido}`).join(' | '))
   await db.exec('ROLLBACK')
+
+  // ── Escenario 2 (Félix, 2026-11-07): el 1 más dos operaciones ──
+  console.log('\n— Escenario 2: Saqué plata y una compra con "Plata mía"')
+  // 15. 20 oct 6:00 p. m.: Saqué plata $50.000 en efectivo
+  const saque = await r(`SELECT toul_registrar_movimiento('saque',50000,$1,NULL) r`, [efe.id])
+  await q(`UPDATE payments SET created_at = $2 WHERE id = $1`, [saque.id, co('2026-10-20 18:00')])
+  // 16. 22 oct 3:00 p. m.: compra de contado de 3 Perfume B por $90.000, pagada con Plata mía
+  const c16 = await r(`SELECT (process_purchase($1::jsonb))->>'purchaseId' r`, [JSON.stringify({
+    isCredit: false, plataMia: true, items: [{ productId: B.id, quantity: 3, unitCost: 30000 }] })])
+  await fecharCompra(c16, co('2026-10-22 15:00'))
+  si('las 2 operaciones quedaron registradas', !!saque.id && !!c16)
+
+  const rep2 = await r(`SELECT toul_reporte($1,$2) r`, [octubre.from, octubre.to])
+  const res2 = resumir(rep2)
+  igual('Ganaste', 270000, res2.ganaste)
+  igual('Metiste', 90000, res2.metiste)
+  igual('Sacaste para ti', 50000, res2.sacaste)
+  igual('Mercancía que pagaste', 310000, res2.mercancia)
+  igual('Plata que salió', 350000, res2.salio)
+  igual('Plata que entró', 520000, res2.entro)
+  igual('Plata en mercancía (4 A + 10 B)', 540000, (await r(`SELECT toul_inventory_overview(1) r`)).value)
+  igual('Debes', 80000, (await r(`SELECT toul_payables() r`)).total)
+  const stock2 = await q(`SELECT name, stock FROM products WHERE store_id=$1 AND name IN ('Perfume A','Perfume B') ORDER BY name`, [STORE])
+  igual('Perfume A en stock', 4, stock2[0].stock, tal)
+  igual('Perfume B en stock', 10, stock2[1].stock, tal)
+  const salida16 = await one(`SELECT id, amount, own_money, created_at FROM payments WHERE reference_id=$1 AND type='purchase'`, [c16])
+  const meti16 = await one(`SELECT amount, created_at FROM payments WHERE linked_payment_id=$1 AND type='owner_in'`, [salida16.id])
+  si('la compra con plata mía tiene su Metí plata por el mismo monto y el mismo día', salida16.own_money && Number(meti16?.amount) === 90000
+    && new Date(meti16.created_at).getTime() === new Date(co('2026-10-22 15:00')).getTime())
+  igual('el Metí plata no cambia lo que ganaste: sigue igual que en el escenario 1', res.ganaste, res2.ganaste)
+  const auditoria2 = await comoDueno(() => q(`SELECT * FROM toul_auditoria()`))
+  si('la auditoría del escenario 2 cuadra', auditoria2.every(f => f.ok),
+    auditoria2.filter(f => !f.ok).map(f => `${f.periodo} ${f.chequeo}: ${f.esperado} vs ${f.obtenido}`).join(' | '))
+  si('y revisa Metí y Saqué plata de octubre', auditoria2.some(f => f.periodo === '2026-10' && f.chequeo.includes('no cambian Ganaste') && f.ok && /metiste \$90000 y sacaste \$50000/.test(f.detalle ?? '')),
+    auditoria2.find(f => f.periodo === '2026-10' && f.chequeo.includes('no cambian Ganaste'))?.detalle)
 
   console.log(fails === 0 ? '  TODO OK' : `  ${fails} FALLOS`)
   return { fails }

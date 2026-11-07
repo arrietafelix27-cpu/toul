@@ -64,6 +64,16 @@ function filasResumen(b: Base): [string, number, 'plata' | 'pct'][] {
     return filas
 }
 
+/** Entre tú y tu negocio: lo que el dueño metió o sacó. No es ganancia
+ *  ni gasto. No sale si los dos son cero */
+export const NOTA_ENTRE_TU_Y_TU_NEGOCIO = 'Es plata que se movió entre tú y tu negocio. No es ganancia ni gasto, por eso no cambia lo que ganaste'
+
+function filasEntreTuYTuNegocio(b: Base): [string, number][] {
+    const r = resumir(b.actual)
+    if (r.metiste === 0 && r.sacaste === 0) return []
+    return [['Metiste', r.metiste], ['Sacaste para ti', r.sacaste]]
+}
+
 /** Una fila de toul_reporte_detalle: la misma cuenta del resumen, venta por venta */
 interface VentaFila {
     fecha: string; cliente: string; vendedor: string; productos: string
@@ -81,6 +91,7 @@ export async function descargarExcel(b: Base & { supabase: SupabaseClient }) {
     const nombre = titulo(b.periodo, b.tramo)
     const negrita = { fontWeight: 'bold' as const }
     const plata = '#,##0'
+    const entre = filasEntreTuYTuNegocio(b)
 
     const resumen = [
         [{ value: `TOUL - ${nombre}`, ...negrita, fontSize: 14 }],
@@ -89,6 +100,12 @@ export async function descargarExcel(b: Base & { supabase: SupabaseClient }) {
         [],
         ...filasResumen(b).map(([rotulo, valor, tipo]) => [
             { value: rotulo }, { value: valor, type: Number, format: tipo === 'pct' ? '0%' : plata },
+        ]),
+        ...(entre.length === 0 ? [] : [
+            [],
+            [{ value: 'Entre tú y tu negocio', ...negrita }],
+            ...entre.map(([rotulo, valor]) => [{ value: rotulo }, { value: valor, type: Number, format: plata }]),
+            [{ value: NOTA_ENTRE_TU_Y_TU_NEGOCIO }],
         ]),
         [],
         [{ value: 'En qué gastaste', ...negrita }],
@@ -229,6 +246,17 @@ export async function descargarPDF(b: Base) {
     fila('Mercancía que pagaste', r.mercancia)
     if (r.devuelto > 0) fila('Devoluciones', r.devuelto)
     fila('Plata que salió', r.salio, { total: true })
+    const entre = filasEntreTuYTuNegocio(b)
+    if (entre.length > 0) {
+        y += 3
+        texto('Entre tú y tu negocio', izq, y, 8.5, PAPEL.gris); y += 5.5
+        for (const [rot, val] of entre) fila(rot, val)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5)
+        for (const renglon of doc.splitTextToSize(limpio(NOTA_ENTRE_TU_Y_TU_NEGOCIO), anchoIzq) as string[]) {
+            texto(renglon, izq, y - 2, 7.5, PAPEL.gris); y += 3.6
+        }
+        y += 2
+    }
     const finIzquierda = y
 
     // ── De cada $100 y Mes a mes (derecha) ──

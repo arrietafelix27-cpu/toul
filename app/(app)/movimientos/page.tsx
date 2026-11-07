@@ -46,7 +46,11 @@ const CSS = `
 `
 
 /** Salidas de plata. Todo lo demás cuenta como entrada. */
-const OUT_TYPES = ['expense', 'purchase', 'provider_payment', 'transfer_out']
+const OUT_TYPES = ['expense', 'purchase', 'provider_payment', 'transfer_out', 'owner_out']
+
+/** Plata entre el dueño y su negocio: no es ganancia ni gasto, así que no
+ *  suma en "Entró" ni en "Salió" (lo de antes del dueño, tampoco) */
+const ENTRE_TU_Y_TU_NEGOCIO = ['owner_in', 'owner_out', 'transfer_in', 'transfer_out', 'capital']
 
 /** Nombre en español de cada movimiento. */
 const LABELS: Record<string, string> = {
@@ -58,8 +62,11 @@ const LABELS: Record<string, string> = {
     expense: 'Gasto',
     purchase: 'Compra de inventario',
     provider_payment: 'Pago a proveedor',
-    transfer_in: 'Traslado recibido',
-    transfer_out: 'Traslado enviado',
+    owner_in: 'Metí plata',
+    owner_out: 'Saqué plata',
+    // Los traslados de antes: solo se ven
+    transfer_in: 'Traslado',
+    transfer_out: 'Traslado',
     capital: 'Capital propio',
 }
 
@@ -214,10 +221,13 @@ function Movimientos() {
             .filter(m => !metodo || (metodo === SIN_METODO ? sinMetodo(m) : m.method?.trim().toLowerCase() === metodo.trim().toLowerCase()))
     }, [data, tipo, metodo])
 
-    const totales = useMemo(() => ({
-        entro: Math.round(movements.filter(m => m.signed > 0).reduce((s, m) => s + m.signed, 0)),
-        salio: Math.round(movements.filter(m => m.signed < 0).reduce((s, m) => s - m.signed, 0)),
-    }), [movements])
+    const totales = useMemo(() => {
+        const cuentan = movements.filter(m => !ENTRE_TU_Y_TU_NEGOCIO.includes(m.type))
+        return {
+            entro: Math.round(cuentan.filter(m => m.signed > 0).reduce((s, m) => s + m.signed, 0)),
+            salio: Math.round(cuentan.filter(m => m.signed < 0).reduce((s, m) => s - m.signed, 0)),
+        }
+    }, [movements])
     const visibles = movements.slice(0, limit)
 
     return (

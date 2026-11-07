@@ -172,6 +172,12 @@ export interface ResumenReporte {
     ticket: number | null
     /** % de lo vendido (antes de devoluciones) que quedó fiado */
     pctCredito: number | null
+    /** Entre tú y tu negocio: lo que metiste de tu plata. No es ganancia:
+     *  no entra en Ganaste ni en la plata que entró */
+    metiste: number
+    /** Entre tú y tu negocio: lo que sacaste para ti. No es gasto: no entra
+     *  en Ganaste ni en la plata que salió */
+    sacaste: number
 }
 
 export function resumir(r: {
@@ -180,6 +186,9 @@ export function resumir(r: {
     abonos: number
     gastos: number
     mercanciaPagada: number
+    /** No vienen si la base todavía no tiene Movimientos */
+    metiste?: number
+    sacaste?: number
 }): ResumenReporte {
     const n = (v: unknown) => Number(v) || 0
     const ventasAntes = n(r.ventas.total)
@@ -205,6 +214,8 @@ export function resumir(r: {
         margen: vendiste > 0 ? Math.round((gananciaVentas / vendiste) * 100) : null,
         ticket: cantidad > 0 ? Math.round(vendiste / cantidad) : null,
         pctCredito: ventasAntes > 0 ? Math.round((credito / ventasAntes) * 100) : null,
+        metiste: Math.round(n(r.metiste)),
+        sacaste: Math.round(n(r.sacaste)),
     }
 }
 
