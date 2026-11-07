@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 7 de noviembre de 2026 (Movimientos, paso 2 — datos y reglas)*
+*Última actualización: 7 de noviembre de 2026 (Movimientos, paso 3 — pantallas)*
 
 ---
 
@@ -404,6 +404,19 @@ Félix pidió rehacer Movimientos en 3 pasos con su aprobación entre cada uno (
 
 ✅ `supabase/deploy_movimientos.sql` ejecutado en Supabase el 7 de noviembre: 4 registros de capital viejo pasaron a Metí plata y la auditoría de todas las tiendas dio 0 descuadres.
 
+### 7 de noviembre de 2026 — Movimientos, paso 3: pantallas ✅ publicado
+
+Diseño en `diseno/movimientos/` (prototipo + LEEME). Con esto quedan los 3 pasos.
+
+- **Movimientos nuevo**: título grande, periodo en píldora ("Este mes" por defecto), tres botones redondos (Gasto, Metí plata, Saqué plata), filtros Todo / Ventas / Abonos / Gastos / Compras / Tú y tu negocio, historia por día (Hoy, Ayer, "4 nov") con cuenta y hora, etiqueta "No cuenta en lo que ganaste", carga sola al bajar. Sin los totales Entró/Salió ni la fila de métodos (decisión de Félix)
+- **Llegar desde un número** (Reportes): el filtro sale como una píldora más con su total; al quitarla vuelve la vista normal
+- **Detalle al tocar**: Gasto, Metí y Saqué plata se corrigen o se borran ahí; venta, compra, abono y pago a proveedor llevan a su pantalla (la venta y la compra abren directo con `?venta=` y `?compra=`)
+- **Una sola hoja para anotar** (`components/movimientos/RegistrarMovimiento.tsx`): la usan Movimientos, Gastos y la caja. Las cuentas salen de `payment_methods` (`CuentaChips.tsx`) y la última usada sale marcada
+- **Siempre se dice con qué se pagó**: Gasto, Compra (lo que se paga hoy) y Pagar proveedor piden la cuenta o "Plata mía". La base lo exige (`supabase/deploy_movimientos_cuentas.sql`); lo viejo "Sin cuenta" se sigue viendo y se puede corregir sin elegir cuenta
+- **Caja**: "Gasto" en el menú de la persona, solo con el permiso "Registrar gastos", sin Plata mía y sin internet no deja
+- **Reportes**: "Entre tú y tu negocio" dentro de Tu plata (Metiste / Sacaste para ti); no sale si los dos son 0
+- **Pruebas**: 8 chequeos nuevos en `movimientos.test.mjs`. En `offline-conteo.test.mjs` la prueba "compra sin método queda General" ahora espera que se rechace (es la regla nueva, aprobada)
+
 ### Sesión 14 — 30 de septiembre de 2026 ✅ Catálogo, de verdad unificado
 
 Félix reportó que el catálogo seguía inconsistente. Causas reales encontradas:
@@ -617,6 +630,8 @@ Rama `feat/modo-isla`. `npm run build` pasa. SQL probado en PGlite reproduciendo
 11. Arreglar recuperación de contraseña
 
 **Fase 2 — Después de abrir:** ventas por vendedor, alertas de stock bajo, exportar datos, devolución parcial, lector de código de barras
+
+**Fase 4 de la caja — anotado por Félix el 7 de noviembre:** la impresión automática de la tirilla traba la pantalla hasta abrir otra pestaña. Debe arreglarse para que imprimir nunca bloquee la caja, ni en PC ni en celular. Diseño en `diseno/caja/` (caja.html, caja.js, LEEME).
 
 **Pendiente de infraestructura:** monitoreo de errores (Sentry o similar), exportar/respaldar datos, facturación electrónica DIAN, cobro por suscripción
 

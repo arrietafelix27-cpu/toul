@@ -103,13 +103,13 @@ export default async function (db) {
   console.log('\n— Las 14 operaciones')
   // 1. 15 sep: compra de contado de 10 Perfume A por $600.000
   const c1 = await r(`SELECT (process_purchase($1::jsonb))->>'purchaseId' r`, [JSON.stringify({
-    isCredit: false, items: [{ productId: A.id, quantity: 10, unitCost: 60000 }] })])
+    isCredit: false, methodId: efe.id, items: [{ productId: A.id, quantity: 10, unitCost: 60000 }] })])
   await fecharCompra(c1, co('2026-09-15 10:00'))
   // 2. 20 sep: venta a crédito a Carla, 1 A por $100.000, sin abono
   await vender('2026-09-20 10:00', A, 1, 100000, { credito: true, cliente: 'Carla' })
   // 3. 1 oct: compra a crédito de 10 B por $300.000 con pago inicial de $100.000
   const c3 = await r(`SELECT (process_purchase($1::jsonb))->>'purchaseId' r`, [JSON.stringify({
-    isCredit: true, providerId: prov.id, paidNow: 100000, items: [{ productId: B.id, quantity: 10, unitCost: 30000 }] })])
+    isCredit: true, providerId: prov.id, paidNow: 100000, methodId: efe.id, items: [{ productId: B.id, quantity: 10, unitCost: 30000 }] })])
   await fecharCompra(c3, co('2026-10-01 10:00'))
   // 4–7. Ventas de octubre
   await vender('2026-10-05 10:00', A, 2, 100000, { pagos: efectivo(200000) })
@@ -121,12 +121,12 @@ export default async function (db) {
   await abonar('2026-10-18 10:00', 'Carla', 40000, efe)
   // 10. Gastos, con la misma función que usa /api/expenses
   for (const [cuando, categoria, monto] of [['2026-10-20 10:00', 'transporte', 25000], ['2026-10-21 10:00', 'publicidad', 15000]]) {
-    const g = await r(`SELECT toul_registrar_gasto($1::text,$2,$1::text,NULL,false) r`, [categoria, monto])
+    const g = await r(`SELECT toul_registrar_gasto($1::text,$2,$1::text,$3,false) r`, [categoria, monto, efe.id])
     await q(`UPDATE expenses SET created_at = $2 WHERE id = $1`, [g.expenseId, co(cuando)])
     await q(`UPDATE payments SET created_at = $2 WHERE reference_id = $1`, [g.expenseId, co(cuando)])
   }
   // 11. Pago al proveedor por $120.000, con la misma función que usa la app
-  await r(`SELECT toul_pagar_proveedor($1,120000,NULL) r`, [prov.id])
+  await r(`SELECT toul_pagar_proveedor($1,120000,NULL,$2) r`, [prov.id, efe.id])
   await q(`UPDATE payments SET created_at = $2 WHERE reference_id = $1 AND type = 'provider_payment'`, [prov.id, co('2026-10-22 10:00')])
   // 12. 25 oct: venta de contado de 1 B por $80.000 que se anula el mismo día
   const anulada = await vender('2026-10-25 10:00', B, 1, 80000, { pagos: efectivo(80000) })
@@ -383,10 +383,10 @@ export default async function (db) {
   igual('y la plata en mercancía la cuenta', 490000, conPresentacion.value)
 
   // Pagarle al proveedor: todo o nada
-  const deMas = await errTx(`SELECT toul_pagar_proveedor($1,999999,NULL) r`, [prov.id], O)
+  const deMas = await errTx(`SELECT toul_pagar_proveedor($1,999999,NULL,$2) r`, [prov.id, efe.id], O)
   si('no deja pagar más de lo que le debes', /no puede ser mayor/.test(deMas ?? ''), deMas)
   igual('y no toca nada', 80000, (await r(`SELECT toul_payables() r`)).total)
-  await r(`SELECT toul_pagar_proveedor($1,30000,NULL) r`, [prov.id])
+  await r(`SELECT toul_pagar_proveedor($1,30000,NULL,$2) r`, [prov.id, efe.id])
   igual('pagas $30.000: ahora le debes', 50000, (await r(`SELECT toul_payables() r`)).total)
   igual('la copia del proveedor queda igual', 50000, (await one(`SELECT total_debt s FROM providers WHERE id=$1`, [prov.id])).s)
   igual('y la caja tiene los dos pagos', 150000, (await one(`SELECT SUM(amount) s FROM payments WHERE store_id=$1 AND type='provider_payment'`, [STORE])).s)

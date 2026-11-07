@@ -6,6 +6,7 @@ import { CreditCard, X, CheckCircle2, Package, AlertCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { formatCOP } from '@/lib/utils'
+import { CuentaChips, cuentaParaGuardar, recordarCuenta } from '@/components/movimientos/CuentaChips'
 
 interface ProviderPaymentModalProps {
     storeId: string
@@ -21,6 +22,8 @@ export function ProviderPaymentModal({ storeId, providerId, providerName, totalD
 
     const [amount, setAmount] = useState('')
     const [saving, setSaving] = useState(false)
+    // "¿Con qué pagaste?": una cuenta del negocio o "Plata mía"
+    const [cuenta, setCuenta] = useState<string | null>(null)
 
     const maxAmount = totalDebt
 
@@ -30,18 +33,20 @@ export function ProviderPaymentModal({ storeId, providerId, providerName, totalD
             toast.error('Monto inválido')
             return
         }
+        if (!cuenta) { toast.error('Elige con qué pagaste'); return }
 
         setSaving(true)
         try {
             const response = await fetch('/api/providers/payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ providerId, amount: payAmount })
+                body: JSON.stringify({ providerId, amount: Math.round(payAmount), ...cuentaParaGuardar(cuenta) })
             })
 
             const result = await response.json()
             if (!response.ok) throw new Error(result.error || 'Error al registrar el pago')
 
+            recordarCuenta('proveedor', cuenta)
             toast.success('Pago registrado correctamente')
             onSuccess()
             onClose()
@@ -108,9 +113,13 @@ export function ProviderPaymentModal({ storeId, providerId, providerName, totalD
                         </div>
                     </div>
 
+                    <div>
+                        <p className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>¿Con qué pagaste?</p>
+                        <CuentaChips valor={cuenta} onChange={setCuenta} recordar="proveedor" conPlataMia />
+                    </div>
 
                     <button
-                        disabled={saving || !amount || Number(amount) <= 0 || Number(amount) > maxAmount}
+                        disabled={saving || !amount || Number(amount) <= 0 || Number(amount) > maxAmount || !cuenta}
                         onClick={handleConfirm}
                         className="toul-btn-primary w-full flex items-center justify-center gap-2">
                         {saving ? (

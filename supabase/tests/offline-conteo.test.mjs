@@ -79,15 +79,18 @@ export default async function (db) {
   const uncounted = await one(`SELECT stock FROM products WHERE id=$1`, [p2.id])
   ok(uncounted.stock === 7, 'los productos no contados no se tocan (padre de variante intacto)')
 
-  console.log('\n— Compra sin elegir de dónde sale el dinero')
+  console.log('\n— Compra: hay que decir con qué se pagó')
+  const sinCuenta = await as(O, () => err(() => q(`SELECT process_purchase($1::jsonb)`, [JSON.stringify({
+    isCredit: false, items: [{ productId: p1.id, quantity: 4, unitCost: 250000 }] })])))
+  ok(sinCuenta?.includes('Elige con qué pagaste'), 'sin cuenta no deja comprar (antes quedaba "General")')
   const buy = await as(O, async () => (await one(`SELECT process_purchase($1::jsonb) r`, [JSON.stringify({
-    isCredit: false, items: [{ productId: p1.id, quantity: 4, unitCost: 250000 }],
+    isCredit: false, methodId: efe.id, items: [{ productId: p1.id, quantity: 4, unitCost: 250000 }],
   })])).r)
-  ok(buy.success, 'compra de contado sin métodos de pago')
+  ok(buy.success, 'compra de contado con su cuenta')
   ok(Number((await one(`SELECT SUM(amount) s FROM purchase_payments WHERE purchase_id=$1`, [buy.purchaseId])).s) === 1000000, 'queda registrado el pago completo')
 
   const credit = await as(O, async () => (await one(`SELECT process_purchase($1::jsonb) r`, [JSON.stringify({
-    isCredit: true, providerId: prov.id, dueDate: '2026-12-01', paidNow: 200000,
+    isCredit: true, providerId: prov.id, dueDate: '2026-12-01', paidNow: 200000, methodId: efe.id,
     items: [{ productId: p1.id, quantity: 2, unitCost: 250000 }],
   })])).r)
   ok(credit.success, 'compra a crédito con abono inicial')

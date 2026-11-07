@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AddedMark } from './AddedMark'
 import type { Product, Provider } from '@/lib/types'
+import { CuentaChips } from '@/components/movimientos/CuentaChips'
 
 // ─── Types (mirror purchase/page.tsx) ───────────────────────
 
@@ -48,6 +49,9 @@ interface Props {
     setSelectedProviderId: (v: string) => void
     dueDate: string
     setDueDate: (v: string) => void
+    /** "¿Con qué pagaste?": el número de la cuenta o "Plata mía" */
+    cuenta: string | null
+    setCuenta: (v: string) => void
     // Submit
     subtotal: number
     total: number
@@ -64,15 +68,21 @@ export function DesktopPurchase({
     paymentMethod, setPaymentMethod,
     initialPayment, setInitialPayment,
     selectedProviderId, setSelectedProviderId, dueDate, setDueDate,
+    cuenta, setCuenta,
     subtotal, total, saving, onSubmit,
 }: Props) {
     // Abonar más de lo que vale la compra deja un saldo negativo en
     // pantalla y el servidor lo rechaza con un error crudo
     const abonoDemasiado = paymentMethod === 'credit' && Number(onlyDigits(initialPayment) || 0) > total
 
+    // Lo que se paga hoy tiene que decir de dónde salió
+    const pagado = paymentMethod === 'credit' ? Math.round(Number(onlyDigits(initialPayment) || 0)) : Math.round(total)
+    const faltaCuenta = pagado > 0 && !cuenta
+
     const canSubmit = selectedItems.length > 0
         && !(paymentMethod === 'credit' && (!selectedProviderId || !dueDate))
         && !abonoDemasiado
+        && !faltaCuenta
         && !saving
 
     const productsToShow = [...products]
@@ -362,6 +372,15 @@ export function DesktopPurchase({
                                     )}
                                 </div>
                             </>
+                        )}
+
+                        {pagado > 0 && (
+                            <div>
+                                <p className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
+                                    {paymentMethod === 'credit' ? '¿Con qué pagaste el abono?' : '¿Con qué pagaste?'}
+                                </p>
+                                <CuentaChips valor={cuenta} onChange={setCuenta} recordar="compra" conPlataMia />
+                            </div>
                         )}
                     </div>
 

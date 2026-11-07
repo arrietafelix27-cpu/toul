@@ -234,6 +234,15 @@ export default function ComprasPage() {
         setAbierta(data as PurchaseDetailData)
     }
 
+    // Desde Movimientos ("Ver la compra") se llega con ?compra=<id>: abre de una
+    useEffect(() => {
+        const id = new URLSearchParams(window.location.search).get('compra')
+        if (!id) return
+        window.history.replaceState(null, '', window.location.pathname)
+        abrir(id)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     // La búsqueda corre sobre lo cargado: por proveedor o por producto
     const lista = useMemo(() => {
         const filas = compras ?? []

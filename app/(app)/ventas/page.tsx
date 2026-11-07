@@ -213,6 +213,26 @@ function Ventas() {
     // El nombre como está en Ajustes, con mayúscula inicial al mostrarlo
     const methodLabel = (raw: string) => nombreMetodo(methodNames?.[raw?.toLowerCase()] ?? raw)
 
+    // Desde Movimientos ("Ver la venta") se llega con ?venta=<id>: abre de una
+    useEffect(() => {
+        if (!storeId) return
+        const id = new URLSearchParams(window.location.search).get('venta')
+        if (!id) return
+        const url = new URL(window.location.href)
+        url.searchParams.delete('venta')
+        window.history.replaceState(null, '', url.pathname + url.search)
+        let vivo = true
+        ;(async () => {
+            const run = (select: string) => supabase.from('sales').select(select).eq('store_id', storeId).eq('id', id).maybeSingle()
+            let { data, error } = await run(`${SALE_DETAIL_SELECT}, seller_name`)
+            if (error) ({ data, error } = await run(SALE_DETAIL_SELECT))
+            if (!vivo) return
+            if (error || !data) { toast.error('No se pudo abrir esa venta'); return }
+            setSelectedSale(data as unknown as VentaData)
+        })()
+        return () => { vivo = false }
+    }, [storeId, supabase])
+
     const { data: sellers } = useSWR(storeId ? ['sellers', storeId] : null, async () => {
         const { data } = await supabase.from('store_members').select('display_name').eq('store_id', storeId).order('created_at')
         return (data ?? []).map(m => m.display_name as string)

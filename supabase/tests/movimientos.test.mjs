@@ -258,8 +258,31 @@ export default async function (db) {
   msg = await intento(O, `INSERT INTO owner_capital_injections(store_id,amount) VALUES ($1,1000)`, [STORE])
   ok(/permission denied|permiso/i.test(msg ?? ''), 'nadie escribe más en la tabla vieja', msg)
 
+  console.log('\n— Paso 3: siempre se dice con qué se pagó')
+  msg = await intento(O, `SELECT toul_registrar_gasto('transporte',12345,'sin cuenta',NULL,false)`)
+  ok(/Elige con qué pagaste/.test(msg ?? ''), 'un gasto sin cuenta no se guarda', msg)
+  ok(Number((await one(`SELECT count(*) n FROM expenses WHERE store_id=$1 AND description='sin cuenta'`, [STORE])).n) === 0, 'y no queda el gasto a medias')
+  msg = await intento(O, `SELECT process_purchase($1::jsonb)`, [JSON.stringify({ isCredit: false, items: [{ productId: perfume.id, quantity: 1, unitCost: 40000 }] })])
+  ok(/Elige con qué pagaste/.test(msg ?? ''), 'una compra pagada sin cuenta no se guarda', msg)
+  const fiada = await r(O, `SELECT process_purchase($1::jsonb) r`, [JSON.stringify({ isCredit: true, providerId: prov.id, paidNow: 0,
+    items: [{ productId: perfume.id, quantity: 1, unitCost: 40000 }] })])
+  ok(fiada.success, 'a crédito sin pagar nada no hay nada que preguntar')
+  const debiaAntes = Number((await one(`SELECT total_debt d FROM providers WHERE id=$1`, [prov.id])).d)
+  msg = await intento(O, `SELECT toul_pagar_proveedor($1,10000,NULL,NULL,false)`, [prov.id])
+  ok(/Elige con qué pagaste/.test(msg ?? ''), 'un pago a proveedor sin cuenta no se guarda', msg)
+  ok(Number((await one(`SELECT total_debt d FROM providers WHERE id=$1`, [prov.id])).d) === debiaAntes, 'y la deuda queda igual')
+  const conCuenta = await r(O, `SELECT toul_pagar_proveedor($1,10000,NULL,$2,false) r`, [prov.id, nequi.id])
+  ok(conCuenta.success, 'con su cuenta sí se paga')
+  // Lo de antes sin cuenta se sigue corrigiendo sin elegirle una
+  const [viejo] = await q(`INSERT INTO expenses(store_id,category,description,amount,payment_method) VALUES ($1,'otros','viejo',5000,'General') RETURNING id`, [STORE])
+  await q(`INSERT INTO payments(store_id,type,method,amount,reference_id,notes) VALUES ($1,'expense','General',5000,$2,'Gasto: viejo')`, [STORE, viejo.id])
+  await r(O, `SELECT toul_update_expense($1,'transporte','viejo',6000) r`, [viejo.id])
+  const pagoViejo = await pagoDeGasto(viejo.id)
+  ok(Number(pagoViejo.amount) === 6000 && pagoViejo.method_id === null && pagoViejo.method === 'General', 'un gasto viejo sin cuenta se corrige y sigue "Sin cuenta"')
+  await r(O, `SELECT toul_delete_expense($1) r`, [viejo.id])
+
   console.log('\n— La auditoría')
-  let aud = await as(O, () => q(`SELECT * FROM toul_auditoria()`))
+  let aud =await as(O, () => q(`SELECT * FROM toul_auditoria()`))
   const nuevos = ['Metiste (Entre tú y tu negocio)', 'Sacaste para ti', 'no cambian Ganaste', '"Plata mía"', 'efectivo que se movió', 'turnos cerrados']
   ok(nuevos.every(n => aud.some(f => f.chequeo.includes(n))), 'revisa Metí y Saqué plata, Plata mía y los turnos')
   ok(aud.every(f => f.ok), 'y todo cuadra', aud.filter(f => !f.ok).map(f => `${f.periodo} ${f.chequeo}: ${f.esperado} vs ${f.obtenido} ${f.detalle ?? ''}`).join(' | '))

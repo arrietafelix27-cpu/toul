@@ -116,11 +116,11 @@ export default async function (db) {
 
   console.log('\n— Mercancía que pagaste: compra a crédito y abono posterior al proveedor')
   await as(O, () => q(`SELECT process_purchase($1::jsonb)`, [JSON.stringify({
-    isCredit: true, providerId: prov.id, paidNow: 200000,
+    isCredit: true, providerId: prov.id, paidNow: 200000, methodId: efe.id,
     items: [{ productId: p1.id, quantity: 10, unitCost: 50000 }],
   })]))
   // Lo mismo que hace /api/providers/payment
-  await q(`INSERT INTO payments(store_id,type,method,amount,reference_id,notes) VALUES ($1,'provider_payment','General',100000,$2,'Abono a proveedor')`, [STORE, prov.id])
+  await q(`INSERT INTO payments(store_id,type,method,method_id,amount,reference_id,notes) VALUES ($1,'provider_payment','Efectivo',$3,100000,$2,'Abono a proveedor')`, [STORE, prov.id, efe.id])
   rep = await reporte()
   ok(Number(rep.mercanciaPagada) === 300000, `pagaste $300.000 de mercancía: $200.000 al comprar + $100.000 después (dio ${rep.mercanciaPagada})`)
 

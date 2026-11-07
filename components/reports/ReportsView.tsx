@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties, type PointerEvent as PunteroReact, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, ChevronRight, Download, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, ChevronRight, Download, FileSpreadsheet, FileText, Info, RefreshCw } from 'lucide-react'
 import AnimatedNumber from '@/components/ui/AnimatedNumber'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Desplegable, SelectorPeriodo, type Variante } from '@/components/dashboard/Desplegable'
@@ -78,6 +78,11 @@ const CSS = ENTRADA_INICIO_CSS + `
 .rp-fila-valor { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rp-fila-total { margin-top: 6px; padding-top: 13px; border-top: 1px solid var(--toul-border); font-size: 15px; font-weight: 600; }
 .rp-fila-nota { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--toul-text-dim); }
+/* Entre tú y tu negocio: Metí y Saqué plata, aparte de lo que ganaste */
+.rp-entre { margin-top: 30px; }
+.rp-entre-titulo { margin: 0 0 12px; font-size: 16px; font-weight: 600; letter-spacing: -0.3px; color: var(--toul-text); }
+.rp-entre-info { display: flex; gap: 8px; margin: 14px 0 0; font-size: 12px; line-height: 1.45; color: var(--toul-text-muted); }
+.rp-entre-info svg { flex-shrink: 0; margin-top: 1px; }
 
 /* Una fila que lleva a su detalle */
 .rp-enlace { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 0 -8px; padding-left: 8px; padding-right: 8px;
@@ -542,6 +547,20 @@ function TuPlata({ r, clave, cargando, enlaces }: { r: ResumenReporte | null; cl
                         {r.devuelto > 0 && <Fila rotulo="Devoluciones" valor={r.devuelto} href={enlaces.devoluciones} />}
                         <Fila rotulo="Plata que salió" valor={r.salio} total />
                     </div>
+
+                    {(r.metiste > 0 || r.sacaste > 0) && (
+                        <div className="rp-entre">
+                            <p className="rp-entre-titulo">Entre tú y tu negocio</p>
+                            <div className="rp-kpis">
+                                <Kpi rotulo="Metiste" valor={r.metiste} formato={formatPrecio} clave={clave} cargando={false} />
+                                <Kpi rotulo="Sacaste para ti" valor={r.sacaste} formato={formatPrecio} clave={clave} cargando={false} />
+                            </div>
+                            <p className="rp-entre-info">
+                                <Info size={15} aria-hidden />
+                                <span>Es plata que se movió entre tú y tu negocio. No es ganancia ni gasto, por eso no cambia lo que ganaste.</span>
+                            </p>
+                        </div>
+                    )}
                 </>
             )}
         </>

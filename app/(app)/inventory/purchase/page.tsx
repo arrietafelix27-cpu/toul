@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
+import { nombreMetodo, onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
+import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
 import { createClient } from '@/lib/supabase/client'
 import { Thumb } from '@/components/ui/Thumb'
 import { formatCOP } from '@/lib/utils'
@@ -19,6 +20,7 @@ import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { DesktopPurchase } from '@/components/inventory/DesktopPurchase'
 import { tomarPedido } from '@/lib/inventory/pedido'
 import { Sheet } from '@/components/isla/Sheet'
+import { CuentaChips, PLATA_MIA, cuentaParaGuardar, recordarCuenta } from '@/components/movimientos/CuentaChips'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -63,6 +65,10 @@ export default function NewPurchaseFlow() {
     const [initialPayment, setInitialPayment] = useState<string>('')
     const [selectedProviderId, setSelectedProviderId] = useState<string>('')
     const [dueDate, setDueDate] = useState<string>('')
+    // "¿Con qué pagaste?": una cuenta del negocio o "Plata mía"
+    const [cuenta, setCuenta] = useState<string | null>(null)
+    const { methods } = usePaymentMethods()
+    const nombreCuenta = cuenta === PLATA_MIA ? 'Plata mía' : nombreMetodo(methods.find(m => m.id === cuenta)?.name)
 
     // Step 3: Confirmation
     const [saving, setSaving] = useState(false)
@@ -176,8 +182,12 @@ export default function NewPurchaseFlow() {
     // Abonar más de lo que vale la compra deja un saldo negativo en
     // pantalla y el servidor lo rechaza con un error crudo
     const abonoDemasiado = paymentMethod === 'credit' && Number(onlyDigits(initialPayment) || 0) > total
+    // Lo que se paga hoy tiene que decir de dónde salió
+    const pagado = paymentMethod === 'credit' ? Math.round(Number(onlyDigits(initialPayment) || 0)) : Math.round(total)
+    const faltaCuenta = pagado > 0 && !cuenta
 
     const handleSubmit = async () => {
+        if (faltaCuenta) { toast.error('Elige con qué pagaste'); return }
         setSaving(true)
         try {
             const response = await fetch('/api/purchases', {
@@ -188,13 +198,8 @@ export default function NewPurchaseFlow() {
                     subtotal,
                     total,
                     isCredit: paymentMethod === 'credit',
-                    paidNow: paymentMethod === 'credit' ? Math.round(Number(initialPayment) || 0) : total,
-                    // Compatibilidad: la versión anterior del servidor espera `payments`.
-                    // Así la compra funciona aunque el SQL nuevo no esté aplicado todavía.
-                    payments: (() => {
-                        const paid = paymentMethod === 'credit' ? Math.round(Number(initialPayment) || 0) : total
-                        return paid > 0 ? [{ methodId: null, methodName: 'General', amount: paid, isCapital: false }] : []
-                    })(),
+                    paidNow: pagado,
+                    ...cuentaParaGuardar(pagado > 0 ? cuenta : null),
                     dueDate: dueDate ? new Date(dueDate).toISOString() : null,
                     items: selectedItems.map(item => ({
                         productId: item.product.id,
@@ -208,6 +213,7 @@ export default function NewPurchaseFlow() {
             const result = await response.json()
             if (!response.ok) throw new Error(result.error || 'Error al procesar la compra')
 
+            if (pagado > 0) recordarCuenta('compra', cuenta)
             toast.success('Compra registrada con éxito!')
             router.push('/inventory')
         } catch (e: unknown) {
@@ -252,6 +258,8 @@ export default function NewPurchaseFlow() {
                 setSelectedProviderId={setSelectedProviderId}
                 dueDate={dueDate}
                 setDueDate={setDueDate}
+                cuenta={cuenta}
+                setCuenta={setCuenta}
                 subtotal={subtotal}
                 total={total}
                 saving={saving}
@@ -573,8 +581,17 @@ export default function NewPurchaseFlow() {
                                 )}
                             </div>
 
+                            {pagado > 0 && (
+                                <div className="pt-4 border-t" style={{ borderColor: 'var(--toul-border)' }}>
+                                    <p className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>
+                                        {paymentMethod === 'credit' ? '¿Con qué pagaste el abono?' : '¿Con qué pagaste?'}
+                                    </p>
+                                    <CuentaChips valor={cuenta} onChange={setCuenta} recordar="compra" conPlataMia />
+                                </div>
+                            )}
+
                             <button
-                                disabled={paymentMethod === 'credit' && (!selectedProviderId || !dueDate || abonoDemasiado)}
+                                disabled={(paymentMethod === 'credit' && (!selectedProviderId || !dueDate || abonoDemasiado)) || faltaCuenta}
                                 onClick={() => setStep(3)}
                                 className="toul-btn-primary w-full mt-6 flex items-center justify-center gap-2">
                                 Revisar resumen <Navigation size={18} />
@@ -599,6 +616,12 @@ export default function NewPurchaseFlow() {
                                             {paymentMethod === 'cash' ? 'Ya la pagué' : 'Queda debiendo'}
                                         </span>
                                     </div>
+                                    {pagado > 0 && cuenta && (
+                                        <div className="flex justify-between text-sm">
+                                            <span style={{ color: 'var(--toul-text-muted)' }}>Con qué</span>
+                                            <span className="font-medium text-right" style={{ color: 'var(--toul-text)' }}>{nombreCuenta}</span>
+                                        </div>
+                                    )}
                                     {selectedProviderId && (
                                         <div className="flex justify-between text-sm">
                                             <span style={{ color: 'var(--toul-text-muted)' }}>Proveedor</span>
@@ -646,7 +669,7 @@ export default function NewPurchaseFlow() {
                             </div>
 
                             <button
-                                disabled={saving}
+                                disabled={saving || faltaCuenta}
                                 onClick={handleSubmit}
                                 className="toul-btn-primary w-full flex items-center justify-center gap-2"
                                 style={{ background: 'var(--toul-accent)', boxShadow: '0 4px 16px rgba(16,185,129,0.3)' }}>

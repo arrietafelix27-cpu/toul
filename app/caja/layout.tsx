@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ShoppingBag, ReceiptText, LockKeyhole, LayoutDashboard, LogOut, Printer, X, WifiOff, CloudUpload, AlertTriangle, LockKeyholeOpen } from 'lucide-react'
+import { ShoppingBag, ReceiptText, Receipt, LockKeyhole, LayoutDashboard, LogOut, Printer, X, WifiOff, CloudUpload, AlertTriangle, LockKeyholeOpen } from 'lucide-react'
 import { POSProvider } from '@/components/pos/POSContext'
 import { CajaContext, type BotonesComprobante } from '@/components/isla/CajaContext'
 import { OpenSessionCard } from '@/components/isla/OpenSessionCard'
@@ -16,6 +16,7 @@ import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { permisosDe } from '@/lib/pos/permisos'
 import { createClient } from '@/lib/supabase/client'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
+import { RegistrarMovimiento } from '@/components/movimientos/RegistrarMovimiento'
 
 const TABS = [
     { href: '/caja', label: 'Vender', short: 'Vender', icon: ShoppingBag },
@@ -103,6 +104,8 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     const [servidor, setServidor] = useState<{ storeId: string; plan: string; info: CachedStoreInfo } | null>(null)
     const [menuOpen, setMenuOpen] = useState(false)
     const [abrirTurnoOpen, setAbrirTurnoOpen] = useState(false)
+    // Un gasto desde la caja: solo con el permiso "Registrar gastos"
+    const [gastoOpen, setGastoOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
     const offline = useOfflineSales(ctx?.storeId)
 
@@ -177,6 +180,8 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     }
 
     const abrirTurno = useCallback(() => { setMenuOpen(false); setAbrirTurnoOpen(true) }, [])
+    const anotarGasto = useCallback(() => { setMenuOpen(false); setGastoOpen(true) }, [])
+    const cerrarGasto = useCallback(() => setGastoOpen(false), [])
 
     // Cerrar sesión pasa por un solo lugar: carga lo pendiente, avisa si
     // algo no se pudo cargar y no deja nada de la cuenta en el equipo
@@ -296,6 +301,14 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
                                                     <LockKeyholeOpen size={17} /> <span style={{ flex: 1, textAlign: 'left' }}>Abrir turno</span>
                                                 </button>
                                             )}
+                                            {/* Sin internet no se puede: el gasto se guarda en el servidor */}
+                                            {permisos.registrar_gastos === 'solo' && (
+                                                <button onClick={anotarGasto} disabled={!offline.online}
+                                                    style={{ ...menuItemStyle, opacity: offline.online ? 1 : 0.45, cursor: offline.online ? 'pointer' : 'default' }}>
+                                                    <Receipt size={17} /> <span style={{ flex: 1, textAlign: 'left' }}>Gasto</span>
+                                                    {!offline.online && <span style={{ fontSize: 12, color: 'var(--toul-text-dim)' }}>Sin internet</span>}
+                                                </button>
+                                            )}
                                             {isPro && (
                                                 <button onClick={toggleAutoPrint} style={menuItemStyle}>
                                                     <Printer size={17} />
@@ -331,6 +344,9 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
                     subtitle="Cuenta el efectivo que hay en la caja antes de empezar.">
                     <OpenSessionCard name={ctx!.displayName} onOpened={() => { setAbrirTurnoOpen(false); refreshSession() }} embedded />
                 </Sheet>
+
+                {/* El vendedor anota con una cuenta del negocio, nunca con "Plata mía" */}
+                <RegistrarMovimiento abierto={gastoOpen} tipo="gasto" conPlataMia={ctx!.role === 'admin'} onCerrar={cerrarGasto} />
             </POSProvider>
         </CajaContext.Provider>
     )

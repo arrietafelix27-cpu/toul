@@ -1,20 +1,22 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { Plus, Receipt, Megaphone, Truck, ShoppingBag, Zap, Package, Trash2 } from 'lucide-react'
+import { Plus, Receipt, Megaphone, Truck, ShoppingBag, Zap, Package } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, getDateRange } from '@/lib/utils'
 import { ZONA_COLOMBIA, diasEntre, instanteDeDia, periodoDeDireccion, textoRango, tramoDeDias, type Tramo } from '@/lib/periodos'
 import { useStore } from '@/lib/hooks/useData'
 import { EXPENSE_CATEGORIES, nombreCategoria } from '@/lib/types'
 import { explainError } from '@/lib/errors'
-import { Field, PriceField, EASE_OUT_EMIL } from '@/components/ui'
-import { Sheet } from '@/components/isla/Sheet'
-import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
+import { nombreMetodo } from '@/lib/format/text'
+import { EASE_OUT_EMIL } from '@/components/ui'
+import { PLATA_MIA } from '@/components/movimientos/CuentaChips'
+import { RegistrarMovimiento, type MovimientoAEditar } from '@/components/movimientos/RegistrarMovimiento'
+import { DetalleMovimiento, type Movimiento } from '@/components/movimientos/DetalleMovimiento'
 
 const supabase = createClient()
 
@@ -105,19 +107,12 @@ function Gastos() {
     const [period, setPeriod] = useState<Period>(inicial.period)
     const [dias] = useState({ desde: inicial.desde, hasta: inicial.hasta })
     const [categoria, setCategoria] = useState(inicial.categoria)
-    const [adding, setAdding] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [form, setForm] = useState({ category: 'otros', description: '', amount: '' })
-    // Un gasto mal digitado dañaba la utilidad para siempre: ahora se corrige
-    const [editing, setEditing] = useState<ExpenseRow | null>(null)
-    const [removing, setRemoving] = useState(false)
-    const [confirmOpen, setConfirmOpen] = useState(false)
+    // Anotar y corregir es lo mismo de Movimientos: con su cuenta o "Plata mía"
+    const [anotar, setAnotar] = useState(false)
+    const [editar, setEditar] = useState<MovimientoAEditar | null>(null)
+    const [abierto, setAbierto] = useState<{ gasto: ExpenseRow; movimiento: Movimiento } | null>(null)
 
-    function abrirNuevo() {
-        setEditing(null)
-        setForm({ category: 'otros', description: '', amount: '' })
-        setAdding(true)
-    }
+    const abrirNuevo = useCallback(() => { setEditar(null); setAnotar(true) }, [])
 
     // Desde el inicio ("Gasto") se llega con ?nuevo=1: el formulario abre de una
     useEffect(() => {
@@ -127,18 +122,51 @@ function Gastos() {
             abrirNuevo()
         }, 0)
         return () => clearTimeout(t)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [abrirNuevo])
 
-    function abrirEdicion(expense: ExpenseRow) {
-        setEditing(expense)
-        setForm({
-            category: expense.category,
-            description: expense.description ?? '',
-            amount: String(Math.round(Number(expense.amount))),
+    // El detalle necesita la salida de plata del gasto: con qué se pagó,
+    // quién lo anotó y si su turno ya se cerró
+    async function abrirGasto(gasto: ExpenseRow) {
+        const { data: pago, error } = await supabase.from('payments')
+            .select('id, method, method_id, own_money, notes, cash_session_id, created_by_name')
+            .eq('type', 'expense').eq('reference_id', gasto.id)
+            .limit(1).maybeSingle()
+        if (error) { toast.error(explainError(error, 'No se pudo abrir el gasto.')); return }
+        let turnoCerrado = false
+        if (pago?.cash_session_id) {
+            const { data: turno } = await supabase.from('cash_sessions').select('status').eq('id', pago.cash_session_id).maybeSingle()
+            turnoCerrado = turno?.status === 'closed'
+        }
+        const metodo = (pago?.method as string | null) ?? null
+        const sinCuenta = !metodo?.trim() || metodo.trim().toLowerCase() === 'general'
+        const monto = Math.round(Number(gasto.amount))
+        setAbierto({
+            gasto,
+            movimiento: {
+                id: (pago?.id as string | undefined) ?? gasto.id, type: 'expense', created_at: gasto.created_at,
+                signed: -monto, amount: monto,
+                method_id: (pago?.method_id as string | null) ?? null, own_money: !!pago?.own_money,
+                notes: (pago?.notes as string | null) ?? null, reference_id: gasto.id, linked_payment_id: null,
+                created_by_name: (pago?.created_by_name as string | null) ?? null,
+                titulo: `Gasto · ${nombreCategoria(gasto.category)}`,
+                cuenta: pago?.own_money ? 'Plata tuya' : sinCuenta ? 'Sin cuenta' : nombreMetodo(metodo),
+                Icon: (CATEGORY_STYLE[gasto.category] ?? CATEGORY_STYLE.otros).Icon,
+                deTuNegocio: false, turnoCerrado,
+                categoria: nombreCategoria(gasto.category), descripcion: gasto.description,
+            },
         })
-        setAdding(true)
     }
+
+    const abrirEdicion = useCallback((m: Movimiento) => {
+        if (!abierto) return
+        setEditar({
+            tipo: 'gasto', id: abierto.gasto.id, monto: m.amount, nota: abierto.gasto.description,
+            categoria: abierto.gasto.category || 'otros',
+            cuenta: m.own_money ? PLATA_MIA : m.method_id, turnoCerrado: m.turnoCerrado,
+        })
+        setAbierto(null)
+        setAnotar(true)
+    }, [abierto])
 
     const tramo = useMemo(() => tramoDe(period, dias), [period, dias])
 
@@ -164,17 +192,6 @@ function Gastos() {
         },
         { revalidateOnFocus: false },
     )
-
-    async function borrar() {
-        if (!editing) return
-        setRemoving(true)
-        const { error } = await supabase.rpc('toul_delete_expense', { p_expense_id: editing.id })
-        setRemoving(false)
-        if (error) { toast.error(explainError(error, 'No se pudo borrar el gasto.')); return }
-        setConfirmOpen(false); setAdding(false); setEditing(null)
-        mutate()
-        toast.success('Gasto borrado')
-    }
 
     const todos = useMemo(() => expenses ?? [], [expenses])
     // Las categorías salen de todo el periodo; la lista y el total, de la elegida
@@ -202,47 +219,10 @@ function Gastos() {
         return [...map.entries()]
     }, [rows])
 
-    async function save() {
-        const amount = Number(form.amount)
-        if (!amount || amount <= 0) { toast.error('Escribe cuánto gastaste'); return }
-
-        // Corregir uno que ya existe: el gasto y su salida de caja se
-        // arreglan juntos, para que la caja no quede descuadrada
-        if (editing) {
-            setSaving(true)
-            const { error } = await supabase.rpc('toul_update_expense', {
-                p_expense_id: editing.id,
-                p_category: form.category,
-                p_description: form.description,
-                p_amount: amount,
-            })
-            setSaving(false)
-            if (error) { toast.error(explainError(error, 'No se pudo corregir el gasto.')); return }
-            setAdding(false); setEditing(null)
-            mutate()
-            toast.success('Gasto corregido')
-            return
-        }
-
-        setSaving(true)
-        try {
-            const res = await fetch('/api/expenses', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ category: form.category, description: form.description, amount }),
-            })
-            const result = await res.json()
-            if (!res.ok) throw new Error(result.error)
-            toast.success('Gasto registrado')
-            setForm({ category: 'otros', description: '', amount: '' })
-            setAdding(false)
-            mutate()
-        } catch (err) {
-            toast.error(explainError(err, 'No se pudo registrar el gasto.'))
-        } finally {
-            setSaving(false)
-        }
-    }
+    const cerrarAnotar = useCallback(() => { setAnotar(false); setEditar(null) }, [])
+    const guardado = useCallback(() => { mutate() }, [mutate])
+    const cerrarDetalle = useCallback(() => setAbierto(null), [])
+    const borrado = useCallback(() => { setAbierto(null); mutate() }, [mutate])
 
     return (
         <div className="px-4 md:px-8 pt-6 pb-10 max-w-2xl lg:max-w-[1040px] mx-auto" style={{ position: 'relative' }}>
@@ -365,7 +345,7 @@ function Gastos() {
                                     const label = EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label ?? 'Otros'
                                     return (
                                         <button key={expense.id} className="gt-fila"
-                                            onClick={() => abrirEdicion(expense)}>
+                                            onClick={() => abrirGasto(expense)}>
                                             <span style={{
                                                 width: 40, height: 40, borderRadius: 13, flexShrink: 0,
                                                 background: style.dim, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -395,72 +375,12 @@ function Gastos() {
             </div>
             </div>
 
-            {/* Nuevo gasto */}
-            <Sheet open={adding} onClose={() => !saving && (setAdding(false), setEditing(null))}
-                title={editing ? 'Corregir gasto' : 'Nuevo gasto'}
-                subtitle={editing
-                    ? 'Se corrige el gasto y su salida de caja al mismo tiempo.'
-                    : 'Lo que sale del negocio y no es mercancía.'}
-                footer={
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="toul-btn-primary" style={{ flex: 1 }}
-                            onClick={save} disabled={saving || !form.amount}>
-                            {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar gasto'}
-                        </button>
-                        {editing && (
-                            <button onClick={() => setConfirmOpen(true)} disabled={saving}
-                                aria-label="Borrar gasto"
-                                style={{
-                                    width: 52, height: 52, borderRadius: 14, cursor: 'pointer', flexShrink: 0,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)',
-                                    color: 'var(--toul-error)',
-                                }}>
-                                <Trash2 size={17} />
-                            </button>
-                        )}
-                    </div>
-                }>
-                <p className="toul-section-label" style={{ margin: '0 0 8px 2px' }}>¿En qué gastaste?</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                    {EXPENSE_CATEGORIES.map(category => {
-                        const style = CATEGORY_STYLE[category.value] ?? CATEGORY_STYLE.otros
-                        const active = form.category === category.value
-                        return (
-                            <button key={category.value} onClick={() => setForm(f => ({ ...f, category: category.value }))}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 46, padding: '0 14px', borderRadius: 13,
-                                    cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 500,
-                                    background: active ? 'var(--toul-surface-focused)' : 'var(--toul-surface)',
-                                    border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
-                                    color: active ? 'var(--toul-accent)' : 'var(--toul-text)',
-                                    transition: 'background var(--toul-transition), border-color var(--toul-transition), color var(--toul-transition)',
-                                }}>
-                                <style.Icon size={15} style={{ color: active ? 'var(--toul-accent)' : style.color }} />
-                                {category.label}
-                            </button>
-                        )
-                    })}
-                </div>
+            {/* Nuevo gasto y corregir uno: lo mismo de Movimientos */}
+            <RegistrarMovimiento abierto={anotar} tipo="gasto" editar={editar} conPlataMia
+                onCerrar={cerrarAnotar} onGuardado={guardado} />
 
-                <PriceField label="Monto" required value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} />
-                <div style={{ height: 10 }} />
-                <Field label="¿En qué exactamente?" hint="opcional" capitalize value={form.description}
-                    onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="Ej: domicilio del pedido de María" maxLength={60} />
-            </Sheet>
-
-            <ConfirmSheet
-                open={confirmOpen}
-                onClose={() => setConfirmOpen(false)}
-                onConfirm={borrar}
-                busy={removing}
-                danger
-                title="¿Borrar este gasto?"
-                message={editing
-                    ? `Se van ${formatCOP(Number(editing.amount))} de tus gastos y de la caja. Esto no se puede deshacer.`
-                    : ''}
-                confirmLabel="Borrar gasto"
-            />
+            <DetalleMovimiento movimiento={abierto?.movimiento ?? null} onCerrar={cerrarDetalle}
+                onEditar={abrirEdicion} onBorrado={borrado} />
         </div>
     )
 }

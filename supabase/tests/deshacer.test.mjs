@@ -65,6 +65,8 @@ export default async function (db) {
   await q(`INSERT INTO provider_debts(store_id,provider_id,purchase_id,amount,remaining_amount,status)
            VALUES ($1,$2,$3,500000,500000,'pending')`, [STORE, prov.id, compra.id])
   await q(`UPDATE providers SET total_debt=500000 WHERE id=$1`, [prov.id])
+  // Una compra de antes, sin cuenta: se anota como lo viejo, sin nadie conectado
+  await db.exec(`SELECT set_config('request.jwt.claim.sub', '', false)`)
   await q(`INSERT INTO payments(store_id,type,method,amount,reference_id) VALUES ($1,'purchase','General',500000,$2)`, [STORE, compra.id])
 
   const stockAntes = Number((await one(`SELECT stock FROM products WHERE id=$1`, [prod.id])).stock)
