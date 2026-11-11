@@ -9,9 +9,15 @@ import type { SessionContext } from './types'
  * negocio como administrador. Así el código nuevo no rompe producción.
  */
 export async function getSessionContext(supabase: SupabaseClient): Promise<SessionContext | null> {
-    const { data, error } = await supabase.rpc('toul_session_context')
+    const { data, error, status } = await supabase.rpc('toul_session_context')
 
     if (!error) return (data as SessionContext | null) ?? null
+
+    // status 0 = la pregunta no llegó al servidor (sin internet). Eso no es
+    // "no hay sesión": se avisa el error para que la caja siga con la sesión
+    // guardada en el equipo y las pantallas muestren el aviso de Sin internet
+    // en vez de quedarse cargando o decir que no hay nada
+    if (status === 0) throw error
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null

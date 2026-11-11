@@ -1,5 +1,6 @@
 'use client'
 
+import { useCallback } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowLeft, Package, Search } from 'lucide-react'
@@ -13,7 +14,7 @@ import { estaVencida, fechaCompra, useCompras } from '@/lib/inventory/useCompras
 import { unidadesDeCompra, type FiltroCompras } from '@/lib/inventory/calculos'
 import { SelectorPeriodo } from '@/components/dashboard/Desplegable'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
-import { SinInternet } from '@/components/inventory/SinInternet'
+import { SinInternet } from '@/components/ui/SinInternet'
 
 /* ══════════════════════════════════════════════════════════════
    Historial de compras.
@@ -92,7 +93,7 @@ const CSS = PANEL_CSS + `
 `
 
 export default function ComprasPage() {
-    const { data: store } = useStore()
+    const { data: store, error: storeError, mutate: recargarTienda } = useStore()
     const storeId = store?.id || null
 
     const {
@@ -101,6 +102,7 @@ export default function ComprasPage() {
         hayMas, sentinela, abierta, abriendo, abrir, cerrar, alCambiar,
     } = useCompras(storeId)
     const esMovil = useIsMobile()
+    const reintentarTodo = useCallback(() => { recargarTienda(); reintentar() }, [recargarTienda, reintentar])
 
     return (
         <div className="px-4 md:px-8 py-6 pb-24" style={{ position: 'relative' }}>
@@ -122,7 +124,8 @@ export default function ComprasPage() {
                 </div>
 
                 {/* Sin internet: ni "Comprado $0" ni una lista vacía que parezcan reales */}
-                {sinDatos ? <SinInternet onRetry={reintentar} que="tus compras" /> : <>
+                {sinDatos || (storeError && !store)
+                    ? <SinInternet onRetry={reintentarTodo} que="tus compras" /> : <>
                 {/* ── Cuánto has comprado ── */}
                 <motion.div variants={fadeUp} initial="hidden" animate="visible"
                     style={{ borderRadius: 22, padding: '18px 20px', marginBottom: 14,

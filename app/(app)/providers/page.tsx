@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
@@ -9,6 +9,7 @@ import { Plus, Search, Truck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Thumb } from '@/components/ui/Thumb'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
@@ -53,7 +54,7 @@ function vencidoHace(iso: string) {
 const dias = (n: number) => `${n} ${n === 1 ? 'día' : 'días'}`
 
 export default function ProvidersPage() {
-    const { data: store, isLoading: storeLoading } = useStore()
+    const { data: store, error: storeError, isLoading: storeLoading, mutate: recargarTienda } = useStore()
     const storeId = store?.id || null
 
     const [busca, setBusca] = useState('')
@@ -61,7 +62,7 @@ export default function ProvidersPage() {
     const [limite, setLimite] = useState(PAGE_SIZE)
     const [hayMas, setHayMas] = useState(false)
 
-    const { data, isLoading, isValidating, mutate } = useSWR(
+    const { data, error, isLoading, isValidating, mutate } = useSWR(
         storeId ? ['proveedores', storeId, busca, limite] : null,
         async () => {
             let q = supabase.from('providers').select('*').eq('store_id', storeId!).order('name')
@@ -105,6 +106,12 @@ export default function ProvidersPage() {
     }, [deudas])
 
     const cargando = isLoading || storeLoading
+    const reintentar = useCallback(() => { recargarTienda(); mutate() }, [recargarTienda, mutate])
+
+    // Sin internet: ni "Le debes $0" ni "Todavía no tienes proveedores" como si fueran reales
+    if ((storeError && !store) || (error && !data)) {
+        return <SinInternet onRetry={reintentar} que="tus proveedores" />
+    }
 
     return (
         <div className="px-4 md:px-8 pt-6 pb-24" style={{ position: 'relative' }}>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import useSWR, { useSWRConfig } from 'swr'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -12,6 +12,7 @@ import { useSessionContext } from '@/lib/isla/useSession'
 import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
 import { PushPrompt } from '@/components/isla/PushPrompt'
 import { Sheet } from '@/components/isla/Sheet'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 import type { ApprovalRequest } from '@/lib/isla/types'
 
@@ -41,20 +42,23 @@ interface PriceReview {
 interface SaleInfo { id: string; total: number; created_at: string; seller_name: string | null; sale_items: { id: string; quantity: number; products: { name: string } | null; combos: { name: string } | null }[] }
 
 export default function AprobacionesPage() {
-    const { data: ctx } = useSessionContext()
+    const { data: ctx, error: errorSesion, mutate: recargarSesion } = useSessionContext()
     const { mutate: globalMutate } = useSWRConfig()
     const [rejecting, setRejecting] = useState<ApprovalRequest | null>(null)
     const [note, setNote] = useState('')
     const [busyId, setBusyId] = useState<string | null>(null)
     const { methods } = usePaymentMethods()
 
-    const { data, isLoading, mutate } = useSWR(ctx ? ['aprobaciones', ctx.storeId] : null, async () => {
+    const { data, error, isLoading, mutate } = useSWR(ctx ? ['aprobaciones', ctx.storeId] : null, async () => {
         const [pending, history, review] = await Promise.all([
             supabase.from('approval_requests').select('*').eq('store_id', ctx!.storeId).eq('status', 'pending').order('requested_at'),
             supabase.from('approval_requests').select('*').eq('store_id', ctx!.storeId).neq('status', 'pending').order('requested_at', { ascending: false }).limit(30),
             supabase.from('sales').select('id, total, created_at, seller_name, price_review').eq('store_id', ctx!.storeId)
                 .not('price_review', 'is', null).is('price_reviewed_at', null).order('created_at', { ascending: false }).limit(50),
         ])
+        // Sin internet no es "nada pendiente": se avisa
+        if (pending.error) throw pending.error
+        if (history.error) throw history.error
         const saleIds = (pending.data ?? []).map(r => r.sale_id).filter(Boolean)
         const sales = saleIds.length
             ? (await supabase.from('sales').select('id, total, created_at, seller_name, sale_items(id, quantity, products(name), combos(name))').in('id', saleIds)).data ?? []
@@ -67,6 +71,8 @@ export default function AprobacionesPage() {
             sales: new Map((sales as unknown as SaleInfo[]).map(s => [s.id, s])),
         }
     }, { refreshInterval: 8_000, revalidateOnFocus: true })
+    const sinDatos = (!!error && !data) || (!!errorSesion && !ctx)
+    const reintentar = useCallback(() => { recargarSesion(); mutate() }, [recargarSesion, mutate])
 
     async function resolve(req: ApprovalRequest, approve: boolean, resolutionNote?: string) {
         setBusyId(req.id)
@@ -114,7 +120,9 @@ export default function AprobacionesPage() {
 
             <PushPrompt compact />
 
-            {isLoading ? (
+            {sinDatos ? (
+                <SinInternet onRetry={reintentar} que="tus aprobaciones" />
+            ) : isLoading ? (
                 <div className="flex flex-col gap-2">{[0, 1].map(i => <div key={i} className="skeleton" style={{ height: 150, borderRadius: 18 }} />)}</div>
             ) : nada ? (
                 <div className="toul-card" style={{ textAlign: 'center', padding: '44px 20px' }}>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ChevronDown, ClipboardList, Plus, Search, Settings2, SlidersHorizontal, Truck } from 'lucide-react'
@@ -13,7 +13,7 @@ import { ReorderPanel } from '@/components/inventory/ReorderPanel'
 import { StockGauge } from '@/components/inventory/StockGauge'
 import { InventoryRow, ROW_CSS } from '@/components/inventory/InventoryRow'
 import { useInventario } from '@/lib/inventory/useInventario'
-import { SinInternet } from '@/components/inventory/SinInternet'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { filaDePresentacion, filaDeEstante, type Filtro } from '@/lib/inventory/calculos'
 
 /* ══════════════════════════════════════════════════════════════
@@ -70,7 +70,7 @@ const CSS = PANEL_CSS + ROW_CSS + `
 `
 
 export default function InventoryPage() {
-    const { data: store } = useStore()
+    const { data: store, error: storeError, mutate: recargarTienda } = useStore()
     const storeId = store?.id || null
 
     const [adjustOpen, setAdjustOpen] = useState(false)
@@ -83,6 +83,7 @@ export default function InventoryPage() {
         overview, overviewError, daysLeft, textoContar, shelf, shelfError, isLoading, reorder, filtered,
         variantsOf, search, setSearch, filtro, setFiltro, verMas, refresh,
     } = useInventario(storeId)
+    const reintentar = useCallback(() => { recargarTienda(); refresh() }, [recargarTienda, refresh])
 
     function toggle(productId: string) {
         setExpanded(prev => {
@@ -94,8 +95,8 @@ export default function InventoryPage() {
 
     // Sin los números de la base no se muestra nada que parezca real.
     // Si ya había datos y solo falló una actualización, se siguen viendo
-    if ((overviewError && !overview) || (shelfError && !shelf)) {
-        return <SinInternet onRetry={refresh} que="tu inventario" />
+    if ((storeError && !store) || (overviewError && !overview) || (shelfError && !shelf)) {
+        return <SinInternet onRetry={reintentar} que="tu inventario" />
     }
 
     const CHIPS: { key: Filtro; label: string; count?: number; color: string }[] = [

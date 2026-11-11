@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { staggerContainer, staggerItem, fadeUp, t } from '@/lib/motion'
 import { Skeleton, EmptyState } from '@/components/ui/Skeleton'
 import { useStore } from '@/lib/hooks/useData'
+import { SinInternet } from '@/components/ui/SinInternet'
 import useSWR from 'swr'
 import type { SaleDetailData as VentaData } from '@/lib/types'
 import { SALE_DETAIL_SELECT } from '@/lib/types'
@@ -96,7 +97,7 @@ export default function VentasPage() {
 
 function Ventas() {
     const supabase = createClient()
-    const { data: store, isLoading: storeLoading } = useStore()
+    const { data: store, error: storeError, isLoading: storeLoading, mutate: recargarTienda } = useStore()
     const storeId = store?.id || null
 
     // Desde Reportes llega con el mismo periodo:
@@ -118,7 +119,7 @@ function Ventas() {
     const [showFilters, setShowFilters] = useState(false)
 
     // Using SWR for caching and consistency
-    const { data: sales, isLoading, isValidating, mutate } = useSWR<VentaData[]>(
+    const { data: sales, error: salesError, isLoading, isValidating, mutate } = useSWR<VentaData[]>(
         storeId ? ['sales', storeId, period, fromDate, toDate, limit, seller, kind] : null,
         async () => {
             const range = getRange(period, fromDate, toDate)
@@ -205,15 +206,17 @@ function Ventas() {
         return () => observer.disconnect()
     }, [hasMore, isValidating, sales])
 
-    const { data: voids } = useSWR<SaleVoid[]>(
+    const { data: voids, error: voidsError, mutate: recargarAnuladas } = useSWR<SaleVoid[]>(
         storeId && view === 'anuladas' ? ['sale-voids', storeId, period, fromDate, toDate] : null,
         async () => {
             const range = getRange(period, fromDate, toDate)
-            const { data } = await supabase.from('sale_voids').select('*')
+            const { data, error } = await supabase.from('sale_voids').select('*')
                 .eq('store_id', storeId)
                 .gte('voided_at', range.from || '1970-01-01')
                 .lte('voided_at', range.to || '9999-12-31')
                 .order('voided_at', { ascending: false })
+            // Sin internet no es "Sin ventas anuladas"
+            if (error) throw error
             return (data ?? []) as SaleVoid[]
         },
         { revalidateOnFocus: false }
@@ -233,7 +236,7 @@ function Ventas() {
 
     // El total se calcula sobre todas las ventas del periodo. Antes
     // sumaba solo las 40 que estuvieran cargadas en pantalla.
-    const { data: periodTotals } = useSWR(
+    const { data: periodTotals, error: totalsError, mutate: recargarTotales } = useSWR(
         storeId ? ['sales-totals', storeId, period, fromDate, toDate, seller, kind] : null,
         async () => {
             const range = getRange(period, fromDate, toDate)
@@ -319,6 +322,9 @@ function Ventas() {
         return periodTotals ?? { revenue: 0, profit: 0, count: 0, fiado: 0 }
     }, [filtered, periodTotals, query, devueltoPorVenta])
 
+    const reintentar = useCallback(() => { recargarTienda(); mutate(); recargarTotales() }, [recargarTienda, mutate, recargarTotales])
+    const reintentarAnuladas = useCallback(() => { recargarAnuladas() }, [recargarAnuladas])
+
     const PERIODS: { value: Period; label: string }[] = [
         { value: 'today', label: 'Hoy' },
         { value: 'week', label: 'Semana' },
@@ -327,6 +333,11 @@ function Ventas() {
         { value: 'total', label: 'Todo' },
         { value: 'custom', label: 'Rango' },
     ]
+
+    // Sin internet: ni "Sin ventas en este período" ni totales en $0 como si fueran reales
+    if ((storeError && !store) || (salesError && !sales) || (totalsError && !periodTotals)) {
+        return <SinInternet onRetry={reintentar} que="tus ventas" />
+    }
 
     return (
         <div className="px-4 md:px-8 pt-6 pb-8 max-w-[1180px] mx-auto" style={{ position: 'relative' }}>
@@ -386,7 +397,9 @@ function Ventas() {
             </div>
 
             {view === 'anuladas' && (
-                (voids ?? []).length === 0 ? (
+                voidsError && !voids ? (
+                    <SinInternet compacto onRetry={reintentarAnuladas} que="las ventas anuladas" />
+                ) : !voids ? null : voids.length === 0 ? (
                     <EmptyState icon={Ban} title="Sin ventas anuladas" description="Las ventas anuladas en este período aparecen aquí, con el motivo y quién aprobó." />
                 ) : (
                     <div className="flex flex-col gap-2">

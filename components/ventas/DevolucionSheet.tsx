@@ -13,6 +13,7 @@ import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
 import { nombreMetodo } from '@/lib/format/text'
 import { Sheet } from '@/components/isla/Sheet'
 import { Thumb } from '@/components/ui/Thumb'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 import { saleItemName, SALE_RETURN_SELECT } from '@/lib/types'
 import type { SaleItemDetail, SaleReturn } from '@/lib/types'
@@ -159,7 +160,7 @@ export function DevolucionSheet({ open, onClose, saleId = null, isAdmin, onDone 
 }) {
     const { mutate: refrescar } = useSWRConfig()
     const { methods } = usePaymentMethods()
-    const { data: store } = useStore()
+    const { data: store, error: storeError, mutate: recargarTienda } = useStore()
 
     const [buscada, setBuscada] = useState<string | null>(null)
     const [query, setQuery] = useState('')
@@ -180,7 +181,7 @@ export function DevolucionSheet({ open, onClose, saleId = null, isAdmin, onDone 
     const id = saleId ?? buscada
 
     // ── Buscar la venta (desde el inicio) ──
-    const { data: recientes, isLoading: cargandoRecientes } = useSWR(
+    const { data: recientes, error: errorRecientes, isLoading: cargandoRecientes, mutate: recargarRecientes } = useSWR(
         open && !id && store?.id ? ['ventas-para-devolver', store.id] : null,
         async () => {
             const desde = new Date(Date.now() - PLAZO_MS).toISOString()
@@ -192,6 +193,9 @@ export function DevolucionSheet({ open, onClose, saleId = null, isAdmin, onDone 
         },
         { revalidateOnFocus: false },
     )
+    // Sin internet: el aviso, no un "cargando" que nunca termina
+    const sinRecientes = (!!storeError && !store) || (!!errorRecientes && !recientes)
+    const reintentarRecientes = useCallback(() => { recargarTienda(); recargarRecientes() }, [recargarTienda, recargarRecientes])
 
     const encontradas = useMemo(() => {
         const q = query.trim().toLowerCase().replace(/^#/, '')
@@ -205,13 +209,17 @@ export function DevolucionSheet({ open, onClose, saleId = null, isAdmin, onDone 
     }, [recientes, query])
 
     // ── La venta elegida ──
-    const { data: venta, error: errorVenta } = useSWR(open && id ? ['venta-para-devolver', id] : null, async () => {
+    const { data: venta, error: errorVenta, mutate: recargarVenta } = useSWR(open && id ? ['venta-para-devolver', id] : null, async () => {
         const { data, error } = await supabase.from('sales').select(VENTA_SELECT).eq('id', id!).single()
         if (error) throw error
         return data as unknown as VentaParaDevolver
     }, { revalidateOnFocus: false })
 
-    const { data: devoluciones } = useDevolucionesDeVenta(open && id ? id : null)
+    const { data: devoluciones, error: errorDevoluciones, mutate: recargarDevoluciones } = useDevolucionesDeVenta(open && id ? id : null)
+    // "No existe" (PGRST116) es que la anularon; cualquier otro error es la conexión
+    const ventaNoExiste = (errorVenta as { code?: string } | undefined)?.code === 'PGRST116'
+    const sinVenta = (!!errorVenta && !venta && !ventaNoExiste) || (!!errorDevoluciones && devoluciones === undefined)
+    const reintentarVenta = useCallback(() => { recargarVenta(); recargarDevoluciones() }, [recargarVenta, recargarDevoluciones])
     const devueltas = useMemo(() => devueltasPorItem(devoluciones), [devoluciones])
     const quedan = useCallback((item: ItemVenta) => Math.max(Number(item.quantity) - (devueltas.get(item.id) ?? 0), 0), [devueltas])
 
@@ -343,7 +351,9 @@ export function DevolucionSheet({ open, onClose, saleId = null, isAdmin, onDone 
                             <input className="toul-input" placeholder="Cliente, producto o número de venta"
                                 value={query} onChange={e => setQuery(e.target.value)} style={{ paddingLeft: 42 }} />
                         </div>
-                        {cargandoRecientes || !recientes ? (
+                        {sinRecientes ? (
+                            <SinInternet compacto onRetry={reintentarRecientes} que="tus ventas recientes" />
+                        ) : cargandoRecientes || !recientes ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
                                 {[0, 1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 56, borderRadius: 14 }} />)}
                             </div>
@@ -384,7 +394,9 @@ export function DevolucionSheet({ open, onClose, saleId = null, isAdmin, onDone 
                             </button>
                         )}
 
-                        {errorVenta ? (
+                        {sinVenta ? (
+                            <SinInternet compacto onRetry={reintentarVenta} que="esta venta" />
+                        ) : errorVenta ? (
                             <p className="dv-aviso">No se encontró la venta. Puede que la hayan anulado.</p>
                         ) : !venta || devoluciones === undefined ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

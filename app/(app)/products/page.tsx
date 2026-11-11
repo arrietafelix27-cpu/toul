@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import dynamic from 'next/dynamic'
@@ -9,6 +9,7 @@ import { Plus, Search, Package, Share, Tag, ArrowUpDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useToulData, useStore } from '@/lib/hooks/useData'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { staggerContainer, fadeUp } from '@/lib/motion'
 import type { Product } from '@/lib/types'
 import { CatalogCard, CATALOG_CARD_CSS, type CatalogCardData } from '@/components/products/CatalogCard'
@@ -44,15 +45,20 @@ type VariantRow = { id: string; product_id: string; name: string; sale_price: nu
 
 const supabase = createClient()
 
+// Cada consulta avisa su error: sin internet no es "no tienes combos" ni
+// "nunca se ha vendido", y la pantalla muestra el aviso en vez de eso
+
 async function fetchCombos(storeId: string) {
-    const { data } = await supabase.from('combos').select('id, name, sale_price, image_url')
+    const { data, error } = await supabase.from('combos').select('id, name, sale_price, image_url')
         .eq('store_id', storeId).eq('is_active', true).order('name')
+    if (error) throw error
     return (data || []) as ComboRow[]
 }
 
 async function fetchVariants(storeId: string) {
-    const { data } = await supabase.from('product_variants').select('id, product_id, name, sale_price')
+    const { data, error } = await supabase.from('product_variants').select('id, product_id, name, sale_price')
         .eq('store_id', storeId).eq('is_active', true)
+    if (error) throw error
     return (data || []) as VariantRow[]
 }
 
@@ -61,7 +67,7 @@ async function fetchVariants(storeId: string) {
  *  alguna está en su mínimo o agotada */
 async function fetchEstados(): Promise<Record<string, EstadoStock>> {
     const { data, error } = await supabase.rpc('toul_estado_stock')
-    if (error) return {}
+    if (error) throw error
     const porProducto = new Map<string, EstadoStock[]>()
     for (const fila of (data ?? []) as { product_id: string; estado: EstadoStock }[]) {
         const lista = porProducto.get(fila.product_id) ?? []
@@ -79,7 +85,7 @@ async function fetchEstados(): Promise<Record<string, EstadoStock>> {
 async function fetchSaleItems(storeId: string) {
     const { data, error } = await supabase.from('sale_items')
         .select('product_id, quantity, sales!inner(created_at)').eq('store_id', storeId)
-    if (error) return []
+    if (error) throw error
     // Supabase tipa la relación como arreglo aunque venga un solo registro
     return (data || []).map(item => {
         const sale = item.sales as unknown as { created_at?: string } | { created_at?: string }[] | null
@@ -95,17 +101,24 @@ async function fetchSaleItems(storeId: string) {
 /* ── Pantalla ───────────────────────────────────────────── */
 
 export default function ProductsPage() {
-    const { data: store, isLoading: storeLoading } = useStore()
+    const { data: store, error: storeError, isLoading: storeLoading, mutate: recargarTienda } = useStore()
     const storeId = store?.id || null
 
-    const { data: products, isLoading: productsLoading } = useToulData<Product>(
+    const { data: products, error: productsError, isLoading: productsLoading, mutate: recargarProductos } = useToulData<Product>(
         'products', storeId,
         { select: '*, category:product_categories(id, name)', eq: { is_active: true }, order: { column: 'name' } },
     )
-    const { data: combos } = useSWR(storeId ? ['combos-catalog', storeId] : null, ([, id]) => fetchCombos(id as string), { revalidateOnFocus: false, dedupingInterval: 60_000 })
-    const { data: variantRows } = useSWR(storeId ? ['variants-catalog', storeId] : null, ([, id]) => fetchVariants(id as string), { revalidateOnFocus: false, dedupingInterval: 60_000 })
-    const { data: saleItems } = useSWR(storeId ? ['sale-items-signals', storeId] : null, ([, id]) => fetchSaleItems(id as string), { revalidateOnFocus: false, dedupingInterval: 60_000 })
-    const { data: estados } = useSWR(storeId ? ['estado-stock', storeId] : null, fetchEstados, { revalidateOnFocus: false, dedupingInterval: 60_000 })
+    const { data: combos, error: combosError, mutate: recargarCombos } = useSWR(storeId ? ['combos-catalog', storeId] : null, ([, id]) => fetchCombos(id as string), { revalidateOnFocus: false, dedupingInterval: 60_000 })
+    const { data: variantRows, error: variantsError, mutate: recargarVariantes } = useSWR(storeId ? ['variants-catalog', storeId] : null, ([, id]) => fetchVariants(id as string), { revalidateOnFocus: false, dedupingInterval: 60_000 })
+    const { data: saleItems, error: saleItemsError, mutate: recargarVentas } = useSWR(storeId ? ['sale-items-signals', storeId] : null, ([, id]) => fetchSaleItems(id as string), { revalidateOnFocus: false, dedupingInterval: 60_000 })
+    const { data: estados, error: estadosError, mutate: recargarEstados } = useSWR(storeId ? ['estado-stock', storeId] : null, fetchEstados, { revalidateOnFocus: false, dedupingInterval: 60_000 })
+
+    const reintentar = useCallback(() => {
+        recargarTienda(); recargarProductos(); recargarCombos(); recargarVariantes(); recargarVentas(); recargarEstados()
+    }, [recargarTienda, recargarProductos, recargarCombos, recargarVariantes, recargarVentas, recargarEstados])
+    // Sin internet: ni "Tu catálogo está vacío" ni avisos de stock o ventas inventados
+    const sinDatos = (!!storeError && !store) || (!!productsError && !products) || (!!combosError && !combos)
+        || (!!variantsError && !variantRows) || (!!saleItemsError && !saleItems) || (!!estadosError && !estados)
 
     const [search, setSearch] = useState('')
     const [typeFilter, setTypeFilter] = useState<TypeFilter>('todos')
@@ -206,6 +219,8 @@ export default function ProductsPage() {
     const isLoading = productsLoading || storeLoading
 
     const cycleSort = () => setSortOrder(prev => SORT_CYCLE[(SORT_CYCLE.indexOf(prev) + 1) % SORT_CYCLE.length])
+
+    if (sinDatos) return <SinInternet onRetry={reintentar} que="tu catálogo" />
 
     return (
         <div className="px-4 md:px-8 pt-6 pb-24" style={{ position: 'relative' }}>

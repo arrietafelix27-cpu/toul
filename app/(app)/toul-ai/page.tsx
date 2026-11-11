@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect, Fragment } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useStore } from '@/lib/hooks/useData'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { marcarObservacionVista } from '@/components/layout/BotonToulAI'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Sparkles, Brain, User, ArrowLeft, Trash2, TrendingUp, Wallet, Package, Target, AlertTriangle } from 'lucide-react'
@@ -12,8 +13,16 @@ import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import Link from 'next/link'
 
 export default function ToulAIPage() {
-    const { data: store } = useStore()
+    const { data: store, error: storeError, mutate: recargarTienda } = useStore()
     const storeId = store?.id
+    const reintentar = useCallback(() => { recargarTienda() }, [recargarTienda])
+
+    // Sin internet y sin la tienda: el aviso, no un "cargando" que nunca termina
+    if (storeError && !store) return (
+        <div className="h-screen flex items-center justify-center" style={{ background: 'var(--toul-bg)' }}>
+            <SinInternet onRetry={reintentar} que="TOUL AI" />
+        </div>
+    )
 
     if (!storeId) return (
         <div className="h-screen flex items-center justify-center" style={{ background: 'var(--toul-bg)' }}>

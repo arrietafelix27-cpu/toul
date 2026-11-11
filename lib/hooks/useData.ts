@@ -54,10 +54,15 @@ export function useStore() {
         // Supabase (getUser tardaba una espera completa al abrir la app). El
         // servidor ya verificó la sesión en el middleware, y las reglas de la
         // base de datos solo devuelven el negocio de quien de verdad es.
-        const { data: { session } } = await supabase.auth.getSession()
+        const { data: { session }, error: errorSesion } = await supabase.auth.getSession()
+        // Sin internet no es "no tienes tienda": se avisa el error, y si la
+        // tienda ya estaba cargada se sigue usando (SWR la conserva)
+        if (errorSesion) throw errorSesion
         const userId = session?.user.id
         if (!userId) return null
-        const { data } = await supabase.from('stores').select('id, name, appearance, plan').eq('owner_id', userId).single()
+        const { data, error } = await supabase.from('stores').select('id, name, appearance, plan').eq('owner_id', userId).single()
+        // PGRST116 = no hay tienda de la que sea dueño (por ejemplo, un vendedor)
+        if (error && error.code !== 'PGRST116') throw error
         return data
     // Antes se recordaba una hora sin volver a preguntar: si cambiabas de
     // cuenta dentro de esa hora, la app seguía creyendo que eras la tienda

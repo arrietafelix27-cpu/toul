@@ -1,16 +1,17 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
-import { AlertTriangle, ArrowRight, CalendarClock, Check, MessageCircle, TrendingDown, TrendingUp } from 'lucide-react'
+import { ArrowRight, CalendarClock, Check, MessageCircle, TrendingDown, TrendingUp } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { onlyDigits, withThousands } from '@/lib/format/text'
 import { Sheet } from '@/components/isla/Sheet'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { MetodoAbono } from '@/components/customers/MetodoAbono'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
@@ -158,11 +159,12 @@ const CSS = `
 `
 
 export function Receivables() {
-    const { data, isLoading, error, mutate } = useSWR<Cartera>('cartera', async () => {
+    const { data, isLoading, mutate } = useSWR<Cartera>('cartera', async () => {
         const { data, error } = await supabase.rpc('toul_receivables')
         if (error) throw error
         return data as Cartera
     }, { revalidateOnFocus: true })
+    const reintentar = useCallback(() => { mutate() }, [mutate])
 
     const [abierta, _setAbierta] = useState<Fila | null>(null)
     const setAbierta = (f: Fila | null) => {
@@ -241,26 +243,8 @@ export function Receivables() {
 
     // Sin esto, un error se vería igual que una cartera en cero: la
     // pantalla diría que nadie te debe cuando lo que pasó es que no
-    // se pudo leer
-    if (error || !data) {
-        return (
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '15px 16px', borderRadius: 18, background: 'var(--toul-warning-dim)', border: '1px solid rgba(255,214,10,0.25)' }}>
-                <style>{CSS}</style>
-                <AlertTriangle size={18} style={{ color: 'var(--toul-warning)', flexShrink: 0, marginTop: 1 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
-                        No se pudo leer tu cartera
-                    </p>
-                    <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '3px 0 10px', lineHeight: 1.5 }}>
-                        No te mostramos un cero para que no creas que nadie te debe.
-                    </p>
-                    <button className="cob-acc" style={{ padding: '0 13px' }} onClick={() => mutate()}>
-                        Volver a intentar
-                    </button>
-                </div>
-            </div>
-        )
-    }
+    // se pudo leer. Si ya había una cartera cargada, se sigue mostrando
+    if (!data) return <SinInternet onRetry={reintentar} que="tu cartera" />
 
     const c = data ?? { total: 0, hoy: 0, diasMasVieja: 0, fiadoMes: 0, recuperadoMes: 0, clientes: [] }
     const cuantos = c.clientes.length

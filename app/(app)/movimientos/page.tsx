@@ -12,6 +12,7 @@ import { diasEntre, enColombia, formatoColombia, periodoDeDireccion, periodoEnDi
 import { nombreMetodo } from '@/lib/format/text'
 import { nombreCategoria, type SaleDetailData } from '@/lib/types'
 import { useStore } from '@/lib/hooks/useData'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { SelectorPeriodo } from '@/components/dashboard/Desplegable'
 import { SPRING_PRESS } from '@/components/ui'
@@ -208,7 +209,7 @@ export default function MovimientosPage() {
 }
 
 function Movimientos() {
-    const { data: store } = useStore()
+    const { data: store, error: storeError, mutate: recargarTienda } = useStore()
     const storeId = store?.id || null
     const variante = useIsMobile() ? 'movil' : 'pc'
 
@@ -248,7 +249,7 @@ function Movimientos() {
     const tramo = useMemo(() => rangoPeriodo(periodo, rango), [periodo, rango])
 
     // Todo el periodo, de a 1.000: el total de un filtro tiene que sumarlo todo
-    const { data, isLoading, mutate } = useSWR(storeId ? ['movimientos', storeId, periodo, tramo.from, periodo === 'custom' ? tramo.to : 'ahora'] : null, async () => {
+    const { data, error: errorMovimientos, isLoading, mutate } = useSWR(storeId ? ['movimientos', storeId, periodo, tramo.from, periodo === 'custom' ? tramo.to : 'ahora'] : null, async () => {
         const filas: Fila[] = []
         for (let desde = 0; ; desde += 1000) {
             let q = supabase.from('payments')
@@ -275,7 +276,7 @@ function Movimientos() {
     const verGastos = deAfuera ? deAfuera.tipo === 'gastos' : filtro === 'gastos'
     const idsGastos = useMemo(() => [...new Set((data ?? [])
         .filter(f => f.type === 'expense' && f.reference_id).map(f => f.reference_id as string))].sort(), [data])
-    const { data: categorias, mutate: mutateCategorias } = useSWR(
+    const { data: categorias, error: errorCategorias, mutate: mutateCategorias } = useSWR(
         storeId && verGastos && idsGastos.length ? ['categorias-gastos', storeId, idsGastos.join(',')] : null,
         async () => {
             const mapa = new Map<string, string>()
@@ -491,6 +492,13 @@ function Movimientos() {
 
     const esNueva = (m: Movimiento) => !!nueva && ((!!nueva.paymentId && nueva.paymentId === m.id)
         || (!!nueva.expenseId && m.type === 'expense' && m.reference_id === nueva.expenseId))
+
+    const reintentar = useCallback(() => { recargarTienda(); mutate(); mutateCategorias() }, [recargarTienda, mutate, mutateCategorias])
+
+    // Sin internet: ni "Aún no hay movimientos" ni totales en $0 como si fueran reales
+    if ((storeError && !store) || (errorMovimientos && !data) || (verGastos && errorCategorias && !categorias)) {
+        return <SinInternet onRetry={reintentar} que="tus movimientos" />
+    }
 
     return (
         <div className="px-4 md:px-8 pt-6 pb-10 max-w-2xl lg:max-w-[1040px] mx-auto" style={{ position: 'relative' }}>

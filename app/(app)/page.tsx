@@ -16,6 +16,7 @@ import { Vendiste, Ganaste, LineaFina, FilasInicio, rotuloGastos, ICONO_FIADO, I
 
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { ENTRADA_INICIO_CSS, entrada, useEntradaInicio } from '@/lib/motion'
 import { contraQue, diasEntre, periodoEnDireccion, rangoAnterior } from '@/lib/periodos'
 import { lineaVentas, porcentajeTendencia, resumenInicio, resumir, type LineaInicio, type TramoLinea } from '@/lib/reports/calculos'
@@ -46,7 +47,7 @@ interface Cabecera {
 
 export default function DashboardPage() {
     const supabase = createClient()
-    const { data: store, isLoading: storeLoading } = useStore()
+    const { data: store, error: storeError, isLoading: storeLoading, mutate: recargarTienda } = useStore()
     const storeId = store?.id || null
     const storeName = store?.name || ''
 
@@ -268,6 +269,7 @@ export default function DashboardPage() {
     )
 
     const loading = metricsLoading || storeLoading
+    const reintentar = useCallback(() => { recargarTienda(); retryMetrics() }, [recargarTienda, retryMetrics])
     // Solo la primera vez no hay nada que mostrar (ver keepPreviousData arriba)
     const primeraCarga = !dashboardData
 
@@ -359,6 +361,13 @@ export default function DashboardPage() {
     // En el celular la gráfica va entre lo vendido y esto
     const abajo: ReactNode = nuevo ? null : <>{ganaste}{filasInicio}</>
 
+    // Sin internet: ni "Vendiste $0" ni "Sin ventas" como si fueran reales.
+    // Con keepPreviousData, lo que hay puede ser de otro periodo: eso tampoco cuenta
+    const datosDeEstePeriodo = !!dashboardData && dashboardData.clave === conteo.clave
+    if ((storeError && !store) || (metricsError && !datosDeEstePeriodo)) {
+        return <SinInternet onRetry={reintentar} que="cómo va tu negocio" />
+    }
+
     return (
         <>
             {/* ── Cuando la carga falla ─────────────────────────────────────
@@ -374,10 +383,10 @@ export default function DashboardPage() {
                     <AlertTriangle size={18} style={{ color: 'var(--toul-warning)', flexShrink: 0, marginTop: 1 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
-                            No se pudieron cargar tus números
+                            No se pudieron actualizar tus números
                         </p>
                         <p style={{ fontSize: 12.5, color: 'var(--toul-text-dim)', margin: '2px 0 10px', lineHeight: 1.5 }}>
-                            Lo que ves abajo no es tu negocio. Revisa tu conexión y vuelve a intentar.
+                            Lo que ves es de la última vez que cargó. Revisa tu conexión y vuelve a intentar.
                         </p>
                         <button onClick={() => retryMetrics()}
                             style={{

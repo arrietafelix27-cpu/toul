@@ -1,7 +1,7 @@
 'use client'
 import { nombreMetodo } from '@/lib/format/text'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -14,6 +14,7 @@ import { CashSummary } from '@/components/isla/CashSummary'
 import { Sheet } from '@/components/isla/Sheet'
 import { PriceField } from '@/components/ui'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { printCashClose } from '@/lib/isla/receipt'
 import { fadeUp } from '@/lib/motion'
@@ -71,16 +72,20 @@ const hace = (iso: string) => {
 }
 
 export default function TurnosPage() {
-    const { data: ctx } = useSessionContext()
+    const { data: ctx, error: errorSesion, mutate: recargarSesion } = useSessionContext()
     const [selected, setSelected] = useState<CashSession | null>(null)
     const [counted, setCounted] = useState('')
     const [closing, setClosing] = useState(false)
 
-    const { data: sessions, isLoading, mutate } = useSWR(ctx ? ['turnos', ctx.storeId] : null, async () => {
-        const { data } = await supabase.from('cash_sessions').select('*')
+    const { data: sessions, error, isLoading, mutate } = useSWR(ctx ? ['turnos', ctx.storeId] : null, async () => {
+        const { data, error } = await supabase.from('cash_sessions').select('*')
             .eq('store_id', ctx!.storeId).order('opened_at', { ascending: false }).limit(40)
+        // Sin internet no es "todavía no hay turnos"
+        if (error) throw error
         return (data ?? []) as CashSession[]
     }, { refreshInterval: 30_000 })
+    const sinDatos = (!!error && !sessions) || (!!errorSesion && !ctx)
+    const reintentar = useCallback(() => { recargarSesion(); mutate() }, [recargarSesion, mutate])
 
     const abierto = useMemo(() => (sessions ?? []).find(s => s.status === 'open') ?? null, [sessions])
 
@@ -153,7 +158,9 @@ export default function TurnosPage() {
                 </motion.div>
 
                 {/* ── El turno en curso manda ── */}
-                {isLoading ? (
+                {sinDatos ? (
+                    <SinInternet onRetry={reintentar} que="tus turnos de caja" />
+                ) : isLoading ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <Skeleton height="3rem" width="220px" className="rounded-xl" />
                         <Skeleton height="5px" className="rounded-full" />
@@ -275,7 +282,7 @@ export default function TurnosPage() {
                     </>
                 )}
 
-                {!isLoading && (sessions?.length ?? 0) === 0 && (
+                {!isLoading && !sinDatos && (sessions?.length ?? 0) === 0 && (
                     <p style={{ fontSize: 13.5, color: 'var(--toul-text-dim)', margin: '28px 2px 0', lineHeight: 1.55 }}>
                         Todavía no hay turnos. Se crean cuando alguien abre la caja en el punto de venta.
                     </p>

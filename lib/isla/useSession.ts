@@ -69,6 +69,10 @@ export function usePendingApprovalsCount(enabled: boolean) {
             supabase.from('sales').select('id', { count: 'exact', head: true })
                 .not('price_review', 'is', null).is('price_reviewed_at', null),
         ])
-        return (solicitudes.error ? 0 : solicitudes.count ?? 0) + (revisar.error ? 0 : revisar.count ?? 0)
+        // Sin internet no es "nada pendiente": se avisa el error (los globos
+        // quedan con lo último que se supo). Lo de revisar precios puede no
+        // existir en bases viejas: ahí cuenta como cero
+        if (solicitudes.error) throw solicitudes.error
+        return (solicitudes.count ?? 0) + (revisar.error ? 0 : revisar.count ?? 0)
     }, { refreshInterval: 15_000, revalidateOnFocus: true })
 }

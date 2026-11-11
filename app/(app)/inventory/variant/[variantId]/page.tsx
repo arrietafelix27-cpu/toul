@@ -2,7 +2,7 @@
 
 import { use, useState, useCallback } from 'react'
 import { StockDetail, StockDetailSkeleton } from '@/components/inventory/StockDetail'
-import { SinInternet } from '@/components/inventory/SinInternet'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { StockAdjustSheet } from '@/components/inventory/StockAdjustSheet'
 import { useDetallePresentacion } from '@/lib/inventory/useDetalleStock'
 

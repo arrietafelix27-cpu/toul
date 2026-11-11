@@ -6,7 +6,7 @@ import { ArrowLeft, ClipboardList, Plus, ChevronRight } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
 import { EASE_OUT_EMIL } from '@/components/ui'
 import { useConteos } from '@/lib/inventory/useConteo'
-import { SinInternet } from '@/components/inventory/SinInternet'
+import { SinInternet } from '@/components/ui/SinInternet'
 
 const CSS = `
 .ct-fila { display: flex; align-items: center; gap: 13px; padding: 11px 10px; border-radius: 14px;

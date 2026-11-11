@@ -6,6 +6,7 @@ import useSWR from 'swr'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { useStore } from '@/lib/hooks/useData'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { PERIODOS_URL, rangoAnterior, rangoPeriodo, type Periodo, type Rango } from '@/lib/periodos'
 import { ReportsView } from '@/components/reports/ReportsView'
@@ -46,7 +47,7 @@ function periodoInicial(params: URLSearchParams): { periodo: Periodo; rango: Ran
 
 function Reportes() {
     const params = useSearchParams()
-    const { data: store } = useStore()
+    const { data: store, error: storeError, mutate: recargarTienda } = useStore()
     const storeId = store?.id || null
     const esMovil = useIsMobile()
 
@@ -76,7 +77,7 @@ function Reportes() {
     )
 
     // No depende del periodo elegido
-    const { data: meses } = useSWR<MesReporte[]>(
+    const { data: meses, error: errorMeses, mutate: recargarMeses } = useSWR<MesReporte[]>(
         storeId ? ['reporte-meses', storeId] : null,
         async () => {
             const { data, error } = await supabase.rpc('toul_reporte_meses', { p_meses: 6 })
@@ -87,7 +88,7 @@ function Reportes() {
     )
 
     // Plata en mercancía: lo de hoy, contando cada presentación, igual que Inventario
-    const { data: inventario } = useSWR<number>(
+    const { data: inventario, error: errorInventario, mutate: recargarInventario } = useSWR<number>(
         storeId ? ['reporte-inventario', storeId] : null,
         async () => {
             const { data, error } = await supabase.rpc('toul_inventory_overview', { p_limit: 1 })
@@ -122,7 +123,15 @@ function Reportes() {
 
     const cambiarPeriodo = useCallback((p: Periodo) => setPeriodo(p), [])
     const cambiarRango = useCallback((r: Rango) => setRango(r), [])
-    const reintentar = useCallback(() => { mutate() }, [mutate])
+    const reintentar = useCallback(() => {
+        recargarTienda(); mutate(); recargarMeses(); recargarInventario()
+    }, [recargarTienda, mutate, recargarMeses, recargarInventario])
+
+    // Sin internet: ni "Ganaste $0" ni gráficas vacías como si fueran reales.
+    // Con keepPreviousData, lo que hay puede ser de otro periodo: eso tampoco cuenta
+    const sinDatos = (!!storeError && !store) || (!!error && data?.clave !== clave)
+        || (!!errorMeses && !meses) || (!!errorInventario && inventario === undefined)
+    if (sinDatos) return <SinInternet onRetry={reintentar} que="tus reportes" />
 
     return (
         <ReportsView

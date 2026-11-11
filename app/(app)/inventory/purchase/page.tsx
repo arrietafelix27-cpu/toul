@@ -18,7 +18,7 @@ import { CuentaChips } from '@/components/movimientos/CuentaChips'
 import { useCompra } from '@/lib/inventory/useCompra'
 import { cantidadValida, saldoPendiente, soloCantidad } from '@/lib/inventory/calculos'
 import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
-import { SinInternet } from '@/components/inventory/SinInternet'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { diaColombia, formatoColombia, instanteDeDia } from '@/lib/periodos'
 
 // ─── Page ────────────────────────────────────────────────────

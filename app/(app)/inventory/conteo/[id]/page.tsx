@@ -9,7 +9,7 @@ import { Sheet } from '@/components/isla/Sheet'
 import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { EASE_OUT_EMIL } from '@/components/ui'
 import { useConteo } from '@/lib/inventory/useConteo'
-import { SinInternet } from '@/components/inventory/SinInternet'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { diferenciasDelConteo, llaveDeConteo } from '@/lib/inventory/calculos'
 
 const CSS = `

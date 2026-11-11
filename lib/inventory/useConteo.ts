@@ -44,7 +44,7 @@ export interface ItemContado {
 
 export function useConteos() {
     const router = useRouter()
-    const { data: ctx } = useSessionContext()
+    const { data: ctx, error: errorSesion, mutate: recargarSesion } = useSessionContext()
     const [creating, setCreating] = useState(false)
 
     const { data: counts, error, isLoading, mutate } = useSWR(ctx ? ['conteos', ctx.storeId] : null, async () => {
@@ -55,8 +55,9 @@ export function useConteos() {
         if (error) throw error
         return (data ?? []) as Conteo[]
     })
-    const sinDatos = !!error && !counts
-    const reintentar = useCallback(() => { mutate() }, [mutate])
+    // Sin saber de qué negocio eres tampoco se puede decir "no hay conteos"
+    const sinDatos = (!!error && !counts) || (!!errorSesion && !ctx)
+    const reintentar = useCallback(() => { recargarSesion(); mutate() }, [recargarSesion, mutate])
 
     const openCount = counts?.find(c => c.status === 'open')
 
@@ -80,7 +81,7 @@ export function useConteos() {
 /* ── Un conteo ──────────────────────────────────────────────── */
 
 export function useConteo(id: string) {
-    const { data: ctx } = useSessionContext()
+    const { data: ctx, error: errorSesion, mutate: recargarSesion } = useSessionContext()
     const [count, setCount] = useState<Conteo | null>(null)
     const [rows, setRows] = useState<FilaConteo[]>([])
     const [counted, setCounted] = useState<Record<string, string>>({})
@@ -139,7 +140,9 @@ export function useConteo(id: string) {
         return () => { cancelled = true }
     }, [ctx, id, intento])
 
-    const reintentar = useCallback(() => { setLoading(true); setIntento(n => n + 1) }, [])
+    const reintentar = useCallback(() => { recargarSesion(); setLoading(true); setIntento(n => n + 1) }, [recargarSesion])
+    // Sin saber de qué negocio eres no se puede cargar: aviso, no "cargando" para siempre
+    const sinSesion = !!errorSesion && !ctx
 
     // ─── Guardar cada renglón mientras se cuenta ──────────────
     const saveRow = useCallback(async (row: FilaConteo, value: string) => {
@@ -227,7 +230,8 @@ export function useConteo(id: string) {
     const nameByKey = useMemo(() => Object.fromEntries(rows.map(r => [r.key, r.name])), [rows])
 
     return {
-        count, rows, counted, applied, loading, sinDatos, reintentar,
+        count, rows, counted, applied,
+        loading: loading && !sinSesion, sinDatos: sinDatos || sinSesion, reintentar,
         search, setSearch,
         confirmOpen, setConfirmOpen,
         cancelOpen, setCancelOpen,

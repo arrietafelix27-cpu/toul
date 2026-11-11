@@ -6,6 +6,7 @@ import { useStore } from '@/lib/hooks/useData'
 import { useOpenCashSession, usePendingApprovalsCount } from '@/lib/isla/useSession'
 import { ZONA_COLOMBIA, diaColombia, formatoColombia } from '@/lib/periodos'
 import { CountBadge } from '@/components/layout/BottomNav'
+import { useEnLinea } from '@/components/ui/SinInternet'
 
 /* ══════════════════════════════════════════════════════════════
    Punto físico: lo del local o la isla, en un solo lugar.
@@ -42,11 +43,17 @@ function textoTurno(abiertaDesde: string): string {
 
 export default function PuntoFisicoPage() {
     const { data: store } = useStore()
-    const { data: turno, isLoading: cargandoTurno } = useOpenCashSession(store?.id)
-    const { data: pendientes, isLoading: cargandoPendientes } = usePendingApprovalsCount(true)
+    const { data: turno, error: errorTurno } = useOpenCashSession(store?.id)
+    const { data: pendientes, error: errorPendientes, isLoading: cargandoPendientes } = usePendingApprovalsCount(true)
+    const enLinea = useEnLinea()
 
-    const estadoTurno = cargandoTurno || turno === undefined ? '' : turno ? textoTurno(turno.opened_at) : 'Caja cerrada'
-    const estadoAprobaciones = cargandoPendientes || pendientes === undefined ? ''
+    // Es un menú: no se tapa con el aviso. Lo que no se puede saber sin
+    // internet dice eso, no "Nada pendiente" o "Caja cerrada" inventados.
+    // El turno sí se recuerda en el equipo (la caja funciona sin internet)
+    const estadoTurno = turno !== undefined ? (turno ? textoTurno(turno.opened_at) : 'Caja cerrada')
+        : errorTurno || !enLinea ? 'Sin internet' : ''
+    const estadoAprobaciones = errorPendientes || !enLinea ? 'Sin internet'
+        : cargandoPendientes || pendientes === undefined ? ''
         : pendientes > 0 ? `${pendientes} por revisar` : 'Nada pendiente'
 
     return (
@@ -70,7 +77,7 @@ export default function PuntoFisicoPage() {
                     <span className="pf-nombre">Aprobaciones</span>
                     <span className="pf-estado">{estadoAprobaciones}</span>
                 </span>
-                <CountBadge count={pendientes ?? 0} />
+                <CountBadge count={errorPendientes || !enLinea ? 0 : pendientes ?? 0} />
                 <ChevronRight size={17} className="pf-chev" aria-hidden />
             </Link>
         </div>

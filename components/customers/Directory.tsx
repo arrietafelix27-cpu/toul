@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -11,6 +11,7 @@ import { capitalizeFirst } from '@/lib/format/text'
 import { formatCOP } from '@/lib/utils'
 import { Sheet } from '@/components/isla/Sheet'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { SinInternet } from '@/components/ui/SinInternet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { explainError } from '@/lib/errors'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
@@ -127,6 +128,7 @@ export function Directory() {
         if (error) throw error
         return data as Vista
     }, { revalidateOnFocus: true })
+    const reintentar = useCallback(() => { mutate() }, [mutate])
 
     const [busca, setBusca] = useState('')
     const [filtro, setFiltro] = useState<Filtro>('todos')
@@ -229,14 +231,18 @@ export function Directory() {
         { key: 'saldo', label: 'Con saldo' },
     ]
 
+    // Sin internet y sin lista guardada: nunca "0 clientes" ni
+    // "Todavía no tienes clientes" como si fuera cierto
+    if (error && !data) return <SinInternet onRetry={reintentar} que="tus clientes" />
+
     return (
         <>
             <style>{PANEL_CSS + CSS}</style>
 
             {error && (
-                <Aviso onClick={() => mutate()}
-                    titulo="No se pudo leer tu lista de clientes"
-                    detalle="Toca para volver a intentarlo." />
+                <Aviso onClick={reintentar}
+                    titulo="No se pudo actualizar tu lista de clientes"
+                    detalle="Lo que ves es de la última vez que cargó. Toca para volver a intentar." />
             )}
 
             {/* ── Quiénes son ── */}
