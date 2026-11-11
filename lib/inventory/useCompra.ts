@@ -7,7 +7,7 @@ import { explainError } from '@/lib/errors'
 import { createClient } from '@/lib/supabase/client'
 import { nombreMetodo, onlyDigits } from '@/lib/format/text'
 import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
-import { PLATA_MIA, cuentaParaGuardar, recordarCuenta } from '@/components/movimientos/CuentaChips'
+import { cuentaParaGuardar, recordarCuenta } from '@/components/movimientos/CuentaChips'
 import type { Product, Provider } from '@/lib/types'
 import { tomarPedido } from './pedido'
 import {
@@ -49,10 +49,10 @@ export function useCompra() {
     const [initialPayment, setInitialPayment] = useState<string>('')
     const [selectedProviderId, setSelectedProviderId] = useState<string>('')
     const [dueDate, setDueDate] = useState<string>('')
-    // "¿Con qué pagaste?": una cuenta del negocio o "Plata mía"
+    // "¿Con qué pagaste?": siempre una cuenta del negocio
     const [cuenta, setCuenta] = useState<string | null>(null)
     const { methods } = usePaymentMethods()
-    const nombreCuenta = cuenta === PLATA_MIA ? 'Plata mía' : nombreMetodo(methods.find(m => m.id === cuenta)?.name)
+    const nombreCuenta = nombreMetodo(methods.find(m => m.id === cuenta)?.name)
 
     const [saving, setSaving] = useState(false)
     // Antes de guardar con costo $0: se avisa una vez y el dueño decide

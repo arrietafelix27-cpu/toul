@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 import { Sheet } from './Sheet'
 import { VoidSaleDialog } from './VoidSaleDialog'
 import { DevolucionSheet, useDevolucionesDeVenta, DIAS_PARA_DEVOLVER } from '@/components/ventas/DevolucionSheet'
@@ -89,7 +90,7 @@ export function SaleDetail({ sale, onClose, isAdmin, voidPending, returnPending 
                 open={!!sale && !voidOpen && !devolverOpen}
                 onClose={onClose}
                 title={sale ? formatCOP(sale.total) : ''}
-                subtitle={sale ? `${time} · Venta #${sale.id.slice(0, 8).toUpperCase()}${sale.seller_name ? ` · ${sale.seller_name}` : ''}` : ''}
+                subtitle={sale ? `${time} · Venta #${sale.id.slice(0, 8).toUpperCase()}${PUNTO_FISICO && sale.seller_name ? ` · ${sale.seller_name}` : ''}` : ''}
                 footer={sale && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {returnPending ? (
@@ -102,9 +103,12 @@ export function SaleDetail({ sale, onClose, isAdmin, voidPending, returnPending 
                             </button>
                         )}
                         <div style={{ display: 'flex', gap: 10 }}>
-                            <button className="toul-btn-secondary" onClick={reprint} disabled={printing} style={{ color: 'var(--toul-text)' }}>
-                                <Printer size={17} /> {printing ? 'Preparando…' : 'Tirilla'}
-                            </button>
+                            {/* La tirilla es del punto físico (en pausa) */}
+                            {PUNTO_FISICO && (
+                                <button className="toul-btn-secondary" onClick={reprint} disabled={printing} style={{ color: 'var(--toul-text)' }}>
+                                    <Printer size={17} /> {printing ? 'Preparando…' : 'Tirilla'}
+                                </button>
+                            )}
                             {voidPending ? (
                                 <button className="toul-btn-secondary" disabled style={{ color: 'var(--toul-warning)' }}>
                                     <Clock size={17} /> Anulación pendiente

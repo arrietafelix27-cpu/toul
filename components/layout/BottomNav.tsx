@@ -6,6 +6,7 @@ import {
     Settings, Ellipsis, ChevronsUpDown, Plus, LogOut,
 } from 'lucide-react'
 import { usePendingApprovalsCount } from '@/lib/isla/useSession'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 import { useStore } from '@/lib/hooks/useData'
 import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { FullscreenToggle } from './FullscreenToggle'
@@ -97,6 +98,8 @@ export type ItemNav = {
     badge?: boolean
     /** Solo con el plan Pro */
     plan?: 'pro'
+    /** Solo si el punto físico está prendido (lib/puntoFisico.ts) */
+    puntoFisico?: true
     /** Pantallas que también cuentan como esta opción */
     tambien?: string[]
 }
@@ -111,16 +114,17 @@ const PROVEEDORES: ItemNav = { href: '/providers', icon: Truck, label: 'Proveedo
 const REPORTES: ItemNav = { href: '/reportes', icon: BarChart3, label: 'Reportes' }
 // Solo lo necesita quien vende en un local o una isla. Quien vende por
 // Instagram no tiene un cajón que cuadrar, así que no le aparece: es lo
-// que separa el plan Pro del básico.
-const PUNTO_FISICO: ItemNav = {
-    href: '/punto-fisico', icon: Store, label: 'Punto físico', badge: true, plan: 'pro',
+// que separa el plan Pro del básico. En pausa: no le sale a nadie
+// mientras la llave de lib/puntoFisico.ts esté apagada.
+const ITEM_PUNTO_FISICO: ItemNav = {
+    href: '/punto-fisico', icon: Store, label: 'Punto físico', badge: true, plan: 'pro', puntoFisico: true,
     tambien: ['/turnos', '/aprobaciones'],
 }
 
 // Una sola lista, en el orden en que se usa
-const MENU_PC: ItemNav[] = [INICIO, CATALOGO, INVENTARIO, MOVIMIENTOS, CLIENTES, PROVEEDORES, REPORTES, PUNTO_FISICO]
+const MENU_PC: ItemNav[] = [INICIO, CATALOGO, INVENTARIO, MOVIMIENTOS, CLIENTES, PROVEEDORES, REPORTES, ITEM_PUNTO_FISICO]
 /** Lo que va en la pantalla "Más" del celular (lo que no está en la barra de abajo) */
-export const MENU_MAS: ItemNav[] = [INVENTARIO, CLIENTES, PROVEEDORES, REPORTES, PUNTO_FISICO]
+export const MENU_MAS: ItemNav[] = [INVENTARIO, CLIENTES, PROVEEDORES, REPORTES, ITEM_PUNTO_FISICO]
 
 export const nombrePlan = (plan: string | undefined) => plan === 'pro' ? 'Plan Pro' : plan === 'basico' ? 'Plan Básico' : ''
 // "Tienda de perfumes" → TP: las palabras cortas de enlace no cuentan
@@ -155,8 +159,9 @@ export function usePlan(): string | undefined {
     return store ? store.plan : recordado
 }
 
-/** Una opción marcada 'pro' solo se ve con el plan Pro. */
-export const seVe = (item: ItemNav, plan: string | undefined) => item.plan !== 'pro' || plan === 'pro'
+/** Una opción marcada 'pro' solo se ve con el plan Pro; lo del punto físico, solo con la llave prendida. */
+export const seVe = (item: ItemNav, plan: string | undefined) =>
+    (!item.puntoFisico || PUNTO_FISICO) && (item.plan !== 'pro' || plan === 'pro')
 
 /** Una opción está activa también dentro de sus pantallas de detalle. */
 function matchPath(pathname: string, href: string) {
@@ -244,7 +249,8 @@ export function Sidebar() {
     const { data: store } = useStore()
     // La caja se deja lista de antemano: "Nueva venta" abre de una
     useEffect(() => { router.prefetch('/caja') }, [router])
-    const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
+    // Las aprobaciones son del punto físico: en pausa, ni se preguntan
+    const { data: pendingApprovals = 0 } = usePendingApprovalsCount(PUNTO_FISICO)
     // Cerrar sesión pasa por el mismo lugar que en Ajustes: carga lo pendiente
     // y no deja nada de la cuenta en el equipo
     const { cerrar, cerrando, dialogo } = useCerrarSesion(store?.id)
@@ -341,7 +347,8 @@ export function BottomNav() {
     const router = useRouter()
     // La caja se deja lista de antemano: el botón + abre de una
     useEffect(() => { router.prefetch('/caja') }, [router])
-    const { data: pendingApprovals = 0 } = usePendingApprovalsCount(true)
+    // Las aprobaciones son del punto físico: en pausa, ni se preguntan
+    const { data: pendingApprovals = 0 } = usePendingApprovalsCount(PUNTO_FISICO)
 
     if (SIN_MENU.some(ruta => ruta.test(pathname))) return null
 

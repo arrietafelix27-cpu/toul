@@ -27,6 +27,12 @@ export default async function (db) {
   const err = async (fn) => { try { await fn(); return null } catch (e) { return e.message } }
   const r = (uid, sql, p) => as(uid, async () => (await one(sql, p)).r)
   const intento = (uid, sql, p) => as(uid, () => err(() => q(sql, p)))
+  // Así se anotaba "Plata mía" antes del 11 de noviembre (ya no se puede
+  // elegir): para probar que lo viejo sigue funcionando igual
+  const comoAntes = async (fn) => {
+    await db.exec('ALTER TABLE payments DISABLE TRIGGER trg_payments_cuenta_obligatoria')
+    try { return await fn() } finally { await db.exec('ALTER TABLE payments ENABLE TRIGGER trg_payments_cuenta_obligatoria') }
+  }
 
   const gasto = (uid, monto, { metodo = null, plataMia = false, categoria = 'transporte', desc = null } = {}) =>
     r(uid, `SELECT toul_registrar_gasto($1,$2,$3,$4,$5) r`, [categoria, monto, desc, metodo, plataMia])
@@ -95,7 +101,7 @@ export default async function (db) {
   await meti(40000, nequi.id)
   const gn = await gasto(O, 5000, { metodo: nequi.id })
   ok(await esperado(turno) === 50000, 'lo que entra o sale por Nequi no cambia el efectivo')
-  const gpm = await gasto(O, 15000, { plataMia: true, desc: 'Bolsas' })
+  const gpm = await comoAntes(() => gasto(O, 15000, { plataMia: true, desc: 'Bolsas' }))
   ok(await esperado(turno) === 50000, 'ni un gasto pagado con plata mía')
   const compra = await r(O, `SELECT process_purchase($1::jsonb) r`, [JSON.stringify({ isCredit: false, methodId: efe.id, items: [{ productId: perfume.id, quantity: 1, unitCost: 25000 }] })])
   ok(await esperado(turno) === 25000, 'una compra de $25.000 pagada en efectivo sale del turno')
@@ -164,12 +170,15 @@ export default async function (db) {
   ok(Number((await atado(ppm.id)).amount) === 18000, 'si el gasto pasa a $18.000, su Metí plata también')
   await as(O, () => q(`SELECT toul_update_expense($1,'empaques','Bolsas',18000,$2,NULL)`, [gpm.expenseId, nequi.id]))
   ok(!(await atado(ppm.id)) && (await pagoDeGasto(gpm.expenseId)).method === 'Nequi', 'si se paga con Nequi, el Metí plata desaparece')
-  await as(O, () => q(`SELECT toul_update_expense($1,'empaques','Bolsas',18000,NULL,true)`, [gpm.expenseId]))
+  // Cambio de regla (11 nov): "Plata mía" ya no se puede elegir, tampoco para volver a ella
+  msg = await intento(O, `SELECT toul_update_expense($1,'empaques','Bolsas',18000,NULL,true)`, [gpm.expenseId])
+  ok(/Elige con qué cuenta del negocio pagaste/.test(msg ?? '') && !(await atado(ppm.id)), 'ya no vuelve a "Plata mía"', msg)
+  await comoAntes(() => as(O, () => q(`SELECT toul_update_expense($1,'empaques','Bolsas',18000,NULL,true)`, [gpm.expenseId])))
   ok(Number((await atado(ppm.id))?.amount) === 18000, 'si vuelve a "Plata mía", vuelve')
   await as(O, () => q(`SELECT toul_delete_expense($1)`, [gpm.expenseId]))
   ok(!(await atado(ppm.id)) && !(await pagoDeGasto(gpm.expenseId)), 'si se borra el gasto, se va con su Metí plata')
 
-  const compraPM = await r(O, `SELECT process_purchase($1::jsonb) r`, [JSON.stringify({ isCredit: false, plataMia: true, items: [{ productId: perfume.id, quantity: 2, unitCost: 30000 }] })])
+  const compraPM = await comoAntes(() => r(O, `SELECT process_purchase($1::jsonb) r`, [JSON.stringify({ isCredit: false, plataMia: true, items: [{ productId: perfume.id, quantity: 2, unitCost: 30000 }] })]))
   const pcm = await one(`SELECT * FROM payments WHERE reference_id=$1 AND type='purchase'`, [compraPM.purchaseId])
   ok(pcm.own_money && Number((await atado(pcm.id))?.amount) === 60000, 'una compra con plata mía: su Metí plata de $60.000')
   ok((await one(`SELECT payment_method FROM purchase_payments WHERE purchase_id=$1`, [compraPM.purchaseId])).payment_method === 'Plata mía', 'y el pago de la compra dice "Plata mía"')
@@ -177,7 +186,7 @@ export default async function (db) {
   ok(!(await one(`SELECT 1 x FROM payments WHERE reference_id=$1`, [compraPM.purchaseId])), 'anulada la compra, no queda ni la salida ni el Metí plata')
 
   const credito = await r(O, `SELECT process_purchase($1::jsonb) r`, [JSON.stringify({ isCredit: true, providerId: prov.id, paidNow: 0, items: [{ productId: perfume.id, quantity: 2, unitCost: 40000 }] })])
-  const pagoProv = await r(O, `SELECT toul_pagar_proveedor($1,30000,NULL,NULL,true) r`, [prov.id])
+  const pagoProv = await comoAntes(() => r(O, `SELECT toul_pagar_proveedor($1,30000,NULL,NULL,true) r`, [prov.id]))
   const ppp = await one(`SELECT * FROM payments WHERE reference_id=$1 AND type='provider_payment'`, [prov.id])
   ok(Number(pagoProv.saldo) === 50000 && ppp.own_money && Number((await atado(ppp.id))?.amount) === 30000, 'un pago al proveedor con plata mía baja la deuda y tiene su Metí plata')
   ok(credito.success, 'la compra a crédito quedó')

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { entrarDeCero } from '@/lib/session/limpiarCuenta'
 import { explainError } from '@/lib/errors'
 import { AceptarTerminos, datosDeAceptacion, yaAcepto } from '@/components/auth/AceptarTerminos'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 import { Check, KeyRound, Store, Shirt, UtensilsCrossed, Sparkles, Smartphone, House, Dumbbell, Palette, Package } from 'lucide-react'
 
 const CATEGORIES = [
@@ -22,8 +23,10 @@ const CATEGORIES = [
 export default function OnboardingPage() {
     const router = useRouter()
     const supabase = createClient()
-    // 0 = elegir camino, 1-2 = crear negocio, 'join' = vendedor con código
-    const [step, setStep] = useState<0 | 1 | 2 | 'join'>(0)
+    // 0 = elegir camino, 1-2 = crear negocio, 'join' = vendedor con código.
+    // Con el punto físico en pausa no hay vendedores: se va directo a crear
+    // el negocio (y los términos, si faltan, se aceptan en el primer paso)
+    const [step, setStep] = useState<0 | 1 | 2 | 'join'>(PUNTO_FISICO ? 0 : 1)
     const [inviteCode, setInviteCode] = useState('')
     const [storeName, setStoreName] = useState('')
     const [category, setCategory] = useState('')
@@ -41,7 +44,7 @@ export default function OnboardingPage() {
         return () => { vigente = false }
     }, [supabase])
 
-    async function elegirCamino(camino: 1 | 'join') {
+    async function elegirCamino(camino: 1 | 2 | 'join') {
         if (debeAceptar) {
             if (!aceptado) { setFaltaAceptar(true); return }
             setLoading(true)
@@ -164,9 +167,14 @@ export default function OnboardingPage() {
                     <p className="text-sm mb-6" style={{ color: 'var(--toul-text-muted)' }}>Así aparecerá en tus registros y reportes.</p>
                     <input className="toul-input mb-4 text-lg" type="text" placeholder="Ej: Tienda de Valentina" value={storeName}
                         onChange={e => setStoreName(e.target.value)} maxLength={50} autoFocus />
-                    <button className="toul-btn-primary mt-auto" onClick={() => {
+                    {debeAceptar && (
+                        <div style={{ marginBottom: 16 }}>
+                            <AceptarTerminos aceptado={aceptado} onCambio={setAceptado} error={faltaAceptar} />
+                        </div>
+                    )}
+                    <button className="toul-btn-primary mt-auto" disabled={loading} onClick={() => {
                         if (!storeName.trim()) { toast.error('Ingresa el nombre'); return }
-                        setStep(2)
+                        elegirCamino(2)
                     }}>
                         Continuar
                     </button>

@@ -14,6 +14,7 @@ import { staggerContainer, staggerItem, fadeUp, t } from '@/lib/motion'
 import { Skeleton, EmptyState } from '@/components/ui/Skeleton'
 import { useStore } from '@/lib/hooks/useData'
 import { SinInternet } from '@/components/ui/SinInternet'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 import useSWR from 'swr'
 import type { SaleDetailData as VentaData } from '@/lib/types'
 import { SALE_DETAIL_SELECT } from '@/lib/types'
@@ -190,7 +191,8 @@ function Ventas() {
         return () => { vivo = false }
     }, [storeId])
 
-    const { data: sellers } = useSWR(storeId ? ['sellers', storeId] : null, async () => {
+    // Los vendedores son del punto físico: en pausa, ni se preguntan
+    const { data: sellers } = useSWR(PUNTO_FISICO && storeId ? ['sellers', storeId] : null, async () => {
         const { data } = await supabase.from('store_members').select('display_name').eq('store_id', storeId).order('created_at')
         return (data ?? []).map(m => m.display_name as string)
     }, { revalidateOnFocus: false })
@@ -446,7 +448,7 @@ function Ventas() {
                     <div className="flex gap-2">
                         <div className="relative flex-1">
                             <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)' }} />
-                            <input className="toul-input" placeholder="Buscar por cliente, producto o vendedor"
+                            <input className="toul-input" placeholder={PUNTO_FISICO ? 'Buscar por cliente, producto o vendedor' : 'Buscar por cliente o producto'}
                                 value={query} onChange={e => setQuery(e.target.value)} style={{ paddingLeft: 42 }} />
                         </div>
                         <button onClick={() => setShowFilters(v => !v)} aria-label="Filtros"
@@ -571,7 +573,7 @@ function Ventas() {
                             const profit = Math.round(utilidad(sale))
                             const summary = sale.sale_items.slice(0, 2).map(i => (i.products as { name?: string } | null)?.name || 'Producto').join(', ')
                             const more = sale.sale_items.length > 2 ? ` +${sale.sale_items.length - 2}` : ''
-                            const vendedor = sale.seller_name && sale.seller_name !== 'Administrador' ? sale.seller_name : null
+                            const vendedor = PUNTO_FISICO && sale.seller_name && sale.seller_name !== 'Administrador' ? sale.seller_name : null
                             return (
                                 <button key={sale.id} className="vt-fila" onClick={() => setSelectedSale(sale)}>
                                     <span className="vt-1" style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>{formatDateTime(sale.created_at)}</span>
@@ -624,7 +626,7 @@ function Ventas() {
                                         <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>
                                             {formatDateTime(sale.created_at)} · {methodLabel(sale.payment_method)}
                                             <span style={{ color: 'var(--toul-text-faint)' }}> · #{sale.id.slice(0, 8).toUpperCase()}</span>
-                                            {sale.seller_name && sale.seller_name !== 'Administrador' && <span> · {sale.seller_name}</span>}
+                                            {PUNTO_FISICO && sale.seller_name && sale.seller_name !== 'Administrador' && <span> · {sale.seller_name}</span>}
                                             {sale.is_credit && <span style={{ color: 'var(--toul-accent)', fontWeight: 600 }}> · Crédito</span>}
                                             {sale.is_credit && sale.customer_name && <span style={{ color: 'var(--toul-text-muted)' }}> — {sale.customer_name}</span>}
                                             {sale.discount > 0 && <span style={{ color: 'var(--toul-warning)' }}> · Dto. {formatCOP(sale.discount)}</span>}

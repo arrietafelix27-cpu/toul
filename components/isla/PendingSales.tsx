@@ -5,6 +5,7 @@ import { CloudUpload, AlertTriangle, Printer, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCOP } from '@/lib/utils'
 import { printReceipt } from '@/lib/isla/receipt'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 import type { OfflineState } from '@/lib/isla/useOffline'
 import { ConfirmSheet } from './ConfirmSheet'
 
@@ -53,10 +54,13 @@ export function PendingSales({ offline }: { offline: OfflineState }) {
                                     {failed ? sale.error : 'Esperando internet'}
                                 </p>
                             </div>
-                            <button onClick={() => printReceipt(sale.receipt)} aria-label="Imprimir tirilla"
-                                style={{ width: 38, height: 38, borderRadius: 11, border: '1px solid var(--toul-border)', background: 'transparent', color: 'var(--toul-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <Printer size={16} />
-                            </button>
+                            {/* La tirilla es del punto físico (en pausa) */}
+                            {PUNTO_FISICO && (
+                                <button onClick={() => printReceipt(sale.receipt)} aria-label="Imprimir tirilla"
+                                    style={{ width: 38, height: 38, borderRadius: 11, border: '1px solid var(--toul-border)', background: 'transparent', color: 'var(--toul-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <Printer size={16} />
+                                </button>
+                            )}
                             {failed && (
                                 <button onClick={() => setDiscarding(sale.clientSaleId)} aria-label="Descartar venta"
                                     style={{ width: 38, height: 38, borderRadius: 11, border: '1px solid var(--toul-border)', background: 'transparent', color: 'var(--toul-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

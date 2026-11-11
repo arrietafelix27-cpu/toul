@@ -8,14 +8,15 @@ import { NextResponse } from 'next/server'
  * salida de la plata se guardan juntos o no se guarda nada. Antes eran dos
  * escrituras sueltas y si la segunda fallaba el gasto quedaba sin salir.
  * La base revisa quién puede: el administrador, o el vendedor con el
- * permiso "Registrar gastos" (con una cuenta y nunca con "Plata mía").
+ * permiso "Registrar gastos". Siempre con una cuenta del negocio: "Plata
+ * mía" ya no existe para lo nuevo (la base también la rechaza).
  */
 export async function POST(request: Request) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { category, description, amount, methodId, plataMia } = await request.json().catch(() => ({}))
+    const { category, description, amount, methodId } = await request.json().catch(() => ({}))
 
     if (!amount || Number(amount) <= 0) {
         return NextResponse.json({ error: 'Escribe cuánto gastaste' }, { status: 400 })
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
         p_monto: Math.round(Number(amount)),
         p_descripcion: description || null,
         p_method_id: methodId || null,
-        p_plata_mia: plataMia === true,
+        p_plata_mia: false,
     })
 
     if (error) {

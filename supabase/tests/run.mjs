@@ -25,15 +25,22 @@ const MIGRATIONS = [
     'deploy_clientes.sql', 'deploy_cartera.sql', 'deploy_compras_detalle.sql', 'deploy_guardado_atomico.sql', 'deploy_deshacer.sql', 'deploy_errores.sql', 'deploy_planes.sql',
     'deploy_devoluciones.sql', 'deploy_reportes.sql', 'deploy_catalogo_stock.sql', 'deploy_caja_segura.sql', 'deploy_caja_permisos.sql',
     'deploy_movimientos.sql', 'deploy_movimientos_cuentas.sql', 'deploy_inventario_cuentas.sql',
-    'deploy_inventario_consistencia.sql',
+    'deploy_inventario_consistencia.sql', 'deploy_sin_plata_mia.sql',
 ]
 
-const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs', 'inventario.test.mjs', 'compras-proveedor.test.mjs', 'precision.test.mjs', 'clientes.test.mjs', 'cartera.test.mjs', 'compras-detalle.test.mjs', 'guardado-atomico.test.mjs', 'deshacer.test.mjs', 'errores.test.mjs', 'devoluciones.test.mjs', 'reportes.test.mjs', 'tienda-prueba.test.mjs', 'caja-segura.test.mjs', 'caja-permisos.test.mjs', 'movimientos.test.mjs', 'inventario-cuentas.test.mjs']
+// Arma todo con lo de antes del último cambio (incluida la tienda de prueba,
+// que corre adentro con sus valores de siempre), toma la foto de los números,
+// aplica el último SQL de la lista y revisa que la foto salga idéntica
+const ANTES_Y_DESPUES = 'antes-y-despues.test.mjs'
+
+const SUITES = ['isla.test.mjs', 'offline-conteo.test.mjs', 'catalogo-publico.test.mjs', 'inventario.test.mjs', 'compras-proveedor.test.mjs', 'precision.test.mjs', 'clientes.test.mjs', 'cartera.test.mjs', 'compras-detalle.test.mjs', 'guardado-atomico.test.mjs', 'deshacer.test.mjs', 'errores.test.mjs', 'devoluciones.test.mjs', 'reportes.test.mjs', ANTES_Y_DESPUES, 'caja-segura.test.mjs', 'caja-permisos.test.mjs', 'movimientos.test.mjs', 'inventario-cuentas.test.mjs']
 
 async function runSuite(file) {
     const db = new PGlite()
     await db.exec(fs.readFileSync(path.join(TESTS_DIR, 'stubs.sql'), 'utf8'))
-    for (const migration of MIGRATIONS) {
+    const ultimo = MIGRATIONS[MIGRATIONS.length - 1]
+    const migraciones = file === ANTES_Y_DESPUES ? MIGRATIONS.slice(0, -1) : MIGRATIONS
+    for (const migration of migraciones) {
         await db.exec(fs.readFileSync(path.join(SUPABASE_DIR, migration), 'utf8'))
     }
     // Supabase da estos permisos por defecto al rol `authenticated`; RLS es lo que filtra
@@ -43,7 +50,9 @@ async function runSuite(file) {
 
     console.log(`\n═══ ${file} ═══`)
     const suite = await import(path.join(TESTS_DIR, file))
-    return suite.default(db)
+    return suite.default(db, {
+        aplicarCambio: () => db.exec(fs.readFileSync(path.join(SUPABASE_DIR, ultimo), 'utf8')),
+    })
 }
 
 let failed = 0

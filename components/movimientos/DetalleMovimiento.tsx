@@ -72,7 +72,8 @@ const CSS = `
 
 const supabase = createClient()
 
-const TURNO_CERRADO = 'Esto quedó en un turno que ya se cerró: solo puedes cambiar la nota o la categoría. Para corregirlo, anota un movimiento nuevo'
+// Sin decir "turno": el punto físico está en pausa (lib/puntoFisico.ts)
+const TURNO_CERRADO = 'Este movimiento ya quedó cerrado: solo puedes cambiar la nota o la categoría. Para corregirlo, anota un movimiento nuevo'
 const ATADO = 'Esta plata la metiste para pagar algo: corrígelo o bórralo desde ahí'
 
 /** Lo que se puede corregir aquí mismo */

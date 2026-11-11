@@ -22,7 +22,7 @@ export function ProviderPaymentModal({ storeId, providerId, providerName, totalD
 
     const [amount, setAmount] = useState('')
     const [saving, setSaving] = useState(false)
-    // "¿Con qué pagaste?": una cuenta del negocio o "Plata mía"
+    // "¿Con qué pagaste?": siempre una cuenta del negocio
     const [cuenta, setCuenta] = useState<string | null>(null)
 
     const maxAmount = totalDebt
@@ -115,7 +115,7 @@ export function ProviderPaymentModal({ storeId, providerId, providerName, totalD
 
                     <div>
                         <p className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>¿Con qué pagaste?</p>
-                        <CuentaChips valor={cuenta} onChange={setCuenta} recordar="proveedor" conPlataMia />
+                        <CuentaChips valor={cuenta} onChange={setCuenta} recordar="proveedor" />
                     </div>
 
                     <button

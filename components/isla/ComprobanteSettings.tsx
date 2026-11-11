@@ -14,7 +14,8 @@ const OPCIONES: { valor: Botones; label: string; detalle: string }[] = [
     { valor: 'ambos', label: 'Los dos', detalle: 'Salen los dos botones al terminar la venta' },
 ]
 
-/** Comprobante de la venta: qué botones salen al terminar y qué datos lleva. */
+/** Comprobante de la venta: qué botones salen al terminar y qué datos lleva.
+ *  Sin el punto físico (isPro false) solo queda el mensaje final del WhatsApp. */
 export function ComprobanteSettings({ storeId, isPro }: { storeId: string; isPro: boolean }) {
     const [form, setForm] = useState({ nit: '', address: '', phone: '', receipt_footer: '' })
     const [botones, setBotones] = useState<Botones>('ambos')
@@ -38,13 +39,15 @@ export function ComprobanteSettings({ storeId, isPro }: { storeId: string; isPro
 
     async function save() {
         setSaving(true)
-        const cambios: Record<string, unknown> = {
-            nit: form.nit.trim() || null,
-            address: form.address.trim() || null,
-            phone: form.phone.trim() || null,
-            receipt_footer: form.receipt_footer.trim() || null,
+        const cambios: Record<string, unknown> = { receipt_footer: form.receipt_footer.trim() || null }
+        // NIT, dirección y teléfono solo salen en la tirilla impresa: sin ella
+        // no se tocan (quedan guardados como estaban)
+        if (isPro) {
+            cambios.nit = form.nit.trim() || null
+            cambios.address = form.address.trim() || null
+            cambios.phone = form.phone.trim() || null
+            if (conBotones) cambios.receipt_buttons = botones
         }
-        if (conBotones && isPro) cambios.receipt_buttons = botones
         const { error } = await createClient().from('stores').update(cambios).eq('id', storeId)
         setSaving(false)
         if (error) toast.error('No se pudo guardar')
@@ -90,9 +93,13 @@ export function ComprobanteSettings({ storeId, isPro }: { storeId: string; isPro
 
             <div className="flex flex-col gap-3">
                 <Field label="Mensaje final" capitalize value={form.receipt_footer} onChange={set('receipt_footer')} placeholder="¡Gracias por tu compra!" maxLength={120} />
-                <Field label="NIT o cédula" value={form.nit} onChange={set('nit')} placeholder="900.123.456-7" maxLength={30} />
-                <Field label="Dirección" capitalize value={form.address} onChange={set('address')} placeholder="C.C. Buenavista · Isla 12" maxLength={80} />
-                <Field label="Teléfono" type="tel" inputMode="tel" value={form.phone} onChange={set('phone')} placeholder="300 123 4567" maxLength={20} />
+                {isPro && (
+                    <>
+                        <Field label="NIT o cédula" value={form.nit} onChange={set('nit')} placeholder="900.123.456-7" maxLength={30} />
+                        <Field label="Dirección" capitalize value={form.address} onChange={set('address')} placeholder="C.C. Buenavista · Isla 12" maxLength={80} />
+                        <Field label="Teléfono" type="tel" inputMode="tel" value={form.phone} onChange={set('phone')} placeholder="300 123 4567" maxLength={20} />
+                    </>
+                )}
                 <button onClick={save} disabled={saving} className="toul-btn-primary">{saving ? 'Guardando…' : 'Guardar comprobante'}</button>
             </div>
         </div>

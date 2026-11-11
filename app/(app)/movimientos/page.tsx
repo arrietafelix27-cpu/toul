@@ -39,19 +39,35 @@ import { VentaAbierta, cargarVenta } from '@/components/ventas/VentaAbierta'
 
 const supabase = createClient()
 
+// Metí y Saqué plata: de segundas, al lado de "Anotar gasto"
+const SECUNDARIAS: TipoMovimiento[] = ['meti', 'saque']
+const IconoGasto = TIPOS_MOVIMIENTO.gasto.Icon
+
 const CSS = `
 .mv-titulo { margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -1px; line-height: 1.1; color: var(--toul-text); }
 .mv-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
-/* Las tres acciones, como las del Inicio */
-.mv-acciones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 20px 0 10px; }
-@media (min-width: 1024px) { .mv-acciones { max-width: 420px; } }
-.mv-accion { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%; padding: 2px 0;
-    border: none; background: none; font: inherit; font-size: 12px; color: var(--toul-text-muted); cursor: pointer;
+/* Anotar un gasto es lo principal. Metí y Saqué plata quedan de
+   segundas: se anotan a mano y no tocan lo que ganaste */
+.mv-acciones { display: flex; flex-direction: column; gap: 6px; margin: 20px 0 10px; }
+.mv-gasto, .mv-secundaria { border: none; font: inherit; cursor: pointer;
     -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
-.mv-circulo { width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: color-mix(in srgb, var(--toul-text) 7%, transparent); transition: background-color 160ms var(--toul-ease-emil); }
-@media (hover: hover) and (pointer: fine) { .mv-accion:hover .mv-circulo { background: color-mix(in srgb, var(--toul-text) 10%, transparent); } }
+.mv-gasto { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; height: 50px; padding: 0 22px;
+    border-radius: 16px; font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--toul-text);
+    background: color-mix(in srgb, var(--toul-text) 9%, transparent); transition: background-color 160ms var(--toul-ease-emil); }
+.mv-secundarias { display: flex; justify-content: center; gap: 4px; }
+.mv-secundaria { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 999px;
+    background: none; font-size: 13.5px; color: var(--toul-text-muted);
+    transition: background-color 160ms var(--toul-ease-emil), color 160ms var(--toul-ease-emil); }
+.mv-gasto:focus-visible, .mv-secundaria:focus-visible { outline: 2px solid var(--toul-border-2); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+    .mv-gasto:hover { background: color-mix(in srgb, var(--toul-text) 12%, transparent); }
+    .mv-secundaria:hover { background: color-mix(in srgb, var(--toul-text) 6%, transparent); color: var(--toul-text); }
+}
+@media (min-width: 768px) {
+    .mv-acciones { flex-direction: row; align-items: center; gap: 8px; }
+    .mv-gasto { width: auto; }
+}
 
 /* Filtros: se deslizan de lado */
 .mv-filtros { display: flex; gap: 6px; overflow-x: auto; margin: 18px -16px 4px; padding: 0 16px;
@@ -511,18 +527,22 @@ function Movimientos() {
             </div>
 
             <div className="mv-acciones">
-                {(Object.keys(TIPOS_MOVIMIENTO) as TipoMovimiento[]).map(tipo => {
-                    const { titulo, Icon, verde } = TIPOS_MOVIMIENTO[tipo]
-                    return (
-                        <motion.button key={tipo} type="button" className="mv-accion" onClick={() => { setEditar(null); setAnotar(tipo) }}
-                            whileTap={{ scale: 0.92 }} transition={SPRING_PRESS}>
-                            <span className="mv-circulo">
-                                <Icon size={24} strokeWidth={2} style={{ color: verde ? 'var(--toul-accent)' : 'var(--toul-text)' }} />
-                            </span>
-                            {titulo}
-                        </motion.button>
-                    )
-                })}
+                <motion.button type="button" className="mv-gasto" onClick={() => { setEditar(null); setAnotar('gasto') }}
+                    whileTap={{ scale: 0.97 }} transition={SPRING_PRESS}>
+                    <IconoGasto size={19} strokeWidth={2} aria-hidden /> Anotar gasto
+                </motion.button>
+                <div className="mv-secundarias">
+                    {SECUNDARIAS.map(tipo => {
+                        const { titulo, Icon, verde } = TIPOS_MOVIMIENTO[tipo]
+                        return (
+                            <motion.button key={tipo} type="button" className="mv-secundaria" onClick={() => { setEditar(null); setAnotar(tipo) }}
+                                whileTap={{ scale: 0.96 }} transition={SPRING_PRESS}>
+                                <Icon size={16} strokeWidth={2} aria-hidden style={{ color: verde ? 'var(--toul-accent)' : 'currentColor' }} />
+                                {titulo}
+                            </motion.button>
+                        )
+                    })}
+                </div>
             </div>
 
             <div className="mv-filtros" role="group" aria-label="Qué movimientos ver">
@@ -624,7 +644,7 @@ function Movimientos() {
                 </div>
             )}
 
-            <RegistrarMovimiento abierto={!!anotar} tipo={anotar ?? 'gasto'} editar={editar} conPlataMia
+            <RegistrarMovimiento abierto={!!anotar} tipo={anotar ?? 'gasto'} editar={editar}
                 onCerrar={cerrarAnotar} onGuardado={guardado} />
 
             <DetalleMovimiento movimiento={abierto} onCerrar={() => setAbierto(null)}

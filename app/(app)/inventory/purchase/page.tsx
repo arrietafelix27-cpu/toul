@@ -385,7 +385,7 @@ export default function NewPurchaseFlow() {
                                     <p className="block text-sm font-semibold mb-2" style={{ color: 'var(--toul-text-muted)' }}>
                                         {paymentMethod === 'credit' ? '¿Con qué pagaste el abono?' : '¿Con qué pagaste?'}
                                     </p>
-                                    <CuentaChips valor={cuenta} onChange={setCuenta} recordar="compra" conPlataMia />
+                                    <CuentaChips valor={cuenta} onChange={setCuenta} recordar="compra" />
                                 </div>
                             )}
 

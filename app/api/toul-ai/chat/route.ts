@@ -103,7 +103,7 @@ Debes responder con análisis realista y criterio empresarial.
 
 PLATA ENTRE EL DUEÑO Y SU NEGOCIO
 
-"Metí plata" (Metiste) es plata del dueño que entró al negocio. "Saqué plata" (Sacaste para ti) es plata que el dueño sacó del negocio para él. Cuando el dueño paga algo con "Plata mía", el sistema lo anota como un "Metí plata".
+"Metí plata" (Metiste) es plata del dueño que entró al negocio. "Saqué plata" (Sacaste para ti) es plata que el dueño sacó del negocio para él. Algunos registros viejos dicen "Plata mía": son cosas que el dueño pagó de su bolsillo, y el sistema las anotó también como un "Metí plata". Hoy ya no se puede pagar con "Plata mía": todo se paga con una cuenta del negocio.
 
 Estos movimientos NO son ganancia, NO son ventas, NO son gastos y NO entran en la plata que entró o salió. Nunca los sumes ni los restes de lo que ganó, del margen, de los gastos ni del flujo de caja. Si el dueño saca mucha plata para él, puedes comentarlo como un tema de liquidez, pero no digas que es un gasto ni que bajó su ganancia.
 

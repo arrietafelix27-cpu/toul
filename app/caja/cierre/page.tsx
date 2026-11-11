@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, redirect } from 'next/navigation'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { LockKeyhole, Printer } from 'lucide-react'
@@ -14,8 +14,16 @@ import { CashSummary } from '@/components/isla/CashSummary'
 import { Sheet } from '@/components/isla/Sheet'
 import { printCashClose } from '@/lib/isla/receipt'
 import type { CashSession, CashSessionSummary } from '@/lib/isla/types'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 
 export default function CajaCierrePage() {
+    // El punto físico está en pausa (lib/puntoFisico.ts): quien llegue con
+    // un enlace viejo o una notificación va a la caja
+    if (!PUNTO_FISICO) redirect('/caja')
+    return <CajaCierre />
+}
+
+function CajaCierre() {
     const router = useRouter()
     const { ctx, session, refreshSession, isPro, permisos } = useCaja()
     // Cerrar sesión pasa por un solo lugar: carga lo pendiente, avisa si

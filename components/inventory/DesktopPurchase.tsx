@@ -316,7 +316,7 @@ export function DesktopPurchase({ compra }: { compra: CompraEnCurso }) {
                                 <p className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
                                     {paymentMethod === 'credit' ? '¿Con qué pagaste el abono?' : '¿Con qué pagaste?'}
                                 </p>
-                                <CuentaChips valor={cuenta} onChange={setCuenta} recordar="compra" conPlataMia />
+                                <CuentaChips valor={cuenta} onChange={setCuenta} recordar="compra" />
                             </div>
                         )}
                     </div>

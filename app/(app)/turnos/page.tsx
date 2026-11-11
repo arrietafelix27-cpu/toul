@@ -19,6 +19,8 @@ import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { printCashClose } from '@/lib/isla/receipt'
 import { fadeUp } from '@/lib/motion'
 import type { CashSession, CashSessionSummary } from '@/lib/isla/types'
+import { redirect } from 'next/navigation'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 
 const supabase = createClient()
 
@@ -72,6 +74,13 @@ const hace = (iso: string) => {
 }
 
 export default function TurnosPage() {
+    // El punto físico está en pausa (lib/puntoFisico.ts): quien llegue con
+    // un enlace viejo o una notificación va al inicio
+    if (!PUNTO_FISICO) redirect('/')
+    return <Turnos />
+}
+
+function Turnos() {
     const { data: ctx, error: errorSesion, mutate: recargarSesion } = useSessionContext()
     const [selected, setSelected] = useState<CashSession | null>(null)
     const [counted, setCounted] = useState('')

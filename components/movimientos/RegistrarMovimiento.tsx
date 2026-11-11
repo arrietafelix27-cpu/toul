@@ -16,9 +16,9 @@ import { CuentaChips, cuentaParaGuardar, recordarCuenta } from './CuentaChips'
    La hoja para anotar plata que no es venta: un Gasto, "Metí plata"
    o "Saqué plata". También corrige uno que ya existe.
 
-   La usan Movimientos, Gastos y la caja (el vendedor con permiso,
-   solo gastos y sin "Plata mía"). Lo que se puede y lo que no lo
-   decide el servidor; aquí solo se pregunta bien.
+   La usan Movimientos, Gastos y la caja (solo gastos). Todo se paga
+   con una cuenta del negocio: "Plata mía" ya no se elige. Lo que se
+   puede y lo que no lo decide el servidor; aquí solo se pregunta bien.
    ══════════════════════════════════════════════════════════════ */
 
 export type TipoMovimiento = 'gasto' | 'meti' | 'saque'
@@ -31,7 +31,7 @@ export interface MovimientoAEditar {
     monto: number
     nota: string | null
     categoria?: string
-    /** El número de la cuenta, PLATA_MIA, o nada si es de antes ("Sin cuenta") */
+    /** El número de la cuenta, PLATA_MIA (algo viejo), o nada si es de antes ("Sin cuenta") */
     cuenta: string | null
     /** Quedó en un turno que ya se cerró: solo la nota o la categoría */
     turnoCerrado: boolean
@@ -70,7 +70,8 @@ const QUE_HACE: Record<TipoMovimiento, string> = {
     saque: 'No cambia lo que ganaste. Es plata que tomas para ti, y la verás en Reportes, en "Tú y tu negocio".',
 }
 
-const TURNO_CERRADO = 'Esto quedó en un turno que ya se cerró: solo puedes cambiar la nota o la categoría. Para corregirlo, anota un movimiento nuevo'
+// Sin decir "turno": el punto físico está en pausa (lib/puntoFisico.ts)
+const TURNO_CERRADO = 'Este movimiento ya quedó cerrado: solo puedes cambiar la nota o la categoría. Para corregirlo, anota un movimiento nuevo'
 
 const CSS = `
 .rm-capa { position: fixed; inset: 0; z-index: 120; display: flex; justify-content: center; align-items: flex-end; }
@@ -114,13 +115,11 @@ const supabase = createClient()
 /** La curva de los cajones de iOS (--toul-ease-drawer) */
 const EASE_DRAWER: [number, number, number, number] = [0.32, 0.72, 0, 1]
 
-export function RegistrarMovimiento({ abierto, tipo, editar = null, conPlataMia = false, onCerrar, onGuardado }: {
+export function RegistrarMovimiento({ abierto, tipo, editar = null, onCerrar, onGuardado }: {
     abierto: boolean
     tipo: TipoMovimiento
     /** Para corregir uno que ya existe */
     editar?: MovimientoAEditar | null
-    /** Solo el administrador paga un gasto con plata suya */
-    conPlataMia?: boolean
     onCerrar: () => void
     onGuardado?: (r: MovimientoGuardado) => void
 }) {
@@ -164,7 +163,7 @@ export function RegistrarMovimiento({ abierto, tipo, editar = null, conPlataMia 
                         exit={{ opacity: 0, transition: { duration: 0.16, ease: EASE_OUT_EMIL } }}
                         transition={{ duration: 0.25, ease: EASE_OUT_EMIL }} />
                     <motion.div className="rm-hoja" role="dialog" aria-modal="true" aria-label={TIPOS_MOVIMIENTO[tipo].titulo} {...hoja}>
-                        <Formulario tipo={editar?.tipo ?? tipo} editar={editar} conPlataMia={conPlataMia}
+                        <Formulario tipo={editar?.tipo ?? tipo} editar={editar}
                             guardando={guardando} setGuardando={setGuardando}
                             onCerrar={cerrar} onGuardado={r => { onGuardado?.(r); onCerrar() }} />
                     </motion.div>
@@ -175,10 +174,9 @@ export function RegistrarMovimiento({ abierto, tipo, editar = null, conPlataMia 
 }
 
 /** Lo de adentro: nace cada vez que se abre, así arranca limpio */
-function Formulario({ tipo, editar, conPlataMia, guardando, setGuardando, onCerrar, onGuardado }: {
+function Formulario({ tipo, editar, guardando, setGuardando, onCerrar, onGuardado }: {
     tipo: TipoMovimiento
     editar: MovimientoAEditar | null
-    conPlataMia: boolean
     guardando: boolean
     setGuardando: (v: boolean) => void
     onCerrar: () => void
@@ -298,7 +296,7 @@ function Formulario({ tipo, editar, conPlataMia, guardando, setGuardando, onCerr
 
                 <span className="rm-rotulo">{PREGUNTA_CUENTA[tipo]}</span>
                 <CuentaChips valor={cuenta} onChange={setCuenta} recordar={tipo} etiqueta={PREGUNTA_CUENTA[tipo]}
-                    conPlataMia={tipo === 'gasto' && conPlataMia} preseleccionar={!editar} bloqueada={cerrado} />
+                    preseleccionar={!editar} bloqueada={cerrado} />
 
                 <label className="rm-rotulo" htmlFor={`${id}-nota`}>Nota · opcional</label>
                 <input id={`${id}-nota`} className="rm-nota" placeholder={EJEMPLO_NOTA[tipo]} maxLength={80}

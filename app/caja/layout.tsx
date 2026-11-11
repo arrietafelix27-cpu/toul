@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ShoppingBag, ReceiptText, Receipt, LockKeyhole, LayoutDashboard, LogOut, Printer, X, WifiOff, CloudUpload, AlertTriangle, LockKeyholeOpen } from 'lucide-react'
+import { ShoppingBag, ReceiptText, Receipt, LockKeyhole, LayoutDashboard, LogOut, Printer, X, WifiOff, CloudUpload, AlertTriangle, LockKeyholeOpen, Store } from 'lucide-react'
 import { POSProvider } from '@/components/pos/POSContext'
 import { CajaContext, type BotonesComprobante } from '@/components/isla/CajaContext'
 import { OpenSessionCard } from '@/components/isla/OpenSessionCard'
@@ -18,6 +18,7 @@ import { tirillaAutomaticaInicial } from '@/lib/pos/comprobante'
 import { createClient } from '@/lib/supabase/client'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 import { RegistrarMovimiento } from '@/components/movimientos/RegistrarMovimiento'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 
 const TABS = [
     { href: '/caja', label: 'Vender', short: 'Vender', icon: ShoppingBag },
@@ -25,7 +26,8 @@ const TABS = [
     { href: '/caja/cierre', label: 'Cerrar turno', short: 'Cierre', icon: LockKeyhole },
 ]
 
-// En el plan Básico no hay turnos: ni cierre, ni estado del turno
+// En el plan Básico no hay turnos: ni cierre, ni estado del turno. Con el
+// punto físico en pausa, la caja es esto para todos
 const TABS_BASICO = [
     TABS[0],
     { ...TABS[1], label: 'Ventas de hoy' },
@@ -84,6 +86,35 @@ button.cj-pill:active, a.cj-pill:active { transform: scale(0.96); }
     .cj-pill { height: 40px; padding: 0 11px; gap: 5px; }
 }
 `
+
+/** Lo único que ve un vendedor mientras el punto físico está en pausa */
+function EnPausa({ onSalir }: { onSalir: () => void }) {
+    return (
+        <div style={{
+            minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--toul-bg)',
+            padding: '24px 24px calc(24px + env(safe-area-inset-bottom, 0px))',
+        }}>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, ease: EASE_OUT_EMIL }}
+                style={{ width: '100%', maxWidth: 340, textAlign: 'center' }}>
+                <div aria-hidden style={{
+                    width: 52, height: 52, borderRadius: '50%', margin: '0 auto 18px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'var(--toul-surface)', color: 'var(--toul-text-muted)',
+                }}>
+                    <Store size={22} strokeWidth={1.9} />
+                </div>
+                <h1 style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.25, color: 'var(--toul-text)', margin: 0 }}>
+                    La venta en punto físico está en pausa
+                </h1>
+                <p style={{ fontSize: 14.5, lineHeight: 1.5, color: 'var(--toul-text-muted)', margin: '8px 0 26px' }}>
+                    Habla con el dueño del negocio.
+                </p>
+                <button type="button" onClick={onSalir} className="toul-btn-ghost" style={{ width: '100%' }}>
+                    Cerrar sesión
+                </button>
+            </motion.div>
+        </div>
+    )
+}
 
 function Spinner() {
     return (
@@ -192,11 +223,14 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     const { cerrar: logout, dialogo: dialogoSalir } = useCerrarSesion(ctx?.storeId)
 
     // Mientras no se sabe el plan se muestra la caja como siempre. Quien
-    // vende con su propia cuenta siempre es de un plan Pro (el equipo es Pro)
-    const isPro = plan !== 'basico' || ctx?.role === 'seller'
+    // vende con su propia cuenta siempre es de un plan Pro (el equipo es Pro).
+    // Con el punto físico en pausa (lib/puntoFisico.ts) nadie tiene turnos
+    // ni tirilla: la caja es solo la forma rápida de anotar una venta
+    const isPro = PUNTO_FISICO && (plan !== 'basico' || ctx?.role === 'seller')
     const turno = isPro ? (session ?? null) : null
     const permisos = useMemo(() => permisosDe(ctx?.role ?? 'seller', tienda?.seller_permissions), [ctx?.role, tienda?.seller_permissions])
-    const comprobante = botonesDe(tienda?.receipt_buttons)
+    // El comprobante por WhatsApp queda para todos; la tirilla, en pausa
+    const comprobante: BotonesComprobante = PUNTO_FISICO ? botonesDe(tienda?.receipt_buttons) : 'whatsapp'
 
     const value = useMemo(() => ctx ? ({
         ctx, session: turno, sessionLoading, refreshSession, autoPrint: autoPrint && isPro, isPro,
@@ -204,6 +238,10 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     }) : null, [ctx, turno, sessionLoading, refreshSession, autoPrint, isPro, permisos, comprobante, tienda, offline, abrirTurno])
 
     if (isLoading || !value) return <Spinner />
+
+    // Un vendedor que llegue a entrar no puede vender mientras el punto
+    // físico esté en pausa
+    if (!PUNTO_FISICO && ctx!.role === 'seller') return <>{dialogoSalir}<EnPausa onSalir={logout} /></>
 
     const openedAt = turno ? new Date(turno.opened_at).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' }) : null
     // El turno abierto puede ser de otra persona: que se vea de quién es
@@ -349,8 +387,8 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
                     <OpenSessionCard name={ctx!.displayName} onOpened={() => { setAbrirTurnoOpen(false); refreshSession() }} embedded />
                 </Sheet>
 
-                {/* El vendedor anota con una cuenta del negocio, nunca con "Plata mía" */}
-                <RegistrarMovimiento abierto={gastoOpen} tipo="gasto" conPlataMia={ctx!.role === 'admin'} onCerrar={cerrarGasto} />
+                {/* El gasto se paga siempre con una cuenta del negocio */}
+                <RegistrarMovimiento abierto={gastoOpen} tipo="gasto" onCerrar={cerrarGasto} />
             </POSProvider>
         </CajaContext.Provider>
     )

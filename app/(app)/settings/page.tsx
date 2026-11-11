@@ -12,6 +12,7 @@ import { ComprobanteSettings } from '@/components/isla/ComprobanteSettings'
 import { PermisosEquipo } from '@/components/isla/PermisosEquipo'
 import { PushPrompt } from '@/components/isla/PushPrompt'
 import { SeguridadCuenta } from '@/components/settings/SeguridadCuenta'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 
 const CATEGORIES = [
     { value: 'ropa', label: 'Ropa y accesorios' },
@@ -212,16 +213,10 @@ export default function SettingsPage() {
                     style={{ background: 'var(--toul-accent-dim)', color: 'var(--toul-accent)' }}>
                     <Sparkles size={17} />
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
-                        Plan {plan === 'pro' ? 'Pro' : 'Básico'}
-                    </p>
-                    <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: 0, lineHeight: 1.45 }}>
-                        {plan === 'pro'
-                            ? 'Incluye el punto físico: turnos de caja y aprobaciones.'
-                            : 'El Pro agrega el punto físico: turnos de caja y aprobaciones.'}
-                    </p>
-                </div>
+                {/* Solo el nombre: lo que trae cada plan se define con el cobro */}
+                <p style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 600, color: 'var(--toul-text)', margin: 0 }}>
+                    Plan {plan === 'pro' ? 'Pro' : 'Básico'}
+                </p>
             </div>
 
             {/* Tus datos */}
@@ -259,8 +254,8 @@ export default function SettingsPage() {
 
             {/* Punto físico: solo con el plan Pro, igual que en el menú.
                 A quien vende por Instagram, vendedores y tirillas no le
-                dicen nada. */}
-            {plan === 'pro' && (
+                dicen nada. En pausa mientras la llave esté apagada */}
+            {PUNTO_FISICO && plan === 'pro' && (
                 <>
                     <p className="toul-section-label" style={{ marginTop: 24 }}>Punto físico</p>
                     <PushPrompt />
@@ -269,8 +264,9 @@ export default function SettingsPage() {
                 </>
             )}
 
-            {/* Comprobante: para todos los planes (la tirilla es del Pro) */}
-            {storeId && <ComprobanteSettings storeId={storeId} isPro={plan === 'pro'} />}
+            {/* Comprobante: para todos los planes (la tirilla es del Pro y del
+                punto físico: en pausa, solo queda el mensaje del WhatsApp) */}
+            {storeId && <ComprobanteSettings storeId={storeId} isPro={PUNTO_FISICO && plan === 'pro'} />}
 
             {email && <SeguridadCuenta storeId={storeId || null} email={email} />}
 

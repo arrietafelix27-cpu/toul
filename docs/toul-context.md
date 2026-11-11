@@ -211,9 +211,19 @@ app/
 
 ---
 
-## Caso de uso actual: isla de perfumes en centro comercial
+## TOUL es para quien vende por redes (desde el 11 de noviembre de 2026)
 
-TOUL se está preparando para operar como sistema de una isla de perfumes (negocio nuevo, apertura aprox. mediados de noviembre de 2026).
+TOUL es 100 % para quien vende por WhatsApp e Instagram. **El punto físico está en pausa**: turnos de caja, vendedores, aprobaciones, permisos del equipo y la tirilla impresa no se ven para nadie. Una sola llave lo controla: `PUNTO_FISICO` en `lib/puntoFisico.ts` (apagada). No se borró código ni datos. **Solo se cambia si Félix lo pide.**
+
+- La caja ("Nueva venta") es solo la forma rápida de anotar una venta: "Vender" y "Ventas de hoy". El comprobante va por WhatsApp
+- Un vendedor que entre ve el aviso de pausa y no puede vender
+- **"Plata mía" ya no se elige**: gastos, compras y pagos a proveedor se pagan siempre con una cuenta del negocio (la base lo exige). Lo viejo con "Plata mía" se sigue viendo igual, con su Metí plata
+- "Metí plata" y "Saqué plata" se anotan a mano en Movimientos, como acciones de segundas; "Anotar gasto" es la principal
+- El plan Pro, por ahora, es solo un nombre
+
+## Antes: isla de perfumes en centro comercial (en pausa)
+
+Lo que sigue es cómo funciona el modo isla, que queda guardado para cuando vuelva. TOUL se estaba preparando para operar como sistema de una isla de perfumes.
 
 - **Equipo:** computador POS táctil + impresora de tirilla 80 mm
 - **Productos:** solo frascos completos (TOUL = reventa de productos físicos, sin decants)

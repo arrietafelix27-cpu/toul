@@ -6,14 +6,18 @@ import { nombreMetodo } from '@/lib/format/text'
 
 /* ══════════════════════════════════════════════════════════════
    "¿Con qué pagaste?": las cuentas del negocio (de payment_methods,
-   nunca escritas a mano) y, donde se puede, "Plata mía".
+   nunca escritas a mano).
+
+   "Plata mía" ya no se puede elegir (desde el 11 de noviembre de 2026).
+   Solo sale, marcada, al corregir algo viejo que se pagó así; se puede
+   pasar a una cuenta del negocio, pero no volver a "Plata mía".
 
    La que usaste la última vez para eso mismo (un gasto, una compra,
    un pago a proveedor…) sale ya marcada. Se recuerda en este equipo
    solo cuando se guarda, no al tocar.
    ══════════════════════════════════════════════════════════════ */
 
-/** "Plata mía": no sale de ninguna cuenta del negocio */
+/** "Plata mía": no sale de ninguna cuenta del negocio (solo lo viejo) */
 export const PLATA_MIA = 'plata-mia'
 
 /** Lo que va al servidor: la cuenta por su número, o plata mía */
@@ -53,13 +57,12 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .cc-chip:active { transform: none; } }
 `
 
-export function CuentaChips({ valor, onChange, recordar, conPlataMia = false, preseleccionar = true, bloqueada = false, etiqueta = '¿Con qué pagaste?' }: {
-    /** El número de la cuenta, PLATA_MIA o nada */
+export function CuentaChips({ valor, onChange, recordar, preseleccionar = true, bloqueada = false, etiqueta = '¿Con qué pagaste?' }: {
+    /** El número de la cuenta, PLATA_MIA (algo viejo) o nada */
     valor: string | null
     onChange: (cuenta: string) => void
     /** Para qué es: la última de cada cosa se recuerda aparte */
     recordar?: string
-    conPlataMia?: boolean
     /** Marcar la última usada si no hay ninguna (no al corregir algo que ya tiene la suya) */
     preseleccionar?: boolean
     /** No se puede cambiar (un turno ya cerrado) */
@@ -70,14 +73,13 @@ export function CuentaChips({ valor, onChange, recordar, conPlataMia = false, pr
     const { methods, isLoading } = usePaymentMethods()
     const yaMarco = useRef(false)
 
-    // La última que usaste, si sigue activa
+    // La última que usaste, si sigue activa (nunca "Plata mía": ya no se elige)
     useEffect(() => {
         if (yaMarco.current || !preseleccionar || valor || isLoading || !recordar) return
         yaMarco.current = true
         const ultima = ultimaCuenta(recordar)
-        if (!ultima) return
-        if (ultima === PLATA_MIA ? conPlataMia : methods.some(m => m.id === ultima)) onChange(ultima)
-    }, [preseleccionar, valor, isLoading, recordar, methods, conPlataMia, onChange])
+        if (ultima && methods.some(m => m.id === ultima)) onChange(ultima)
+    }, [preseleccionar, valor, isLoading, recordar, methods, onChange])
 
     return (
         <>
@@ -92,9 +94,9 @@ export function CuentaChips({ valor, onChange, recordar, conPlataMia = false, pr
                                 {nombreMetodo(m.name)}
                             </button>
                         ))}
-                        {conPlataMia && (
-                            <button type="button" role="radio" className="cc-chip" aria-checked={valor === PLATA_MIA}
-                                disabled={bloqueada} onClick={() => onChange(PLATA_MIA)}>
+                        {/* Lo viejo que se pagó con "Plata mía" la muestra marcada */}
+                        {valor === PLATA_MIA && (
+                            <button type="button" role="radio" className="cc-chip" aria-checked disabled={bloqueada}>
                                 Plata mía
                             </button>
                         )}

@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 7 de noviembre de 2026 (Menú nuevo, Punto físico y TOUL AI)*
+*Última actualización: 11 de noviembre de 2026 (TOUL para redes: punto físico en pausa y sin "Plata mía")*
 
 ---
 
@@ -389,6 +389,31 @@ Modals base rediseñados:
 
 `npm run build` pasa sin errores.
 
+### 11 de noviembre de 2026 — TOUL es para quien vende por redes ✅ publicado, ⚠️ falta correr el SQL
+
+Cambio de estrategia: TOUL es 100 % para quien vende por WhatsApp e Instagram. El punto físico queda **en pausa**.
+
+**Punto físico en pausa, detrás de una sola llave** (`lib/puntoFisico.ts`, `PUNTO_FISICO = false`). No se borró código ni datos; todo vuelve cambiando esa línea. **Solo se cambia si Félix lo pide.** No hay opción en Ajustes ni por tienda.
+- Escondido para todos: "Punto físico" en el menú y en Más (y el contador de aprobaciones, que ya ni se consulta), Turnos de caja, Aprobaciones, invitar al equipo y permisos (Ajustes), la tirilla impresa (botones, tirilla automática, NIT/dirección/teléfono del comprobante), "Soy vendedor" en el registro, el filtro y la columna "Vendedor" en Ventas y en el Excel
+- `/punto-fisico`, `/turnos` y `/aprobaciones` llevan al Inicio; `/caja/cierre` lleva a la caja
+- **Caja ("Nueva venta")**: solo "Vender" y "Ventas de hoy", como en el plan Básico. Sin turno, sin "Abrir turno", sin "Cerrar turno". El comprobante por WhatsApp queda para todos (Ajustes → Comprobante: solo "Mensaje final")
+- **Un vendedor que entre** solo ve "La venta en punto físico está en pausa. Habla con el dueño del negocio." y Cerrar sesión. Ojo: esto es en la pantalla; la base no bloquea a un vendedor que llame la API directo (no hay vendedores reales hoy; Félix decidió dejarlo así). El vendedor de prueba "loco 1" ya no tiene membresía en la tienda de Félix (se revisó el 11 de noviembre): no tiene acceso
+- **Plan Pro** en Ajustes: solo el nombre, sin descripción (se define con el cobro)
+- La lógica de los turnos en la base **no se tocó**. Antes de publicar se revisó: ningún turno abierto
+- Las páginas legales no se tocaron
+
+**Sin "Plata mía" para lo nuevo**
+- Gasto, compra y pago a proveedor se pagan siempre con una cuenta del negocio. Ya no se crea ningún "Metí plata" automático
+- Lo viejo no cambia: lo que dice "Plata mía" se sigue viendo igual, con su Metí plata. Al corregir un gasto viejo sale "Plata mía" marcada; se puede pasar a una cuenta, pero no volver
+- La base lo rechaza (`supabase/deploy_sin_plata_mia.sql`, amplía `toul_cuenta_obligatoria`): vale aunque alguien se salte la pantalla. Las APIs de gasto y pago a proveedor mandan siempre `p_plata_mia: false`
+- **Movimientos**: "Anotar gasto" es el botón principal; "Metí plata" y "Saqué plata" quedan pequeños debajo (en PC, al lado)
+- Aviso de algo ya cerrado: "Este movimiento ya quedó cerrado…" (sin decir "turno")
+
+**Prueba de que ningún número cambió**
+- `supabase/tests/antes-y-despues.test.mjs`: arma la tienda de prueba con las reglas de antes, toma la foto de todos los números (Ganaste, ventas, inventario, cada reporte por periodo y por mes, cartera, compras, clientes, turnos, libro de plata, auditoría), aplica el SQL y la foto sale idéntica. La tienda de prueba ahora corre dentro de esta prueba
+- Con los datos reales de Félix: Inicio, Reportes, Clientes, Inventario, Compras y Proveedores salen iguales con el código de antes y el nuevo
+- Cambio de reglas en pruebas viejas: `movimientos.test.mjs` y `inventario-cuentas.test.mjs` crean sus registros con "Plata mía" "como antes" (apagando solo la regla nueva un momento); los valores esperados no cambiaron. Y ahora se prueba que lo viejo ya no vuelve a "Plata mía"
+
 ### 7 de noviembre de 2026 — Movimientos, paso 2: datos y reglas ✅ desplegado
 
 Félix pidió rehacer Movimientos en 3 pasos con su aprobación entre cada uno (1 almacenamiento ✅, 2 datos y reglas ✅, 3 pantallas pendiente). Tres tipos: **Gasto** (resta de lo que ganaste), **Metí plata** y **Saqué plata** (plata entre el dueño y su negocio: nunca cambian Ganaste, margen, ni Plata que entró/salió).
@@ -669,6 +694,8 @@ Rama `feat/modo-isla`. `npm run build` pasa. SQL probado en PGlite reproduciendo
 
 **Fase 4 de la caja:** ✅ hecha el 7 de noviembre (ver arriba). Falta que Félix pruebe la impresión con impresora real en PC y celular.
 
+**⏸️ En pausa desde el 11 de noviembre:** todo el modo isla / punto físico (ver arriba). Vuelve con `PUNTO_FISICO = true` en `lib/puntoFisico.ts`, solo si Félix lo pide.
+
 **Pendiente de infraestructura:** monitoreo de errores (Sentry o similar), exportar/respaldar datos, facturación electrónica DIAN, cobro por suscripción
 
 
@@ -728,6 +755,9 @@ Rama `feat/modo-isla`. `npm run build` pasa. SQL probado en PGlite reproduciendo
 - En modo crédito, el split del método de pago usa el abono inicial, no el total
 - Paleta del POS mantiene identidad visual propia (`--toul-pos-*`) — solo el verde se unifica al global
 - Stock centralizado en `inventory_adjustments` con cantidades signadas — `products.stock` es caché mantenido por trigger
+- TOUL es para quien vende por WhatsApp e Instagram (11 nov 2026). El punto físico está en pausa detrás de `PUNTO_FISICO` (lib/puntoFisico.ts); no se borra nada
+- "Plata mía" ya no se elige (11 nov 2026): todo se paga con una cuenta del negocio. Lo viejo se sigue viendo igual
+- El plan Pro, por ahora, es solo un nombre: lo que trae se define con el cobro
 
 ---
 

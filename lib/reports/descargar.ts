@@ -5,6 +5,7 @@ import { nombreCategoria } from '@/lib/types'
 import { ZONA_COLOMBIA, contraQue, enColombia, formatoColombia, textoRango, type Periodo, type Tramo } from '@/lib/periodos'
 import { deCada100, formatoCorto, porcentajeTendencia, proyeccion, resumir, textoPorcentaje } from '@/lib/reports/calculos'
 import type { MesReporte, ReporteSQL } from '@/lib/reports/types'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 
 /* ══════════════════════════════════════════════════════════════
    Descargar el reporte: Excel (resumen + cada venta, montos como
@@ -122,7 +123,8 @@ export async function descargarExcel(b: Base & { supabase: SupabaseClient }) {
         ...b.actual.metodos.map(m => [{ value: capitalizeFirst(m.nombre) }, { value: Number(m.monto), type: Number, format: plata }]),
     ]
 
-    const cabeza = ['Fecha', 'Cliente', 'Vendedor', 'Productos', 'Total', 'Costo', 'Ganancia', 'De contado', 'A crédito', 'Cómo pagó']
+    // Quién vendió es del punto físico: en pausa, la columna no sale
+    const cabeza = ['Fecha', 'Cliente', ...(PUNTO_FISICO ? ['Vendedor'] : []), 'Productos', 'Total', 'Costo', 'Ganancia', 'De contado', 'A crédito', 'Cómo pagó']
     // Sin redondear cada venta: así la suma de cada columna da lo mismo que el resumen
     const hoja = [
         cabeza.map(c => ({ value: c, ...negrita })),
@@ -130,7 +132,7 @@ export async function descargarExcel(b: Base & { supabase: SupabaseClient }) {
             // Excel no sabe de zonas horarias: se escribe la hora de Colombia (UTC−5)
             { value: new Date(new Date(v.fecha).getTime() - 5 * 3_600_000), type: Date, format: 'dd/mm/yyyy hh:mm' },
             { value: v.cliente },
-            { value: v.vendedor },
+            ...(PUNTO_FISICO ? [{ value: v.vendedor }] : []),
             { value: v.productos },
             { value: Number(v.total), type: Number, format: plata },
             { value: Number(v.costo), type: Number, format: plata },
@@ -144,7 +146,7 @@ export async function descargarExcel(b: Base & { supabase: SupabaseClient }) {
     await writeXlsxFile([
         { sheet: 'Resumen', data: resumen, columns: [{ width: 32 }, { width: 16 }, { width: 10 }] },
         { sheet: 'Ventas', data: hoja, stickyRowsCount: 1,
-            columns: [{ width: 17 }, { width: 22 }, { width: 16 }, { width: 44 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 30 }] },
+            columns: [{ width: 17 }, { width: 22 }, ...(PUNTO_FISICO ? [{ width: 16 }] : []), { width: 44 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 30 }] },
     ] as Parameters<typeof writeXlsxFile>[0]).toFile(`TOUL - ${nombre}.xlsx`)
 }
 

@@ -7,6 +7,8 @@ import { useOpenCashSession, usePendingApprovalsCount } from '@/lib/isla/useSess
 import { ZONA_COLOMBIA, diaColombia, formatoColombia } from '@/lib/periodos'
 import { CountBadge } from '@/components/layout/BottomNav'
 import { useEnLinea } from '@/components/ui/SinInternet'
+import { redirect } from 'next/navigation'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 
 /* ══════════════════════════════════════════════════════════════
    Punto físico: lo del local o la isla, en un solo lugar.
@@ -42,6 +44,13 @@ function textoTurno(abiertaDesde: string): string {
 }
 
 export default function PuntoFisicoPage() {
+    // El punto físico está en pausa (lib/puntoFisico.ts): quien llegue con
+    // un enlace viejo o una notificación va al inicio
+    if (!PUNTO_FISICO) redirect('/')
+    return <PuntoFisico />
+}
+
+function PuntoFisico() {
     const { data: store } = useStore()
     const { data: turno, error: errorTurno } = useOpenCashSession(store?.id)
     const { data: pendientes, error: errorPendientes, isLoading: cargandoPendientes } = usePendingApprovalsCount(true)

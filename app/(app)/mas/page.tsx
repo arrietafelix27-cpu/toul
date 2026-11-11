@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ChevronRight, LogOut, Settings } from 'lucide-react'
 import { useStore } from '@/lib/hooks/useData'
 import { usePendingApprovalsCount } from '@/lib/isla/useSession'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { BotonToulAI } from '@/components/layout/BotonToulAI'
 import { CountBadge, MENU_MAS, inicialesDe, nombrePlan, seVe, usePlan } from '@/components/layout/BottomNav'
@@ -42,7 +43,8 @@ const CSS = `
 export default function MasPage() {
     const { data: store } = useStore()
     const plan = usePlan()
-    const { data: pendientes = 0 } = usePendingApprovalsCount(true)
+    // Las aprobaciones son del punto físico: en pausa, ni se preguntan
+    const { data: pendientes = 0 } = usePendingApprovalsCount(PUNTO_FISICO)
     // El mismo cierre de sesión de Ajustes: carga lo pendiente y no deja nada en el equipo
     const { cerrar, cerrando, dialogo } = useCerrarSesion(store?.id)
     const nombre = store?.name || 'Mi negocio'

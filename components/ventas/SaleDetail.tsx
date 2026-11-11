@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { nombreMetodo } from '@/lib/format/text'
 import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 import { panelVariants, backdropVariants } from '@/lib/motion'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { useDevolucionesDeVenta, DIAS_PARA_DEVOLVER } from './DevolucionSheet'
@@ -221,7 +222,8 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, onDevolver
                                     {formatCOP(Math.round(sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0) - gananciaDevuelta))}
                                 </span>
                             </div>
-                            {sale.seller_name && (
+                            {/* Quién vendió y la tirilla son del punto físico (en pausa) */}
+                            {PUNTO_FISICO && sale.seller_name && (
                                 <div className="flex justify-between">
                                     <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Vendió</span>
                                     <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>
@@ -235,10 +237,12 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, onDevolver
                             </div>
 
                             <div className="flex gap-2 pt-3">
-                                <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-text)' }}
-                                    disabled={printing} onClick={() => imprimir(sale.id)}>
-                                    <Printer size={16} /> {printing ? 'Preparando…' : 'Tirilla'}
-                                </button>
+                                {PUNTO_FISICO && (
+                                    <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-text)' }}
+                                        disabled={printing} onClick={() => imprimir(sale.id)}>
+                                        <Printer size={16} /> {printing ? 'Preparando…' : 'Tirilla'}
+                                    </button>
+                                )}
                                 {puedeDevolver && (
                                     <button className="toul-btn-secondary" style={{ height: 48, fontSize: 14, color: 'var(--toul-text)' }}
                                         onClick={onDevolver}>

@@ -15,6 +15,8 @@ import { Sheet } from '@/components/isla/Sheet'
 import { SinInternet } from '@/components/ui/SinInternet'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 import type { ApprovalRequest } from '@/lib/isla/types'
+import { redirect } from 'next/navigation'
+import { PUNTO_FISICO } from '@/lib/puntoFisico'
 
 const supabase = createClient()
 
@@ -42,6 +44,13 @@ interface PriceReview {
 interface SaleInfo { id: string; total: number; created_at: string; seller_name: string | null; sale_items: { id: string; quantity: number; products: { name: string } | null; combos: { name: string } | null }[] }
 
 export default function AprobacionesPage() {
+    // El punto físico está en pausa (lib/puntoFisico.ts): quien llegue con
+    // un enlace viejo o una notificación va al inicio
+    if (!PUNTO_FISICO) redirect('/')
+    return <Aprobaciones />
+}
+
+function Aprobaciones() {
     const { data: ctx, error: errorSesion, mutate: recargarSesion } = useSessionContext()
     const { mutate: globalMutate } = useSWRConfig()
     const [rejecting, setRejecting] = useState<ApprovalRequest | null>(null)

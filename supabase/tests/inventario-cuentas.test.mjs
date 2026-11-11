@@ -465,7 +465,10 @@ export default async function (db) {
   }
   const item = (variantId, quantity, unitCost) => ({ productId: pantalon.id, variantId, quantity, unitCost })
   const c1 = await compraEn('01', O, { isCredit: false, methodId: efe.id, items: [item(p30.id, 2, 20000), item(p32.id, 2, 25000)] })
+  // Así se pagaba con "Plata mía" antes del 11 de noviembre (ya no se puede elegir)
+  await db.exec('ALTER TABLE payments DISABLE TRIGGER trg_payments_cuenta_obligatoria')
   await compraEn('05', O, { isCredit: false, plataMia: true, items: [item(p32.id, 1, 26000)] })
+  await db.exec('ALTER TABLE payments ENABLE TRIGGER trg_payments_cuenta_obligatoria')
   const c3 = await compraEn('09', O, { isCredit: false, methodId: neq.id, items: [item(p30.id, 1, 21000), item(p32.id, 1, 27000)] })
   const det3 = await r(O, `SELECT toul_purchase_detail($1) r`, [c3])
   const talla = (d, talla) => d.items.find(i => i.presentacion === talla)
