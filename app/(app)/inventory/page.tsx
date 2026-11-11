@@ -1,23 +1,20 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import useSWR from 'swr'
 import { motion } from 'framer-motion'
-import { AlertTriangle, ChevronDown, ClipboardList, Plus, Search, Settings2, SlidersHorizontal, Truck } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { ChevronDown, ClipboardList, Plus, Search, Settings2, SlidersHorizontal, Truck } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { StockAdjustSheet } from '@/components/inventory/StockAdjustSheet'
-import { ReorderPanel, type ReorderItem } from '@/components/inventory/ReorderPanel'
+import { ReorderPanel } from '@/components/inventory/ReorderPanel'
 import { StockGauge } from '@/components/inventory/StockGauge'
 import { InventoryRow, ROW_CSS } from '@/components/inventory/InventoryRow'
-
-const supabase = createClient()
-const PAGE_SIZE = 40
-/** Después de dos meses sin venderse, esa plata está dormida */
+import { useInventario } from '@/lib/inventory/useInventario'
+import { SinInternet } from '@/components/inventory/SinInternet'
+import { filaDePresentacion, filaDeEstante, type Filtro } from '@/lib/inventory/calculos'
 
 /* ══════════════════════════════════════════════════════════════
    Inventario.
@@ -27,63 +24,6 @@ const PAGE_SIZE = 40
    de stock —la talla o la presentación— porque una referencia con
    40 unidades y sin tallas M ni L está muerta.
    ══════════════════════════════════════════════════════════════ */
-
-interface AlertRow {
-    id: string
-    kind: 'producto' | 'presentacion'
-    product_id: string
-    product_name: string
-    variant_name: string | null
-    image_url: string | null
-    stock: number
-    cost: number
-    min_stock: number
-    sold_30d: number
-}
-
-interface DormantRow {
-    id: string
-    kind: 'producto' | 'presentacion'
-    product_id: string
-    product_name: string
-    variant_name: string | null
-    image_url: string | null
-    stock: number
-    cost: number
-    idle_days: number
-    never_sold: boolean
-}
-
-interface Overview {
-    coverageDays: number
-    idleDays: number
-    value: number
-    retailValue: number
-    units: number
-    soldUnits30: number
-    items: number
-    references: number
-    outOfStock: number
-    lowStock: number
-    alerts: AlertRow[]
-    dormantValue: number
-    dormantCount: number
-    dormant: DormantRow[]
-}
-
-type Filtro = 'todo' | 'agotados' | 'pocos' | 'quietos'
-
-interface Row {
-    key: string
-    href: string
-    image: string | null
-    title: string
-    subtitle: string
-    subtitleTone: 'dim' | 'warn' | 'error'
-    stock: number
-    /** Cuántas debería haber. Sin esto no se dibuja la barra de nivel. */
-    target?: number
-}
 
 const CSS = PANEL_CSS + ROW_CSS + `
 .inv-wrap { position: relative; max-width: 1000px; margin: 0 auto; padding: 24px 16px 96px; container-type: inline-size; }
@@ -115,7 +55,7 @@ const CSS = PANEL_CSS + ROW_CSS + `
 
 .inv-input { width: 100%; height: 46px; border-radius: 14px; padding: 0 14px 0 40px; font-family: inherit;
     background: var(--toul-surface); border: 1px solid var(--toul-border); color: var(--toul-text);
-    font-size: 15px; outline: none;
+    font-size: 16px; outline: none;
     transition: border-color 160ms cubic-bezier(0.23,1,0.32,1); }
 .inv-input:focus { border-color: var(--toul-border-focused); }
 
@@ -129,123 +69,20 @@ const CSS = PANEL_CSS + ROW_CSS + `
 }
 `
 
-const daysAgo = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
-
 export default function InventoryPage() {
     const { data: store } = useStore()
     const storeId = store?.id || null
 
-    const [search, setSearch] = useState('')
-    const [filtro, setFiltro] = useState<Filtro>('todo')
-    const [limit, setLimit] = useState(PAGE_SIZE)
     const [adjustOpen, setAdjustOpen] = useState(false)
     // El mismo inventario vale distinto según se mire: lo que costó
     // o lo que va a entrar si se vende
     const [verVenta, setVerVenta] = useState(false)
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-    // ── Valor, mínimos y lo que falta: lo calcula la base ──
-    const { data: overview, error: overviewError, mutate: refreshOverview } = useSWR(
-        storeId ? ['inventory-overview', storeId] : null,
-        async () => {
-            const { data, error } = await supabase.rpc('toul_inventory_overview', { p_limit: 120 })
-            if (error) throw error
-            return data as Overview
-        },
-        { revalidateOnFocus: false, dedupingInterval: 30000 },
-    )
-
-    // Cuánto dura la bodega al ritmo al que sale la mercancía
-    const daysLeft = useMemo(() => {
-        if (!overview || !Number(overview.soldUnits30)) return null
-        const perDay = Number(overview.soldUnits30) / 30
-        return Math.floor(Number(overview.units) / perDay)
-    }, [overview])
-
-    const { data: lastCount } = useSWR(
-        storeId ? ['last-count', storeId] : null,
-        async () => {
-            const { data } = await supabase.from('inventory_counts')
-                .select('applied_at').eq('store_id', storeId!).eq('status', 'applied')
-                .order('applied_at', { ascending: false }).limit(1).maybeSingle()
-            return data?.applied_at as string | undefined
-        },
-        { revalidateOnFocus: false },
-    )
-
-    // ── La bodega ──
-    const { data: shelf, isLoading, mutate: refreshShelf } = useSWR(
-        storeId ? ['inventory-shelf', storeId, search, limit] : null,
-        async () => {
-            let query = supabase.from('products')
-                .select('id, name, reference, image_url, images, stock, cpp')
-                .eq('store_id', storeId!).eq('is_active', true).order('name').limit(limit + 1)
-            if (search) query = query.or(`name.ilike.%${search}%,reference.ilike.%${search}%`)
-
-            const [productsRes, variantsRes] = await Promise.all([
-                query,
-                supabase.from('product_variants')
-                    .select('id, product_id, name, stock, cpp')
-                    .eq('store_id', storeId!).eq('is_active', true).order('name'),
-            ])
-            const rows = productsRes.data ?? []
-            return { products: rows.slice(0, limit), hasMore: rows.length > limit, variants: variantsRes.data ?? [] }
-        },
-        { revalidateOnFocus: false, dedupingInterval: 30000 },
-    )
-
-    const refresh = () => { refreshOverview(); refreshShelf() }
-
-    // ── Lo que hay que pedir ──
-    const reorder: ReorderItem[] = useMemo(() => (overview?.alerts ?? []).map(alert => ({
-        id: alert.id,
-        kind: alert.kind,
-        productId: alert.product_id,
-        title: alert.product_name,
-        subtitle: alert.variant_name,
-        image: alert.image_url,
-        stock: Math.max(Number(alert.stock) || 0, 0),
-        toOrder: Math.max(Number(alert.min_stock) - Number(alert.stock), 1),
-        cost: Number(alert.cost) || 0,
-    })), [overview])
-
-    // ── La lista, según el filtro ──
-    const filtered: Row[] | null = useMemo(() => {
-        if (filtro === 'todo' || !overview) return null
-        const text = search.trim().toLowerCase()
-
-        if (filtro === 'quietos') {
-            return overview.dormant
-                .map(row => ({
-                    key: `q-${row.kind}-${row.id}`,
-                    href: row.kind === 'presentacion' ? `/inventory/variant/${row.id}` : `/inventory/${row.id}`,
-                    image: row.image_url,
-                    title: row.variant_name ? `${row.product_name} · ${row.variant_name}` : row.product_name,
-                    subtitle: `${row.never_sold ? 'nunca se ha vendido' : 'sin venderse'} hace ${row.idle_days} días · ${formatCOP(Math.round(row.stock * row.cost))} quietos`,
-                    subtitleTone: 'warn' as Row['subtitleTone'],
-                    stock: Math.max(Number(row.stock) || 0, 0),
-                    // Un producto quieto no tiene un nivel "correcto" contra
-                    // el cual medirse: el problema no es cuánto hay
-                }))
-                .filter(row => !text || row.title.toLowerCase().includes(text))
-        }
-
-        return overview.alerts
-            .filter(alert => filtro === 'agotados' ? alert.stock <= 0 : alert.stock > 0)
-            .map(alert => ({
-                key: `${alert.kind}-${alert.id}`,
-                href: alert.kind === 'presentacion' ? `/inventory/variant/${alert.id}` : `/inventory/${alert.id}`,
-                image: alert.image_url,
-                title: alert.variant_name ? `${alert.product_name} · ${alert.variant_name}` : alert.product_name,
-                subtitle: alert.stock <= 0 ? 'se agotó' : `quedan ${alert.stock}, deberías tener ${alert.min_stock}`,
-                subtitleTone: (alert.stock <= 0 ? 'error' : 'warn') as Row['subtitleTone'],
-                stock: Math.max(Number(alert.stock) || 0, 0),
-                target: Math.max(Number(alert.min_stock) || 0, 1),
-            }))
-            .filter(row => !text || row.title.toLowerCase().includes(text))
-    }, [filtro, overview, search])
-
-    const variantsOf = (productId: string) => (shelf?.variants ?? []).filter(v => v.product_id === productId)
+    const {
+        overview, overviewError, daysLeft, textoContar, shelf, shelfError, isLoading, reorder, filtered,
+        variantsOf, search, setSearch, filtro, setFiltro, verMas, refresh,
+    } = useInventario(storeId)
 
     function toggle(productId: string) {
         setExpanded(prev => {
@@ -255,18 +92,10 @@ export default function InventoryPage() {
         })
     }
 
-    if (overviewError) {
-        return (
-            <div className="px-4 md:px-8 py-10 max-w-xl mx-auto" style={{ textAlign: 'center' }}>
-                <AlertTriangle size={26} style={{ color: 'var(--toul-warning)', margin: '0 auto 12px' }} />
-                <h1 style={{ fontSize: 19, fontWeight: 700, color: 'var(--toul-text)', margin: '0 0 8px' }}>
-                    Falta aplicar una actualización
-                </h1>
-                <p style={{ fontSize: 14.5, color: 'var(--toul-text-muted)', lineHeight: 1.55, margin: 0 }}>
-                    Corre <strong style={{ color: 'var(--toul-text)' }}>deploy_inventario.sql</strong> en Supabase y vuelve a entrar.
-                </p>
-            </div>
-        )
+    // Sin los números de la base no se muestra nada que parezca real.
+    // Si ya había datos y solo falló una actualización, se siguen viendo
+    if ((overviewError && !overview) || (shelfError && !shelf)) {
+        return <SinInternet onRetry={refresh} que="tu inventario" />
     }
 
     const CHIPS: { key: Filtro; label: string; count?: number; color: string }[] = [
@@ -334,9 +163,7 @@ export default function InventoryPage() {
                     </button>
                     <Link href="/inventory/conteo" className="pnl-pill">
                         <ClipboardList size={13} />
-                        {lastCount === undefined ? 'Contar'
-                            : lastCount ? `Contar · hace ${daysAgo(lastCount)} ${daysAgo(lastCount) === 1 ? 'día' : 'días'}`
-                                : 'Contar · nunca'}
+                        {textoContar}
                     </Link>
                     <Link href="/inventory/compras" className="pnl-pill">
                         <Truck size={13} /> Compras
@@ -389,7 +216,7 @@ export default function InventoryPage() {
                 <div style={{ position: 'relative', marginBottom: 10 }}>
                     <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)', pointerEvents: 'none' }} />
                     <input className="inv-input" placeholder="Buscar por nombre o referencia"
-                        value={search} onChange={event => { setSearch(event.target.value); setLimit(PAGE_SIZE) }} />
+                        value={search} onChange={event => setSearch(event.target.value)} />
                 </div>
 
                 {isLoading || !shelf ? (
@@ -419,20 +246,9 @@ export default function InventoryPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                             {shelf.products.map((product, index) => {
                                 const variants = variantsOf(product.id)
-                                const hasVariants = variants.length > 0
-                                const stock = hasVariants
-                                    ? variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)
-                                    : Number(product.stock) || 0
-                                const agotadas = variants.filter(v => (Number(v.stock) || 0) <= 0).length
-                                const image = (product.images?.[0] as string | undefined) ?? product.image_url
+                                const { conTallas: hasVariants, stock, subtitle, tone, image } = filaDeEstante(product, variants, formatCOP)
                                 const isOpen = expanded.has(product.id)
                                 const delay = Math.min(index, 12) * 30
-
-                                const subtitle = hasVariants
-                                    ? agotadas > 0
-                                        ? `${variants.length} presentaciones · ${agotadas} sin existencias`
-                                        : `${variants.length} presentaciones`
-                                    : `${formatCOP(Math.round(stock * (Number(product.cpp) || 0)))} en bodega`
 
                                 return (
                                     <div key={product.id}>
@@ -441,7 +257,7 @@ export default function InventoryPage() {
                                             onClick={hasVariants ? () => toggle(product.id) : undefined}
                                             image={image} name={product.name}
                                             title={product.name} subtitle={subtitle}
-                                            tone={agotadas > 0 ? 'error' : 'dim'}
+                                            tone={tone}
                                             stock={stock} delay={delay}
                                             trailing={
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
@@ -466,7 +282,7 @@ export default function InventoryPage() {
                                                 borderLeft: '1px solid var(--toul-divider)',
                                             }}>
                                                 {variants.map((variant, vi) => {
-                                                    const vStock = Number(variant.stock) || 0
+                                                    const { stock: vStock, texto: vTexto } = filaDePresentacion(variant, formatCOP)
                                                     return (
                                                         <Link key={variant.id} href={`/inventory/variant/${variant.id}`}
                                                             className="ivr ivr-item" style={{ animationDelay: `${vi * 30}ms` }}>
@@ -475,8 +291,7 @@ export default function InventoryPage() {
                                                                     {variant.name}
                                                                 </span>
                                                                 <span style={{ display: 'block', fontSize: 11.5, color: vStock <= 0 ? 'var(--toul-error)' : 'var(--toul-text-dim)' }}>
-                                                                    {vStock <= 0 ? 'se agotó'
-                                                                        : `${formatCOP(Math.round(vStock * (Number(variant.cpp) || 0)))} en bodega`}
+                                                                    {vTexto}
                                                                 </span>
                                                             </span>
                                                             <span style={{
@@ -497,7 +312,7 @@ export default function InventoryPage() {
                         </div>
 
                         {shelf.hasMore && (
-                            <button onClick={() => setLimit(l => l + PAGE_SIZE)}
+                            <button onClick={verMas}
                                 style={{
                                     width: '100%', marginTop: 12, height: 44, borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
                                     background: 'transparent', border: '1px dashed var(--toul-border)',

@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, ChevronLeft, ChevronRight, Package, Layers, Gift } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
 import { EASE_OUT_EMIL } from '@/components/ui'
+import type { EstadoStock } from '@/lib/inventory/calculos'
 
 /* ══════════════════════════════════════════════════════════════
    Detalle de producto — una sola plantilla para los cuatro casos:
@@ -22,6 +23,8 @@ export interface Presentation {
     name: string
     price: number
     stock: number
+    /** Agotada, por acabarse o bien: la misma regla de Inventario (toul_estado_stock) */
+    estado?: EstadoStock | null
     href?: string
 }
 
@@ -53,6 +56,8 @@ export interface ProductDetailProps {
     cost?: number | null
     margin?: number | null
     stock?: number | null
+    /** Agotado, por acabarse o bien: la misma regla de Inventario (toul_estado_stock) */
+    estadoStock?: EstadoStock | null
     stockValue?: number | null
     presentations?: Presentation[]
     components?: ComboComponent[]
@@ -143,15 +148,16 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 export function ProductDetailView(props: ProductDetailProps) {
     const {
         kind, name, parent, categoryName, reference, images, priceLabel,
-        cost, margin, stock, stockValue, presentations, components,
+        cost, margin, stock, estadoStock, stockValue, presentations, components,
         sales, insight, movements, actions, backHref = '/products',
     } = props
 
     const [imageIndex, setImageIndex] = useState(0)
     const { label: kindLabel, Icon: KindIcon } = KIND_LABEL[kind]
     const hasImages = images.length > 0
-    const lowStock = typeof stock === 'number' && stock > 0 && stock <= 3
-    const outOfStock = stock === 0
+    // Mientras no llega el estado, solo se sabe que lo de 0 o menos está agotado
+    const outOfStock = estadoStock ? estadoStock === 'agotado' : typeof stock === 'number' && stock <= 0
+    const lowStock = estadoStock === 'pocas'
 
     return (
         <div className="pdv">
@@ -272,12 +278,13 @@ export function ProductDetailView(props: ProductDetailProps) {
                             title={kind === 'presentacion' ? 'Otras presentaciones' : 'Presentaciones'}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 {presentations.map(item => {
+                                    const agotada = item.estado ? item.estado === 'agotado' : item.stock <= 0
                                     const body = (
                                         <>
                                             <span style={{ flex: 1, minWidth: 0 }}>
                                                 <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: 'var(--toul-text)' }}>{item.name}</span>
-                                                <span style={{ display: 'block', fontSize: 13, color: item.stock === 0 ? 'var(--toul-error)' : item.stock <= 3 ? 'var(--toul-warning)' : 'var(--toul-text-dim)' }}>
-                                                    {item.stock === 0 ? 'Sin stock' : `${item.stock} und`}
+                                                <span style={{ display: 'block', fontSize: 13, color: agotada ? 'var(--toul-error)' : item.estado === 'pocas' ? 'var(--toul-warning)' : 'var(--toul-text-dim)' }}>
+                                                    {agotada ? 'Sin stock' : `${item.stock} und`}
                                                 </span>
                                             </span>
                                             <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-accent)' }}>

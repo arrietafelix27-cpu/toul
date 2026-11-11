@@ -85,6 +85,9 @@ export function explainError(error: unknown, fallback = 'No se pudo completar. I
     if (err.status === 429) return 'Demasiados intentos seguidos. Espera unos minutos y vuelve a intentar.'
 
     if (err.status === 401 || raw.includes('unauthorized')) return 'Tu sesión se venció. Vuelve a entrar.'
+    if (raw.includes('invalid json') || raw.includes('payload required') || raw.includes('unexpected token')) {
+        return 'Los datos no llegaron completos. Intenta de nuevo.'
+    }
     if (err.status === 403) return 'Tu cuenta no tiene permiso para hacer esto.'
     if (raw.includes('stock insuficiente')) return err.message || 'No hay suficiente stock.'
     if (raw.includes('duplicate key')) return 'Ya existe un registro con ese nombre. Usa otro.'

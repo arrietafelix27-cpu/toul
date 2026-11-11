@@ -1,22 +1,24 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { explainError } from '@/lib/errors'
 
 /* ══════════════════════════════════════════════════════════════
    Ajuste de inventario.
    Sirve para los dos lados: dar de baja lo que se perdió y meter
-   lo que entró sin ser una compra (una devolución, algo que
-   apareció, un regalo del proveedor).
+   lo que entró sin ser una compra (algo que apareció, un regalo
+   del proveedor).
    Y funciona sobre la presentación, no solo sobre el producto:
    lo que se daña es el frasco de 50 ml o la talla M.
    ══════════════════════════════════════════════════════════════ */
 
 const SALIDAS = ['damage', 'loss', 'theft', 'expired', 'other']
-const ENTRADAS = ['return', 'found', 'gift', 'other']
+// Lo que un cliente devuelve entra por Devoluciones, con su venta
+const ENTRADAS = ['found', 'gift', 'other']
 
 export async function POST(request: Request) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return NextResponse.json({ error: 'Tu sesión se venció. Vuelve a entrar.' }, { status: 401 })
 
     try {
         const { productId, variantId, direction, quantity, reason, notes } = await request.json()
@@ -79,7 +81,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true })
     } catch (error: unknown) {
         console.error('Adjustment Error:', error)
-        const message = error instanceof Error ? error.message : 'Error interno del servidor'
+        // Datos que no llegaron bien o un error de la base: en español, nunca el técnico
+        const message = error instanceof SyntaxError
+            ? 'No se recibieron los datos del ajuste. Intenta de nuevo.'
+            : explainError(error, 'No se pudo guardar el ajuste. Intenta de nuevo.')
         return NextResponse.json({ error: message }, { status: 500 })
     }
 }

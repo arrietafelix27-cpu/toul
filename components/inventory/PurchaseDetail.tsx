@@ -13,7 +13,8 @@ import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { explainError } from '@/lib/errors'
 import { panelVariants, backdropVariants } from '@/lib/motion'
-import { diasEntre, instanteDeDia } from '@/lib/periodos'
+import { ZONA_COLOMBIA, diasEntre, formatoColombia, instanteDeDia } from '@/lib/periodos'
+import { nombreMetodo } from '@/lib/format/text'
 
 const supabase = createClient()
 
@@ -37,11 +38,17 @@ export interface PurchaseDetailData {
     total: number
     metodo: string
     credito: boolean
+    /** Ya se anuló: la mercancía salió y la plata volvió. No viene si la base es de antes */
+    anulada?: boolean
     proveedor: { id: string; nombre: string; telefono: string | null } | null
     deuda: { monto: number; falta: number; vence: string | null; estado: string } | null
+    /** Con qué cuenta se pagó lo que se pagó al comprar. No viene si la base es de antes */
+    cuenta?: { nombre: string; plataMia: boolean; monto: number } | null
     items: {
         id: string
         nombre: string
+        /** La talla o presentación de la línea. No viene si la base es de antes */
+        presentacion?: string | null
         imagen: string | null
         cantidad: number
         costo: number
@@ -58,10 +65,14 @@ const METODO: Record<string, string> = {
 }
 
 const fechaLarga = (iso: string) =>
-    new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: ZONA_COLOMBIA })
 
-const fechaCorta = (iso: string) =>
-    new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+/** Un momento (la fecha de una compra), en hora de Colombia */
+const fechaCorta = (iso: string) => formatoColombia(iso, { day: 'numeric', month: 'short' })
+
+/** Un plazo es un día del calendario guardado a medianoche UTC: se lee
+    como día, no como hora, para que no salga un día antes en Colombia */
+const diaCorto = (iso: string) => formatoColombia(instanteDeDia(iso.slice(0, 10)), { day: 'numeric', month: 'short' })
 
 /** Días que lleva vencido un plazo. Negativo si todavía no llega. */
 function vencidoHace(iso: string) {
@@ -78,6 +89,10 @@ const CSS = PANEL_CSS + `
 
 .pd-var { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
     font-size: 11px; font-weight: 700; letter-spacing: -0.01em; }
+
+.pd-anulada { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; margin-left: 8px;
+    border-radius: 999px; vertical-align: 2px; font-size: 11px; font-weight: 600;
+    background: var(--toul-error-dim); color: var(--toul-error); }
 `
 
 export function PurchaseDetail({ purchase, onClose, onChanged }: {
@@ -145,13 +160,22 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
                             <div className="flex items-center justify-between px-5 pt-4 pb-3" style={{ borderBottom: '1px solid var(--toul-border)' }}>
                                 <div style={{ minWidth: 0 }}>
                                     <p className="text-xs font-medium" style={{ color: 'var(--toul-text-subtle)' }}>Detalle de compra</p>
-                                    <p className="font-bold" style={{ color: 'var(--toul-text)' }}>{fechaLarga(purchase.fecha)}</p>
+                                    <p className="font-bold" style={{ color: 'var(--toul-text)' }}>
+                                        {fechaLarga(purchase.fecha)}
+                                        {purchase.anulada && <span className="pd-anulada">Anulada</span>}
+                                    </p>
                                 </div>
                                 <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                                     style={{ background: 'var(--toul-surface)', color: 'var(--toul-text-muted)' }}>
                                     <X size={16} />
                                 </button>
                             </div>
+
+                            {purchase.anulada && (
+                                <p className="px-5 pt-4" style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--toul-text-muted)' }}>
+                                    Esta compra se anuló: lo que entró salió del inventario y no cuenta en lo que compraste.
+                                </p>
+                            )}
 
                             {/* ── A quién le compraste ── */}
                             <div className="px-5 pt-4" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -190,7 +214,7 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <p className="text-sm font-medium" style={{ color: 'var(--toul-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {item.nombre}
+                                                    {item.presentacion ? `${item.nombre} · ${item.presentacion}` : item.nombre}
                                                 </p>
                                                 <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>
                                                     {Number(item.cantidad)} × {formatCOP(Number(item.costo))}
@@ -224,6 +248,16 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
                                         {METODO[purchase.metodo] ?? purchase.metodo}
                                     </span>
                                 </div>
+                                {purchase.cuenta && (
+                                    <div className="flex justify-between">
+                                        <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>
+                                            {purchase.credito ? 'Abonaste con' : 'Con qué pagaste'}
+                                        </span>
+                                        <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>
+                                            {purchase.cuenta.plataMia ? 'Plata mía' : nombreMetodo(purchase.cuenta.nombre)}
+                                        </span>
+                                    </div>
+                                )}
 
                                 {purchase.deuda && (
                                     <>
@@ -244,7 +278,7 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
                                                         {vencida ? 'Se venció el' : 'Plazo'}
                                                     </span>
                                                     <span className="text-sm font-medium" style={{ color: vencida ? 'var(--toul-error)' : 'var(--toul-text)' }}>
-                                                        {fechaCorta(purchase.deuda!.vence!)}
+                                                        {diaCorto(purchase.deuda!.vence!)}
                                                         {vencida && ` · hace ${dias} ${dias === 1 ? 'día' : 'días'}`}
                                                     </span>
                                                 </div>
@@ -264,7 +298,7 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
                                     </span>
                                 </div>
 
-                                <button onClick={() => setAnular(true)} disabled={saving}
+                                {!purchase.anulada && <button onClick={() => setAnular(true)} disabled={saving}
                                     style={{
                                         marginTop: 10, height: 46, borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
                                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -273,7 +307,7 @@ export function PurchaseDetail({ purchase, onClose, onChanged }: {
                                         color: 'var(--toul-error)',
                                     }}>
                                     <Ban size={16} /> Anular compra
-                                </button>
+                                </button>}
                             </div>
                         </motion.div>
                     </div>

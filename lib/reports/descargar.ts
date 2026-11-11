@@ -56,6 +56,8 @@ function filasResumen(b: Base): [string, number, 'plata' | 'pct'][] {
         ['Devoluciones (plata que salió)', r.devuelto, 'plata'],
         ['Plata que salió', r.salio, 'plata'],
         ['Ganancia en ventas', r.gananciaVentas, 'plata'],
+        ['Mercancía perdida', r.mercanciaPerdida, 'plata'],
+        ['Mercancía recuperada', r.mercanciaRecuperada, 'plata'],
         ['Margen promedio', (r.margen ?? 0) / 100, 'pct'],
         ['Ticket promedio', r.ticket ?? 0, 'plata'],
         ['Vendiste a crédito', (r.pctCredito ?? 0) / 100, 'pct'],
@@ -189,6 +191,12 @@ export async function descargarPDF(b: Base) {
     texto(r.ganaste < 0 ? 'Perdiste' : 'Ganaste', margen, 52, 10, PAPEL.gris)
     texto(formatPrecio(Math.abs(r.ganaste)), margen, 63, 28, r.ganaste < 0 ? PAPEL.rojo : PAPEL.verde, true)
     let y = 70
+    // Lo que Ganaste ya descuenta (o suma) por mercancía perdida o recuperada
+    const merma = [
+        r.mercanciaPerdida > 0 ? `Mercancía perdida -${formatPrecio(r.mercanciaPerdida)}` : null,
+        r.mercanciaRecuperada > 0 ? `Mercancía recuperada +${formatPrecio(r.mercanciaRecuperada)}` : null,
+    ].filter(Boolean).join('   ·   ')
+    if (merma) { texto(merma, margen, y, 10, PAPEL.gris); y += 6 }
     const antes = b.anterior ? resumir(b.anterior) : null
     const tendencia = antes ? porcentajeTendencia({ ahora: r.ganaste, antes: antes.ganaste, ventasAntes: antes.cantidad }) : null
     if (tendencia !== null) {
@@ -262,13 +270,13 @@ export async function descargarPDF(b: Base) {
     const der = 112, anchoDer = derecha - der
     y = arriba
     texto('De cada $100 que vendiste', der, y, 13, PAPEL.texto, true); y += 6
-    const cien = deCada100({ ventas: r.vendiste, costo: r.costoNeto, gastos: r.gastos })
+    const cien = deCada100({ ventas: r.vendiste, costo: r.costoNeto, gastos: r.gastos, sePerdio: Math.max(-r.mercanciaNeta, 0) })
     if (!cien) {
         texto('Sin ventas en este periodo', der, y + 2, 10, PAPEL.gris); y += 10
     } else {
-        const tonos = { mercancia: '#d6d6d6', gastos: '#8f8f8f', quedo: PAPEL.verde }
+        const tonos = { mercancia: '#d6d6d6', gastos: '#8f8f8f', sePerdio: PAPEL.rojo, quedo: PAPEL.verde }
         let x = der
-        for (const k of ['mercancia', 'gastos', 'quedo'] as const) {
+        for (const k of ['mercancia', 'gastos', 'sePerdio', 'quedo'] as const) {
             const w = (cien.barra[k] / 100) * anchoDer
             caja(x, y, Math.max(w - 0.8, 0), 3, tonos[k])
             x += w
@@ -277,6 +285,7 @@ export async function descargarPDF(b: Base) {
         const leyenda: [string, number, string][] = [
             ['Se fue en mercancía', cien.mercancia, tonos.mercancia],
             ['Se fue en gastos', cien.gastos, tonos.gastos],
+            ...(cien.sePerdio > 0 ? [['Se perdió', cien.sePerdio, tonos.sePerdio] as [string, number, string]] : []),
             ['Te quedó', cien.quedo, tonos.quedo],
         ]
         for (const [rot, val, color] of leyenda) {
@@ -285,7 +294,14 @@ export async function descargarPDF(b: Base) {
             texto(`$${val}`, derecha, y, 10, PAPEL.texto, true, 'right')
             y += 6.2
         }
-        if (cien.perdida) { texto('Gastaste más de lo que te dejaron las ventas', der, y, 9.5, PAPEL.rojo); y += 6 }
+        if (cien.perdida) {
+            const aviso = cien.sePerdio > 0 ? 'Entre gastos y lo perdido se fue más de lo que dejaron las ventas' : 'Gastaste más de lo que te dejaron las ventas'
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5)
+            for (const renglon of doc.splitTextToSize(limpio(aviso), anchoDer) as string[]) {
+                texto(renglon, der, y, 9.5, PAPEL.rojo); y += 4.6
+            }
+            y += 1.4
+        }
     }
 
     y += 6

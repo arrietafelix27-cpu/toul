@@ -12,7 +12,7 @@ import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { PrimerosPasos } from '@/components/dashboard/PrimerosPasos'
 import { SelectorPeriodo, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
-import { Vendiste, Ganaste, LineaFina, FilasInicio, rotuloGastos, ICONO_FIADO, ICONO_GASTOS, ICONO_SEMANA, type FilaInicio, type LlevasHoy, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
+import { Vendiste, Ganaste, LineaFina, FilasInicio, rotuloGastos, ICONO_FIADO, ICONO_GASTOS, ICONO_PERDIDA, ICONO_SEMANA, type FilaInicio, type LlevasHoy, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
 
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
@@ -328,8 +328,10 @@ export default function DashboardPage() {
             variante={variante} alto={variante === 'movil' ? 150 : '100%'} dibujar={dibujar} />
     )
     // Debajo de lo vendido: Ganaste y las filas. Los gastos del periodo
-    // siempre (llevan a Movimientos con el mismo periodo); lo que quedó
-    // fiado, solo si hubo (lleva a Clientes). Sin ventas no hay Ganaste:
+    // siempre (llevan a Movimientos con el mismo periodo); la mercancía
+    // que se perdió, solo si hubo (resta de Ganaste; lleva a Reportes,
+    // donde está el detalle); lo que quedó fiado, solo si hubo (lleva a
+    // Clientes). Sin ventas no hay Ganaste:
     // en Hoy, los gastos de hoy y cómo vas en la semana
     const resumen = dashboardData?.clave === conteo.clave ? dashboardData.resumen : null
     const sinVentas = !loading && metrics.salesCount === 0
@@ -342,7 +344,9 @@ export default function DashboardPage() {
         ? [filaGastos, ...(period === 'today' && cabecera?.llevas
             ? [{ clave: 'semana', rotulo: 'Esta semana llevas', monto: cabecera.llevas.semana, Icono: ICONO_SEMANA, href: '/reportes?periodo=week' }]
             : [])]
-        : [filaGastos, ...(resumen && resumen.fiado > 0
+        : [filaGastos, ...(resumen && resumen.sePerdio > 0
+            ? [{ clave: 'perdida', rotulo: 'Se perdió', monto: resumen.sePerdio, Icono: ICONO_PERDIDA, href: hrefReporte }]
+            : []), ...(resumen && resumen.fiado > 0
             ? [{ clave: 'fiado', rotulo: 'Quedó fiado', monto: resumen.fiado, Icono: ICONO_FIADO, href: '/customers', tono: 'fiado' as const }]
             : [])]
     const claveDatos = dashboardData?.clave ?? ''

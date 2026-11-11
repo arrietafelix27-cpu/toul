@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ChevronLeft, Package, Pencil, ShoppingCart, SlidersHorizontal, Tag } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
+import { diasQueAguanta, estadoDelStock, ritmoSemanal } from '@/lib/inventory/calculos'
 
 /* ══════════════════════════════════════════════════════════════
    Detalle de inventario.
@@ -69,7 +70,7 @@ const CSS = PANEL_CSS + `
 .sd-stat { padding: 14px 16px; border-radius: 16px; background: var(--toul-surface); border: 1px solid var(--toul-border); min-width: 0; }
 .sd-min { width: 76px; height: 38px; border-radius: 11px; padding: 0 12px; font-family: inherit;
     background: var(--toul-surface-2); border: 1px solid var(--toul-border); color: var(--toul-text);
-    font-size: 15px; font-weight: 600; outline: none; }
+    font-size: 16px; font-weight: 600; outline: none; }
 `
 
 export function StockDetail(props: StockDetailProps) {
@@ -82,11 +83,11 @@ export function StockDetail(props: StockDetailProps) {
     const [minDraft, setMinDraft] = useState(String(minStock))
     const [savingMin, setSavingMin] = useState(false)
 
-    const perDay = sold30d / 30
-    const daysLeft = perDay > 0 ? Math.floor(stock / perDay) : null
-    const state = stock <= 0 ? 'zero' : stock <= minStock ? 'low' : 'ok'
-    const tone = state === 'zero' ? 'var(--toul-error)' : state === 'low' ? 'var(--toul-warning)' : 'var(--toul-accent)'
-    const estado = state === 'zero' ? 'Se agotó' : state === 'low' ? 'Por acabarse' : 'Con existencias'
+    const daysLeft = diasQueAguanta(stock, sold30d)
+    const porSemana = ritmoSemanal(sold30d)
+    const state = estadoDelStock(stock, minStock)
+    const tone = state === 'agotado' ? 'var(--toul-error)' : state === 'pocas' ? 'var(--toul-warning)' : 'var(--toul-accent)'
+    const estado = state === 'agotado' ? 'Se agotó' : state === 'pocas' ? 'Por acabarse' : 'Con existencias'
 
     async function saveMin(value: number | null) {
         setSavingMin(true)
@@ -163,7 +164,7 @@ export function StockDetail(props: StockDetailProps) {
                     </span>
                     <span style={{
                         marginLeft: 'auto', padding: '4px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 600,
-                        background: state === 'ok' ? 'var(--toul-accent-dim)' : state === 'low' ? 'var(--toul-warning-dim)' : 'rgba(239,68,68,0.12)',
+                        background: state === 'bien' ? 'var(--toul-accent-dim)' : state === 'pocas' ? 'var(--toul-warning-dim)' : 'rgba(239,68,68,0.12)',
                         color: tone,
                     }}>
                         {estado}
@@ -180,7 +181,7 @@ export function StockDetail(props: StockDetailProps) {
                     <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: 0 }}>Salieron en 30 días</p>
                     <p style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: '2px 0 0' }}>{sold30d}</p>
                     <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>
-                        {perDay > 0 ? `${(perDay * 7).toFixed(1)} por semana` : 'no se ha vendido'}
+                        {porSemana !== null ? `${porSemana} por semana` : 'no se ha vendido'}
                     </p>
                 </div>
                 <div className="sd-stat">

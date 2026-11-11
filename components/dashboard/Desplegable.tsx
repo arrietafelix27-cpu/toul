@@ -218,6 +218,7 @@ const PERIODOS: Opcion<Periodo>[] = [
 ]
 /* Reportes también mira el año */
 const PERIODOS_CON_ANO: Opcion<Periodo>[] = [...PERIODOS.slice(0, 3), { valor: 'year', etiqueta: 'Este año' }, PERIODOS[3]]
+const TODO: Opcion<Periodo> = { valor: 'total', etiqueta: 'Todo' }
 
 /** Lo que dice el título: "Hoy", "Esta semana"… o las fechas elegidas */
 export function tituloPeriodo(period: Periodo, rango: Rango): string {
@@ -231,7 +232,7 @@ export function tituloPeriodo(period: Periodo, rango: Rango): string {
 }
 
 
-export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod, rango, setRango, conAno = false, lado }: {
+export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod, rango, setRango, conAno = false, conTodo = false, lado }: {
     variante: Variante
     /** El título grande del celular, la píldora pequeña del Inicio en el
      *  computador o la píldora de 34 px de Reportes */
@@ -242,6 +243,8 @@ export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod,
     setRango: (r: Rango) => void
     /** Incluir "Este año" */
     conAno?: boolean
+    /** Incluir "Todo" al final (solo Compras: para buscar una compra vieja) */
+    conTodo?: boolean
     lado?: 'izquierda' | 'derecha'
 }) {
     const [conFechas, setConFechas] = useState(false)
@@ -303,7 +306,7 @@ export function SelectorPeriodo({ variante, forma = 'titulo', period, setPeriod,
                     </button>
                 </div>
             ) : (
-                <Opciones variante={variante} opciones={conAno ? PERIODOS_CON_ANO : PERIODOS} activo={period}
+                <Opciones variante={variante} opciones={[...(conAno ? PERIODOS_CON_ANO : PERIODOS), ...(conTodo ? [TODO] : [])]} activo={period}
                     onElegir={valor => {
                         if (valor === 'custom') { elegirFechas(); return }
                         setPeriod(valor)

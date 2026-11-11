@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { explainError } from '@/lib/errors'
 
 /**
  * POST /api/purchases
@@ -14,17 +15,17 @@ import { NextResponse } from 'next/server'
 export async function POST(request: Request) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return NextResponse.json({ error: 'Tu sesión se venció. Vuelve a entrar.' }, { status: 401 })
 
     let payload: unknown
     try {
         payload = await request.json()
     } catch {
-        return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 })
+        return NextResponse.json({ error: 'No se recibieron los datos de la compra. Intenta de nuevo.' }, { status: 400 })
     }
 
     if (!payload || typeof payload !== 'object') {
-        return NextResponse.json({ error: 'Payload required' }, { status: 400 })
+        return NextResponse.json({ error: 'No se recibieron los datos de la compra. Intenta de nuevo.' }, { status: 400 })
     }
 
     const body = payload as Record<string, unknown>
@@ -35,9 +36,10 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.rpc('process_purchase', { payload: body })
 
     if (error) {
-        const message = error.message || 'Error al registrar la compra'
-        // P0001 = RAISE EXCEPTION from the RPC (validation) → 400; anything else → 500
+        // P0001 = RAISE EXCEPTION from the RPC (validation) → 400; anything else → 500.
+        // explainError deja pasar las reglas de TOUL (ya en español) y traduce el resto
         const isValidation = error.code === 'P0001'
+        const message = explainError(error, 'No se pudo registrar la compra. Intenta de nuevo.')
         return NextResponse.json({ error: message }, { status: isValidation ? 400 : 500 })
     }
 

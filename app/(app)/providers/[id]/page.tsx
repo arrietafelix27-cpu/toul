@@ -31,6 +31,8 @@ interface Compra {
     created_at: string
     total: number
     is_credit: boolean
+    /** 'voided' si se anuló: sale en la lista, pero no cuenta en lo comprado */
+    status: string | null
     purchase_items: { quantity: number }[]
 }
 
@@ -104,7 +106,7 @@ export default function ProviderDetailsPage({ params }: { params: Promise<{ id: 
             supabase.from('provider_debts').select('id, purchase_id, amount, remaining_amount, due_date, status, created_at')
                 .eq('provider_id', id).order('created_at', { ascending: false }).limit(TOPE_COMPRAS),
             // Todas las compras a este proveedor, de contado y a crédito
-            supabase.from('purchases').select('id, created_at, total, is_credit, purchase_items(quantity)')
+            supabase.from('purchases').select('id, created_at, total, is_credit, status, purchase_items(quantity)')
                 .eq('provider_id', id).order('created_at', { ascending: false }).limit(TOPE_COMPRAS),
         ])
         return {
@@ -135,7 +137,7 @@ export default function ProviderDetailsPage({ params }: { params: Promise<{ id: 
     const sueltas = useMemo(() => (data?.deudas ?? []).filter(d => !d.purchase_id), [data?.deudas])
 
     const comprado = useMemo(
-        () => Math.round((data?.compras ?? []).reduce((s, c) => s + Number(c.total), 0)),
+        () => Math.round((data?.compras ?? []).filter(c => c.status !== 'voided').reduce((s, c) => s + Number(c.total), 0)),
         [data?.compras])
 
     async function abrirCompra(purchaseId: string) {
@@ -253,7 +255,10 @@ export default function ProviderDetailsPage({ params }: { params: Promise<{ id: 
                                 const d = deudaDe.get(c.id)
                                 const unidades = (c.purchase_items ?? []).reduce((s, i) => s + Number(i.quantity), 0)
                                 const refs = (c.purchase_items ?? []).length
-                                const estado = estadoDeuda(d, c.is_credit)
+                                const anulada = c.status === 'voided'
+                                const estado = anulada
+                                    ? { texto: 'anulada', color: 'var(--toul-error)', pendiente: true, falta: null }
+                                    : estadoDeuda(d, c.is_credit)
                                 return (
                                     <motion.div key={c.id} variants={staggerItem}>
                                         <button className="pd-fila" disabled={abriendo === c.id} onClick={() => abrirCompra(c.id)}>
@@ -274,7 +279,8 @@ export default function ProviderDetailsPage({ params }: { params: Promise<{ id: 
                                                 </span>
                                             </span>
                                             <span style={{ flexShrink: 0, textAlign: 'right' }}>
-                                                <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }}>
+                                                <span style={{ display: 'block', fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                                                    color: anulada ? 'var(--toul-text-dim)' : 'var(--toul-text)', textDecoration: anulada ? 'line-through' : undefined }}>
                                                     {abriendo === c.id ? '…' : formatCOP(Math.round(Number(c.total)))}
                                                 </span>
                                                 {estado.falta !== null && (

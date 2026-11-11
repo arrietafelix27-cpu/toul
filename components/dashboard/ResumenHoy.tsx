@@ -2,7 +2,7 @@
 
 import type { CSSProperties, ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowDownRight, ArrowUpRight, CalendarDays, Clock, Receipt, type LucideIcon } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CalendarDays, Clock, PackageMinus, Receipt, type LucideIcon } from 'lucide-react'
 import AnimatedNumber from '@/components/ui/AnimatedNumber'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { formatPrecio } from '@/lib/utils'
@@ -19,8 +19,9 @@ import type { Periodo } from './Desplegable'
    cualquiera de los dos abre Reportes en el mismo periodo.
 
    Debajo, filas con su ícono: los gastos del periodo (siempre, y en
-   gris tenue si son $0) y lo que quedó fiado (solo si hubo). Cada una
-   lleva a su pantalla. Lo pagado, lo fiado y los métodos de cada
+   gris tenue si son $0), la mercancía que se perdió (solo si hubo:
+   también resta de Ganaste) y lo que quedó fiado (solo si hubo). Cada
+   una lleva a su pantalla. Lo pagado, lo fiado y los métodos de cada
    venta viven en Reportes.
 
    Son piezas sueltas porque en el celular la gráfica va entre
@@ -229,6 +230,7 @@ export function rotuloGastos(period: Periodo): string {
 
 export const ICONO_GASTOS = Receipt
 export const ICONO_FIADO = Clock
+export const ICONO_PERDIDA = PackageMinus
 export const ICONO_SEMANA = CalendarDays
 
 /** Las filas entran con un fundido hacia arriba cuando cuentan los montos

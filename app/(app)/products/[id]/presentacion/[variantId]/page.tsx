@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { ProductDetailView, ProductDetailSkeleton, type MovementLine, type Presentation } from '@/components/products/ProductDetailView'
 import { REASON_LABEL, formatMovementDate } from '@/lib/products/movements'
+import { fraseRitmo, type EstadoStock } from '@/lib/inventory/calculos'
 
 const supabase = createClient()
 const DAYS = 14
@@ -24,13 +25,17 @@ export default function PresentationDetailPage({ params }: { params: Promise<{ i
     const { data, isLoading } = useSWR(['presentacion', id, variantId], async () => {
         const since = new Date(Date.now() - DAYS * 86400000).toISOString()
 
-        const [productRes, variantsRes, stockRes, movementsRes, saleItemsRes] = await Promise.all([
+        const [productRes, variantsRes, stockRes, movementsRes, saleItemsRes, estadoRes] = await Promise.all([
             supabase.from('products').select('id, name, reference, image_url, images, category:product_categories(name)').eq('id', id).single(),
             supabase.from('product_variants').select('id, name, sale_price, cpp, cost_price').eq('product_id', id).eq('is_active', true).order('name'),
             supabase.from('inventory_adjustments').select('variant_id, quantity').eq('product_id', id),
             supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at, created_by_name').eq('variant_id', variantId).order('created_at', { ascending: false }).limit(8),
             supabase.from('sale_items').select('quantity, unit_price, sales!inner(created_at)').eq('variant_id', variantId).gte('sales.created_at', since),
+            // Agotada o por acabarse: la misma regla de Inventario
+            supabase.rpc('toul_estado_stock', { p_producto: id }),
         ])
+        const estados = (estadoRes.error ? [] : (estadoRes.data ?? [])) as { variant_id: string | null; estado: EstadoStock }[]
+        const estadoDe = new Map(estados.map(e => [e.variant_id, e.estado]))
 
         const product = productRes.data as Record<string, unknown> | null
         const variants = (variantsRes.data ?? []) as { id: string; name: string; sale_price: number; cpp: number; cost_price: number }[]
@@ -50,6 +55,7 @@ export default function PresentationDetailPage({ params }: { params: Promise<{ i
                 name: v.name,
                 price: Number(v.sale_price),
                 stock: Math.max(0, Math.round(stockByVariant.get(v.id) ?? 0)),
+                estado: estadoDe.get(v.id) ?? null,
                 href: `/products/${id}/presentacion/${v.id}`,
             }))
 
@@ -69,6 +75,7 @@ export default function PresentationDetailPage({ params }: { params: Promise<{ i
             siblings,
             movements,
             stock: Math.max(0, Math.round(stockByVariant.get(variantId) ?? 0)),
+            estadoStock: estadoDe.get(variantId) ?? null,
             sales: {
                 units: saleItems.reduce((sum, item) => sum + Number(item.quantity), 0),
                 revenue: Math.round(saleItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price), 0)),
@@ -101,9 +108,10 @@ export default function PresentationDetailPage({ params }: { params: Promise<{ i
     const margin = price > 0 ? ((price - cost) / price) * 100 : null
     const images = [...(product.images ?? []), product.image_url].filter(Boolean) as string[]
 
-    const insight = data.sales.units === 0
+    const ritmo = fraseRitmo(data.sales.units, DAYS)
+    const insight = ritmo === null
         ? 'Esta presentación no se ha vendido en las últimas dos semanas. Revisa el precio o muévela en el mostrador.'
-        : `Se están vendiendo ${(data.sales.units / DAYS * 7).toFixed(1)} unidades por semana de esta presentación.`
+        : `${ritmo} de esta presentación.`
 
     return (
         <ProductDetailView
@@ -117,6 +125,7 @@ export default function PresentationDetailPage({ params }: { params: Promise<{ i
             cost={cost || null}
             margin={margin}
             stock={data.stock}
+            estadoStock={data.estadoStock}
             stockValue={Math.round(data.stock * cost)}
             presentations={data.siblings}
             sales={data.sales}

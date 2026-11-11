@@ -1,16 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import useSWR from 'swr'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import toast from 'react-hot-toast'
 import { ArrowLeft, ClipboardList, Plus, ChevronRight } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { useSessionContext } from '@/lib/isla/useSession'
 import { EASE_OUT_EMIL } from '@/components/ui'
+import { useConteos } from '@/lib/inventory/useConteo'
+import { SinInternet } from '@/components/inventory/SinInternet'
 
 const CSS = `
 .ct-fila { display: flex; align-items: center; gap: 13px; padding: 11px 10px; border-radius: 14px;
@@ -22,48 +18,10 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .ct-fila:active { transform: none; } }
 `
 
-const supabase = createClient()
-
-interface CountRow {
-    id: string
-    status: 'open' | 'applied' | 'cancelled'
-    started_by_name: string | null
-    started_at: string
-    applied_at: string | null
-    counted_items: number
-    diff_units: number
-    diff_value: number
-    notes: string | null
-}
-
 const fmt = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 
 export default function ConteosPage() {
-    const router = useRouter()
-    const { data: ctx } = useSessionContext()
-    const [creating, setCreating] = useState(false)
-
-    const { data: counts, isLoading } = useSWR(ctx ? ['conteos', ctx.storeId] : null, async () => {
-        const { data } = await supabase.from('inventory_counts').select('*')
-            .eq('store_id', ctx!.storeId).order('started_at', { ascending: false }).limit(30)
-        return (data ?? []) as CountRow[]
-    })
-
-    async function startCount() {
-        if (!ctx) return
-        const open = counts?.find(c => c.status === 'open')
-        if (open) { router.push(`/inventory/conteo/${open.id}`); return }
-
-        setCreating(true)
-        const { data, error } = await supabase.from('inventory_counts')
-            .insert({ store_id: ctx.storeId, started_by: ctx.userId, started_by_name: ctx.displayName })
-            .select('id').single()
-        setCreating(false)
-        if (error || !data) { toast.error('No se pudo iniciar el conteo'); return }
-        router.push(`/inventory/conteo/${data.id}`)
-    }
-
-    const openCount = counts?.find(c => c.status === 'open')
+    const { counts, isLoading, sinDatos, reintentar, creating, openCount, startCount } = useConteos()
 
     return (
         <div className="px-4 md:px-8 py-6 pb-24 max-w-2xl mx-auto" style={{ position: 'relative' }}>
@@ -81,6 +39,8 @@ export default function ConteosPage() {
                 </div>
             </div>
 
+            {/* Sin internet no se sabe si hay uno abierto: no se ofrece empezar otro */}
+            {sinDatos ? <SinInternet onRetry={reintentar} que="tus conteos" /> : <>
             <div className="mb-6" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ width: 44, height: 44, borderRadius: 14, background: 'var(--toul-accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <ClipboardList size={20} style={{ color: 'var(--toul-accent)' }} />
@@ -139,6 +99,7 @@ export default function ConteosPage() {
                     })}
                 </div>
             )}
+            </>}
         </div>
     )
 }

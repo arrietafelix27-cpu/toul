@@ -9,6 +9,7 @@
  */
 
 import type { Product } from '@/lib/types'
+import type { EstadoStock } from '@/lib/inventory/calculos'
 
 // ─── Signal Types ──────────────────────────────────────────
 
@@ -32,7 +33,9 @@ export interface ProductInsight {
 export interface SignalContext {
     salesLast14DaysMap: Record<string, number>   // productId → total quantity sold
     topProductsSet: Set<string>                   // productIds in top 30%
-    threshold: number                             // low stock threshold (default 3)
+    /** Agotado o por acabarse, por producto: la misma regla de Inventario
+     *  (toul_estado_stock + estadoDelProducto). Sin dato, no hay aviso de stock */
+    estadoPorProducto: Record<string, EstadoStock>
     now: Date
 }
 
@@ -45,7 +48,7 @@ export interface SignalContext {
 export function buildSignalContext(
     products: Product[],
     saleItems: Array<{ product_id: string; quantity: number; created_at: string }>,
-    threshold: number = 3,
+    estadoPorProducto: Record<string, EstadoStock> = {},
 ): SignalContext {
     const now = new Date()
     const fourteenDaysAgo = new Date(now)
@@ -74,7 +77,7 @@ export function buildSignalContext(
         }
     }
 
-    return { salesLast14DaysMap, topProductsSet, threshold, now }
+    return { salesLast14DaysMap, topProductsSet, estadoPorProducto, now }
 }
 
 // ─── Signal Computation ────────────────────────────────────
@@ -84,8 +87,8 @@ export function buildSignalContext(
  * Returns null if no signal applies.
  * 
  * Priority order:
- * 1. Sin stock (stock === 0)
- * 2. Pocas unidades (stock > 0 && stock <= threshold)
+ * 1. Sin stock (agotado: todas sus presentaciones en 0 o menos)
+ * 2. Pocas unidades (alguna presentación en su mínimo o agotada)
  * 3. Se vende bien (in topProductsSet)
  * 4. Sin ventas (0 sales in 14d, product >= 7 days old)
  * 5. Bajo margen (margin < 20%)
@@ -94,14 +97,12 @@ export function computeProductSignal(
     product: Product,
     context: SignalContext,
 ): ProductSignal | null {
-    // 1. Sin stock
-    if (product.stock === 0) {
+    // 1 y 2. La misma regla de Inventario
+    const estado = context.estadoPorProducto[product.id]
+    if (estado === 'agotado') {
         return { key: 'sin_stock', label: 'Sin stock', color: 'red' }
     }
-
-    // 2. Pocas unidades
-    const effectiveThreshold = product.low_stock_threshold ?? context.threshold
-    if (product.stock > 0 && product.stock <= effectiveThreshold) {
+    if (estado === 'pocas') {
         return { key: 'pocas_unidades', label: 'Pocas unidades', color: 'yellow' }
     }
 
@@ -157,9 +158,8 @@ export function computeInsightMessage(
         return { key: 'top', message: 'Se vende bien' }
     }
 
-    // Priority 3: Stock bajo
-    const effectiveThreshold = product.low_stock_threshold ?? context.threshold
-    if (product.stock > 0 && product.stock <= effectiveThreshold) {
+    // Priority 3: Stock bajo (la misma regla de Inventario)
+    if (context.estadoPorProducto[product.id] === 'pocas') {
         return { key: 'stock_bajo', message: 'Stock bajo' }
     }
 
@@ -189,7 +189,7 @@ export function filterProducts(
         case 'sin_movimiento':
             return products.filter(p => (context.salesLast14DaysMap[p.id] || 0) === 0)
         case 'sin_stock':
-            return products.filter(p => p.stock === 0)
+            return products.filter(p => context.estadoPorProducto[p.id] === 'agotado')
         case 'todos':
         default:
             return products

@@ -53,6 +53,7 @@ export async function POST(request: Request) {
         { data: reporte30 },
         { data: reporteAntes },
         { data: inventario },
+        { data: estadosStock },
     ] = await Promise.all([
         supabase.from('products').select('id, name, stock, cpp, sale_price, is_active, created_at').eq('store_id', storeId).eq('is_active', true),
         supabase.from('sales').select('id, total, created_at, payment_method').eq('store_id', storeId).gte('created_at', last30),
@@ -62,6 +63,8 @@ export async function POST(request: Request) {
         supabase.rpc('toul_reporte', { p_desde: last60, p_hasta: last30 }),
         // El valor del inventario cuenta cada presentación, igual que en Inventario
         supabase.rpc('toul_inventory_overview', { p_limit: 1 }),
+        // Agotado y por acabarse: la misma regla de Inventario y del Catálogo
+        supabase.rpc('toul_estado_stock'),
     ])
 
     // ── Compute derived metrics ───────────────────────────────────────────────
@@ -116,8 +119,10 @@ export async function POST(request: Request) {
     const highMarginProduct = [...prodList].sort((a, b) => b.margin - a.margin)[0]
     const highTrapped = [...inventarioPorProducto].sort((a, b) => b.trappedCapital - a.trappedCapital)[0]
     const lowRotation = inventarioPorProducto.filter(p => p.units === 0 && p.stock > 0).sort((a, b) => b.trappedCapital - a.trappedCapital)[0]
-    const lowStockProds = prods.filter(p => p.stock > 0 && p.stock <= 5)
-    const outOfStock = prods.filter(p => p.stock === 0)
+    // Cada presentación contra su mínimo; el stock negativo es agotado
+    const unidades = (estadosStock ?? []) as { estado: 'agotado' | 'pocas' | 'bien' }[]
+    const lowStockProds = unidades.filter(u => u.estado === 'pocas')
+    const outOfStock = unidades.filter(u => u.estado === 'agotado')
 
     // Sales by day of week
     const dayMap: Record<number, number> = {}
@@ -263,6 +268,8 @@ DATOS DEL NEGOCIO (últimos 30 días):
 - # Ventas: ${sales.length} | Ticket promedio: $${Math.round(avgTicket).toLocaleString('es-CO')}
 - Gastos: $${totalExpenses.toLocaleString('es-CO')} | Capital en inventario: $${inventoryValue.toLocaleString('es-CO')}
 - Margen bruto: ${totalRevenue > 0 ? (grossProfit / totalRevenue * 100).toFixed(1) : 0}%
+- Mercancía perdida: $${r30.mercanciaPerdida.toLocaleString('es-CO')} | Recuperada: $${r30.mercanciaRecuperada.toLocaleString('es-CO')} (a costo)
+- Ganaste: $${r30.ganaste.toLocaleString('es-CO')} (ganancia bruta − gastos − mercancía perdida + recuperada; el mismo número de Reportes)
 
 PRODUCTOS CLAVE:
 ${prodList.slice(0, 5).map(p => `  - ${p.name}: ${p.units} uds, margen ${p.margin.toFixed(0)}%, capital $${p.trappedCapital.toLocaleString('es-CO')}`).join('\n')}

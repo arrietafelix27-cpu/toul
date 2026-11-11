@@ -441,6 +441,32 @@ export default async function (db) {
     auditoriaNueva.filter(f => !f.ok).map(f => `${f.periodo} ${f.chequeo}: ${f.esperado} vs ${f.obtenido}`).join(' | '))
   await db.exec('ROLLBACK')
 
+  // ── Escenario 3 (Félix, 2026-11-10): el 1 más un daño ──
+  // Se deshace al final, para que el escenario 2 siga sobre el 1
+  console.log('\n— Escenario 3: Ajustar, salió 1 Perfume A, motivo Se dañó')
+  igual('sin el daño, la mercancía perdida de octubre es', 0, rep.mercanciaPerdida)
+  await db.exec('BEGIN')
+  // 23 oct 10:00 a. m.: lo mismo que hace "Ajustar" (el dueño escribe el movimiento)
+  const [dano] = await comoDueno(() => q(`INSERT INTO inventory_adjustments(store_id,product_id,quantity,reason,notes) VALUES ($1,$2,-1,'damage','Se dañó') RETURNING id`, [STORE, A.id]))
+  await q(`UPDATE inventory_adjustments SET created_at = $2 WHERE id = $1`, [dano.id, co('2026-10-23 10:00')])
+  const rep3 = await r(`SELECT toul_reporte($1,$2) r`, [octubre.from, octubre.to])
+  const res3 = resumir(rep3)
+  igual('Mercancía perdida', 60000, res3.mercanciaPerdida)
+  igual('Ganaste', 210000, res3.ganaste)
+  igual('Ganancia en ventas', 310000, res3.gananciaVentas)
+  igual('Plata en mercancía (3 A + 7 B)', 390000, (await r(`SELECT toul_inventory_overview(1) r`)).value)
+  const meses3 = await r(`SELECT toul_reporte_meses(6, '2026-11-01') r`)
+  igual('Mes a mes: octubre da el mismo Ganaste', res3.ganaste, meses3.find(m => m.mes === '2026-10-01')?.ganancia)
+  igual('Inicio: Ganaste', res3.ganaste, resumenInicio(res3).ganaste)
+  const cien3 = deCada100({ ventas: res3.vendiste, costo: res3.costoNeto, gastos: res3.gastos, sePerdio: Math.max(-res3.mercanciaNeta, 0) })
+  si('De cada $100 muestra "Se perdió" y suma 100', !!cien3 && cien3.sePerdio > 0 && cien3.mercancia + cien3.gastos + cien3.sePerdio + cien3.quedo === 100,
+    cien3 ? `${cien3.mercancia} + ${cien3.gastos} + ${cien3.sePerdio} + ${cien3.quedo}` : 'sin ventas')
+  const auditoria3 = await comoDueno(() => q(`SELECT * FROM toul_auditoria()`))
+  si('la auditoría del escenario 3 cuadra', auditoria3.every(f => f.ok),
+    auditoria3.filter(f => !f.ok).map(f => `${f.periodo} ${f.chequeo}: ${f.esperado} vs ${f.obtenido}`).join(' | '))
+  si('y revisa la mercancía perdida de octubre', auditoria3.some(f => f.periodo === '2026-10' && f.chequeo === 'Mercancía perdida = suma directa de los ajustes' && f.ok && Number(f.obtenido) === 60000))
+  await db.exec('ROLLBACK')
+
   // ── Escenario 2 (Félix, 2026-11-07): el 1 más dos operaciones ──
   console.log('\n— Escenario 2: Saqué plata y una compra con "Plata mía"')
   // 15. 20 oct 6:00 p. m.: Saqué plata $50.000 en efectivo

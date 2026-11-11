@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { animate, useReducedMotion } from 'framer-motion'
 import { ArrowLeftRight } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
+import { medidor, type NivelMedidor } from '@/lib/inventory/calculos'
 
 /* ══════════════════════════════════════════════════════════════
    Cuánto aguanta el inventario.
@@ -18,7 +19,12 @@ import { formatCOP } from '@/lib/utils'
    relleno no llega a la marca, vas tarde.
    ══════════════════════════════════════════════════════════════ */
 
-const HORIZONTE = 30
+const COLOR: Record<NivelMedidor, string> = {
+    'sin-ventas': 'var(--toul-text-faint)',
+    corto: 'var(--toul-error)',
+    justo: 'var(--toul-warning)',
+    bien: 'var(--toul-accent)',
+}
 
 const CSS = `
 .gauge-pista { display: block; position: relative; height: 10px; border-radius: 999px;
@@ -68,15 +74,8 @@ export function StockGauge({
     units: number
 }) {
     const sinMovimiento = days === null
-    const dias = days ?? 0
-
-    const color = sinMovimiento ? 'var(--toul-text-faint)'
-        : dias < coverageDays ? 'var(--toul-error)'
-            : dias < coverageDays * 2 ? 'var(--toul-warning)'
-                : 'var(--toul-accent)'
-
-    const pct = Math.min(Math.max(dias / HORIZONTE, 0), 1)
-    const marca = Math.min(Math.max(coverageDays / HORIZONTE, 0), 1)
+    const { nivel, dias, relleno: pct, marca, verMarca, menosDelRespaldo } = medidor(days, coverageDays)
+    const color = COLOR[nivel]
 
     const numero = useRef<HTMLSpanElement>(null)
     const relleno = useRef<HTMLSpanElement>(null)
@@ -152,7 +151,7 @@ export function StockGauge({
                     <span className="gauge-pista">
                         <span ref={relleno} className="gauge-relleno" style={{ background: color }} />
                     </span>
-                    {!sinMovimiento && marca > 0 && marca < 1 && (
+                    {verMarca && (
                         <span className="gauge-marca" style={{ left: `${marca * 100}%` }}
                             title={`Tu respaldo: ${coverageDays} días`} />
                     )}
@@ -168,7 +167,7 @@ export function StockGauge({
                 <span>{references} {references === 1 ? 'referencia' : 'referencias'}</span>
                 {items > references && <span>{items} presentaciones</span>}
                 <span>{units} {units === 1 ? 'unidad' : 'unidades'}</span>
-                {!sinMovimiento && dias < coverageDays && (
+                {menosDelRespaldo && (
                     <span style={{ color: 'var(--toul-error)' }}>
                         menos de tus {coverageDays} días de respaldo
                     </span>

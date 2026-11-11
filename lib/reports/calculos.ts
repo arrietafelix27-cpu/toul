@@ -79,11 +79,13 @@ export interface DeCada100 {
     /** Lo que dicen los rótulos: "Se fue en mercancía $44" */
     mercancia: number
     gastos: number
+    /** Mercancía perdida (dañada, robada, lo que faltó al contar). 0: no se muestra */
+    sePerdio: number
     quedo: number
     /** Gastaste más de lo que te dejaron las ventas */
     perdida: boolean
-    /** Los tres tramos de la barra; siempre suman 100 */
-    barra: { mercancia: number; gastos: number; quedo: number }
+    /** Los tramos de la barra; siempre suman 100 */
+    barra: { mercancia: number; gastos: number; sePerdio: number; quedo: number }
 }
 
 /** Reparte 100 entre partes, redondeando sin que la suma se corra:
@@ -106,30 +108,37 @@ function repartir100(partes: number[]): number[] {
 }
 
 /** De cada $100 que vendiste: cuánto se fue en mercancía, cuánto en
- *  gastos y cuánto te quedó. Sin ventas no hay nada que repartir. */
-export function deCada100({ ventas, costo, gastos }: { ventas: number; costo: number; gastos: number }): DeCada100 | null {
+ *  gastos, cuánto se perdió en mercancía (solo si se perdió más de lo que
+ *  se recuperó) y cuánto te quedó. Sin ventas no hay nada que repartir. */
+export function deCada100({ ventas, costo, gastos, sePerdio = 0 }: {
+    ventas: number; costo: number; gastos: number
+    /** Mercancía perdida neta del periodo (perdida − recuperada, si es más que 0) */
+    sePerdio?: number
+}): DeCada100 | null {
     if (ventas <= 0) return null
     const c = Math.max(costo, 0)
     const g = Math.max(gastos, 0)
-    const quedo = ventas - c - g
+    const p = Math.max(sePerdio, 0)
+    const quedo = ventas - c - g - p
 
     if (quedo >= 0) {
-        const [mercancia, gastosN, quedoN] = repartir100([c, g, quedo])
+        const [mercancia, gastosN, sePerdioN, quedoN] = repartir100([c, g, p, quedo])
         return {
-            mercancia, gastos: gastosN, quedo: quedoN, perdida: false,
-            barra: { mercancia, gastos: gastosN, quedo: quedoN },
+            mercancia, gastos: gastosN, sePerdio: sePerdioN, quedo: quedoN, perdida: false,
+            barra: { mercancia, gastos: gastosN, sePerdio: sePerdioN, quedo: quedoN },
         }
     }
 
     // Se fue más de lo que entró: los rótulos dicen lo real (pueden pasar
-    // de 100) y la barra reparte el 100 entre mercancía y gastos
-    const [bm, bg] = repartir100([c, g])
+    // de 100) y la barra reparte el 100 entre mercancía, gastos y lo perdido
+    const [bm, bg, bp] = repartir100([c, g, p])
     return {
         mercancia: Math.round((c / ventas) * 100),
         gastos: Math.round((g / ventas) * 100),
+        sePerdio: Math.round((p / ventas) * 100),
         quedo: 0,
         perdida: true,
-        barra: { mercancia: bm, gastos: bg, quedo: 0 },
+        barra: { mercancia: bm, gastos: bg, sePerdio: bp, quedo: 0 },
     }
 }
 
@@ -163,7 +172,15 @@ export interface ResumenReporte {
     costoNeto: number
     /** Ganancia en ventas: vendiste − costo */
     gananciaVentas: number
-    /** Ganancia en ventas − gastos */
+    /** Mercancía que salió por daño, pérdida, robo, vencimiento u "Otro", y
+     *  lo que faltó al contar, a costo promedio */
+    mercanciaPerdida: number
+    /** Lo que apareció, el regalo del proveedor, un "Otro" de entrada y lo
+     *  que sobró al contar, a costo promedio */
+    mercanciaRecuperada: number
+    /** Recuperada − perdida. Negativo: "Mercancía perdida"; positivo: "Mercancía recuperada" */
+    mercanciaNeta: number
+    /** Ganancia en ventas − gastos − mercancía perdida + mercancía recuperada */
     ganaste: number
     cantidad: number
     /** % de lo vendido que te quedó como ganancia en ventas */
@@ -189,6 +206,9 @@ export function resumir(r: {
     /** No vienen si la base todavía no tiene Movimientos */
     metiste?: number
     sacaste?: number
+    /** No vienen si la base todavía no tiene la mercancía perdida */
+    mercanciaPerdida?: number
+    mercanciaRecuperada?: number
 }): ResumenReporte {
     const n = (v: unknown) => Number(v) || 0
     const ventasAntes = n(r.ventas.total)
@@ -203,13 +223,17 @@ export function resumir(r: {
     const vendiste = ventasAntes - devoluciones
     const costoNeto = n(r.ventas.costo) - n(r.devoluciones.costo)
     const gananciaVentas = vendiste - costoNeto
+    const mercanciaPerdida = Math.round(n(r.mercanciaPerdida))
+    const mercanciaRecuperada = Math.round(n(r.mercanciaRecuperada))
+    const mercanciaNeta = mercanciaRecuperada - mercanciaPerdida
     return {
         vendiste, ventasAntes, contado, credito, devoluciones, abonos,
         entro: contado + abonos,
         gastos, mercancia, devuelto,
         salio: gastos + mercancia + devuelto,
         costoNeto, gananciaVentas,
-        ganaste: gananciaVentas - gastos,
+        mercanciaPerdida, mercanciaRecuperada, mercanciaNeta,
+        ganaste: gananciaVentas - gastos + mercanciaNeta,
         cantidad,
         margen: vendiste > 0 ? Math.round((gananciaVentas / vendiste) * 100) : null,
         ticket: cantidad > 0 ? Math.round(vendiste / cantidad) : null,
@@ -243,6 +267,8 @@ export interface ResumenInicio {
     gastos: number
     /** Solo se muestra si es más que cero */
     fiado: number
+    /** La mercancía perdida menos la recuperada. Solo se muestra si es más que cero */
+    sePerdio: number
 }
 
 export function resumenInicio(r: ResumenReporte): ResumenInicio {
@@ -253,6 +279,7 @@ export function resumenInicio(r: ResumenReporte): ResumenInicio {
         deLoVendido: r.vendiste > 0 ? `${textoPorcentaje(Math.abs(r.ganaste), r.vendiste)} de lo que vendiste` : null,
         gastos: Math.round(r.gastos),
         fiado: Math.round(r.vendiste - pagado),
+        sePerdio: Math.round(Math.max(-r.mercanciaNeta, 0)),
     }
 }
 

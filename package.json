@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:db": "node supabase/tests/run.mjs",
-    "test:calculos": "for z in America/Bogota UTC Asia/Tokyo America/Los_Angeles; do TZ=$z node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/reports/calculos.test.ts lib/periodos.test.ts lib/pos/stock.test.ts lib/pos/clientes.test.ts lib/pos/cobro.test.ts || exit 1; done"
+    "test:calculos": "for z in America/Bogota UTC Asia/Tokyo America/Los_Angeles; do TZ=$z node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/reports/calculos.test.ts lib/periodos.test.ts lib/pos/stock.test.ts lib/pos/clientes.test.ts lib/pos/cobro.test.ts lib/inventory/calculos.test.ts || exit 1; done"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.41",

@@ -5,7 +5,8 @@ import { ArrowRight, Check } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { InventoryRow, ROW_CSS } from '@/components/inventory/InventoryRow'
-import { guardarPedido, type PedidoLinea } from '@/lib/inventory/pedido'
+import { guardarPedido } from '@/lib/inventory/pedido'
+import { costoDelPedido, enlaceDeStock, lineasDelPedido, type ParaReponer } from '@/lib/inventory/calculos'
 
 /* ══════════════════════════════════════════════════════════════
    Hay que reponer.
@@ -13,19 +14,7 @@ import { guardarPedido, type PedidoLinea } from '@/lib/inventory/pedido'
    acción —armarlo— y no un botón por renglón.
    ══════════════════════════════════════════════════════════════ */
 
-export interface ReorderItem {
-    id: string
-    kind: 'producto' | 'presentacion'
-    productId: string
-    title: string
-    subtitle: string | null
-    image: string | null
-    stock: number
-    /** Cuántas sugiere pedir */
-    toOrder: number
-    /** Lo que cuesta cada una */
-    cost: number
-}
+export type ReorderItem = ParaReponer
 
 const CSS = PANEL_CSS + ROW_CSS + `
 .rp-head { display: flex; align-items: center; justify-content: space-between;
@@ -64,17 +53,12 @@ export function ReorderPanel({ items }: { items: ReorderItem[] }) {
         )
     }
 
-    const total = items.reduce((sum, item) => sum + item.toOrder * item.cost, 0)
+    const total = costoDelPedido(items)
     const mostradas = items.slice(0, MOSTRADAS)
     const resto = items.length - mostradas.length
 
     function armar() {
-        const lineas: PedidoLinea[] = items.map(item => ({
-            productId: item.productId,
-            variantId: item.kind === 'presentacion' ? item.id : null,
-            quantity: item.toOrder,
-        }))
-        router.push(guardarPedido(lineas))
+        router.push(guardarPedido(lineasDelPedido(items)))
     }
 
     return (
@@ -100,7 +84,7 @@ export function ReorderPanel({ items }: { items: ReorderItem[] }) {
                 {mostradas.map((item, index) => (
                     <InventoryRow
                         key={`${item.kind}-${item.id}`}
-                        href={item.kind === 'presentacion' ? `/inventory/variant/${item.id}` : `/inventory/${item.id}`}
+                        href={enlaceDeStock(item.kind, item.id)}
                         image={item.image}
                         name={item.title}
                         title={item.subtitle ? `${item.title} · ${item.subtitle}` : item.title}
@@ -112,7 +96,7 @@ export function ReorderPanel({ items }: { items: ReorderItem[] }) {
                         trailing={
                             <span style={{ flexShrink: 0, textAlign: 'right' }}>
                                 <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--toul-text-muted)', whiteSpace: 'nowrap' }}>
-                                    pide {item.toOrder}
+                                    Compra {item.toOrder}
                                 </span>
                                 {item.stock > 0 && (
                                     <span className="ivr-nivel">

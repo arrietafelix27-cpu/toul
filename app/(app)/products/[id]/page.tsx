@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { ProductDetailView, ProductDetailSkeleton, type MovementLine, type Presentation } from '@/components/products/ProductDetailView'
 import { REASON_LABEL, formatMovementDate } from '@/lib/products/movements'
+import { estadoDelProducto, fraseRitmo, type EstadoStock } from '@/lib/inventory/calculos'
 
 const supabase = createClient()
 const DAYS = 14
@@ -38,16 +39,20 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     const { data, isLoading } = useSWR(['producto', id], async () => {
         const since = new Date(Date.now() - DAYS * 86400000).toISOString()
 
-        const [productRes, variantsRes, stockRes, movementsRes, saleItemsRes] = await Promise.all([
+        const [productRes, variantsRes, stockRes, movementsRes, saleItemsRes, estadoRes] = await Promise.all([
             supabase.from('products').select('*, category:product_categories(id, name)').eq('id', id).single(),
             supabase.from('product_variants').select('id, name, sale_price, cpp, cost_price').eq('product_id', id).eq('is_active', true).order('name'),
             supabase.from('inventory_adjustments').select('variant_id, quantity').eq('product_id', id),
             supabase.from('inventory_adjustments').select('id, quantity, reason, notes, created_at, variant_id, created_by_name').eq('product_id', id).order('created_at', { ascending: false }).limit(8),
             supabase.from('sale_items').select('quantity, unit_price, sales!inner(created_at)').eq('product_id', id).gte('sales.created_at', since),
+            // Agotado o por acabarse: la misma regla de Inventario
+            supabase.rpc('toul_estado_stock', { p_producto: id }),
         ])
 
         const product = productRes.data as Record<string, unknown> | null
         if (!product) return null
+        const estados = (estadoRes.error ? [] : (estadoRes.data ?? [])) as { variant_id: string | null; estado: EstadoStock }[]
+        const estadoDe = new Map(estados.map(e => [e.variant_id, e.estado]))
 
         const variants = (variantsRes.data ?? []) as { id: string; name: string; sale_price: number; cpp: number; cost_price: number }[]
 
@@ -62,6 +67,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             name: variant.name,
             price: Number(variant.sale_price),
             stock: Math.max(0, Math.round(stockByVariant.get(variant.id) ?? 0)),
+            estado: estadoDe.get(variant.id) ?? null,
             href: `/products/${id}/presentacion/${variant.id}`,
         }))
 
@@ -96,6 +102,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
         return {
             product, presentations, movements,
+            estadoStock: estadoDelProducto(estados.map(e => e.estado)),
             variantStock: totalUnits,
             variantCost,
             sales: { units, revenue: Math.round(revenue), days: DAYS },
@@ -125,9 +132,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
     const images = [...(product.images ?? []), product.image_url].filter(Boolean) as string[]
 
-    const insight = data.sales.units === 0
+    const ritmo = fraseRitmo(data.sales.units, DAYS)
+    const insight = ritmo === null
         ? 'No se ha vendido en las últimas dos semanas. Revisa el precio o dale más visibilidad.'
-        : `Se están vendiendo ${(data.sales.units / DAYS * 7).toFixed(1)} unidades por semana.`
+        : `${ritmo}.`
 
     return (
         <>
@@ -141,6 +149,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             cost={cost || null}
             margin={margin}
             stock={stock}
+            estadoStock={data.estadoStock}
             stockValue={Math.round(stock * cost)}
             presentations={data.presentations}
             sales={data.sales}

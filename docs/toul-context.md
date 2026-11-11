@@ -133,7 +133,7 @@ Estas reglas no se negocian. Antes de tocar cualquier lógica relacionada, confi
 | `sales` | Ventas registradas |
 | `sale_items` | Productos/variantes de cada venta (`variant_id` nullable) |
 | `products` | Catálogo de productos (`stock` existe como caché del trigger — ver migration_v5_hotfix + v6) |
-| `product_variants` | Variantes de producto (talla, color, etc.) — sin stock column |
+| `product_variants` | Variantes de producto (talla, color, etc.) — con su propio `stock` (caché del mismo trigger) |
 | `product_variant_attributes` | Atributos de variante por producto (ej: "Talla", "Color") |
 | `inventory_adjustments` | Toda entrada/salida de inventario — fuente única de stock |
 | `combos` | Paquetes de productos/variantes vendidos juntos |
@@ -153,7 +153,9 @@ Estas reglas no se negocian. Antes de tocar cualquier lógica relacionada, confi
 | `sale_voids` | Ventas anuladas (foto completa) |
 | `push_subscriptions` | Dispositivos que reciben notificaciones |
 
-**Regla de stock:** `products.stock` es un caché mantenido automáticamente por el trigger `trg_sync_product_stock`. El frontend lee siempre `products.stock` directamente — el trigger lo mantiene al día. Las variantes NO tienen columna `stock`: su stock se calcula como `SUM(quantity) FROM inventory_adjustments WHERE product_id = X AND variant_id = Y`.
+**Regla de stock:** `inventory_adjustments` es la fuente única. `products.stock` y `product_variants.stock` son cachés que mantiene el trigger `trg_sync_product_stock` (`deploy_inventario.sql`) en cada entrada o salida: el del producto es la suma de todos sus movimientos y el de cada variante, la suma de los de esa variante. El frontend lee esas columnas directamente.
+
+**Regla de "pocas unidades":** una sola definición para Catálogo ("Pocas unidades" / "Sin stock"), TOUL AI ("stock bajo") e Inventario ("Por acabarse" / "Agotados"): la función `toul_estado_stock` (`deploy_inventario_consistencia.sql`). Se mide por variante (o por producto si no tiene variantes) contra su mínimo (el que puso el dueño o el automático con las ventas de 30 días). Stock en 0 o negativo = agotado. Un producto con variantes muestra "Sin stock" solo si todas están agotadas, y "Pocas unidades" si alguna está en su mínimo o agotada.
 
 ---
 

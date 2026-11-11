@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Gift, Layers, Package } from 'lucide-react'
+import type { EstadoStock } from '@/lib/inventory/calculos'
 
 /* ══════════════════════════════════════════════════════════════
    Una tarjeta del catálogo.
@@ -30,6 +31,9 @@ export interface CatalogCardData {
     priceLabel: string
     image: string | null
     stock: number | null
+    /** Agotado o por acabarse: la misma regla de Inventario. Sin dato, solo
+     *  se sabe que lo de 0 o menos está agotado */
+    estado?: EstadoStock | null
     presentations?: number
     badge?: { label: string; bg: string; text: string } | null
     href: string
@@ -133,15 +137,15 @@ const CHIP: Record<CatalogKind, { label: string; Icon: typeof Package } | null> 
 
 export function CatalogCard({ item, index }: { item: CatalogCardData; index: number }) {
     const chip = CHIP[item.kind]
-    const agotado = item.stock === 0
-    const poco = typeof item.stock === 'number' && item.stock > 0 && item.stock <= 3
+    const agotado = item.estado ? item.estado === 'agotado' : typeof item.stock === 'number' && item.stock <= 0
+    const poco = item.estado === 'pocas'
 
     const pie = item.kind === 'combo' ? 'Combo'
         : item.kind === 'presentaciones' ? `${item.presentations ?? 0} presentaciones`
             : agotado ? 'Se agotó' : `${item.stock ?? 0} und`
 
     const colorPie = agotado ? 'var(--toul-error)'
-        : poco && item.kind === 'simple' ? 'var(--toul-warning)'
+        : poco ? 'var(--toul-warning)'
             : 'var(--toul-text-dim)'
 
     return (

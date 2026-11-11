@@ -1,226 +1,53 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { nombreMetodo, onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
-import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useCallback } from 'react'
+import { onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
 import { Thumb } from '@/components/ui/Thumb'
 import { formatCOP } from '@/lib/utils'
 import {
     ArrowLeft, Package, CreditCard, CheckCircle2, Navigation,
     Trash2, Plus, Search, Layers, ChevronRight
 } from 'lucide-react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { Product, Provider } from '@/lib/types'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AddedMark } from '@/components/inventory/AddedMark'
-import { fadeUp, t } from '@/lib/motion'
-import toast from 'react-hot-toast'
+import { fadeUp } from '@/lib/motion'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { DesktopPurchase } from '@/components/inventory/DesktopPurchase'
-import { tomarPedido } from '@/lib/inventory/pedido'
 import { Sheet } from '@/components/isla/Sheet'
-import { CuentaChips, PLATA_MIA, cuentaParaGuardar, recordarCuenta } from '@/components/movimientos/CuentaChips'
-
-// ─── Types ───────────────────────────────────────────────────
-
-type Variant = { id: string; product_id: string; name: string; sale_price: number; cpp: number }
-
-type SelectedItem = {
-    itemKey: string          // `${productId}:${variantId ?? ''}`
-    product: Product
-    variantId?: string
-    variantName?: string
-    quantity: string
-    cost: string
-}
+import { CuentaChips } from '@/components/movimientos/CuentaChips'
+import { useCompra } from '@/lib/inventory/useCompra'
+import { cantidadValida, saldoPendiente, soloCantidad } from '@/lib/inventory/calculos'
+import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
+import { SinInternet } from '@/components/inventory/SinInternet'
+import { diaColombia, formatoColombia, instanteDeDia } from '@/lib/periodos'
 
 // ─── Page ────────────────────────────────────────────────────
 
 export default function NewPurchaseFlow() {
-    const supabase = createClient()
     const router = useRouter()
+    const compra = useCompra()
+    const {
+        loading, sinDatos, reintentar, productsToShow, variantsByProduct, providers,
+        searchQuery, setSearchQuery, sortBy, setSortBy, expandedInPicker, toggleExpand,
+        selectedItems, addItem, updateItem, removeItem,
+        paymentMethod, setPaymentMethod, initialPayment, setInitialPayment,
+        selectedProviderId, setSelectedProviderId, dueDate, setDueDate,
+        cuenta, setCuenta, nombreCuenta,
+        total, abono, pagado, abonoDemasiado, faltaCuenta, puedeVerResumen, cantidadesBien,
+        saving, guardar, avisoCero, nombresEnCero, guardarIgual, cerrarAvisoCero,
+    } = compra
 
-    // Global context
-    const [storeId, setStoreId] = useState<string | null>(null)
-    const [products, setProducts] = useState<Product[]>([])
-    const [variantsByProduct, setVariantsByProduct] = useState<Record<string, Variant[]>>({})
-    const [providers, setProviders] = useState<Provider[]>([])
-    const [loading, setLoading] = useState(true)
-
-    // Flow state
+    // Celular: la compra va en 3 pasos
     const [step, setStep] = useState<1 | 2 | 3>(1)
-
-    // Step 1: Items
-    const [searchQuery, setSearchQuery] = useState('')
-    const [sortBy, setSortBy] = useState<'A-Z' | 'Stock' | 'Recientes'>('Recientes')
-    const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
-    const [expandedInPicker, setExpandedInPicker] = useState<Set<string>>(new Set())
     // Celular: con productos ya agregados, la lista para agregar más se abre en una hoja
     const [pickerOpen, setPickerOpen] = useState(false)
     const cerrarPicker = useCallback(() => setPickerOpen(false), [])
-
-    // Step 2: Payment
-    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit'>('cash')
-    const [initialPayment, setInitialPayment] = useState<string>('')
-    const [selectedProviderId, setSelectedProviderId] = useState<string>('')
-    const [dueDate, setDueDate] = useState<string>('')
-    // "¿Con qué pagaste?": una cuenta del negocio o "Plata mía"
-    const [cuenta, setCuenta] = useState<string | null>(null)
-    const { methods } = usePaymentMethods()
-    const nombreCuenta = cuenta === PLATA_MIA ? 'Plata mía' : nombreMetodo(methods.find(m => m.id === cuenta)?.name)
-
-    // Step 3: Confirmation
-    const [saving, setSaving] = useState(false)
+    // "Revisar costos": vuelve al paso 1, donde están los costos
+    const revisarCostos = useCallback(() => { cerrarAvisoCero(); setStep(1) }, [cerrarAvisoCero])
     const isMobile = useIsMobile()
 
-    useEffect(() => {
-        async function load() {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-            const { data: store } = await supabase.from('stores').select('id').eq('owner_id', user.id).single()
-            if (!store) return
-            setStoreId(store.id)
-
-            const [prodRes, provRes, variantsRes] = await Promise.all([
-                supabase.from('products').select('*').eq('store_id', store.id).eq('is_active', true).order('name'),
-                supabase.from('providers').select('*').eq('store_id', store.id).order('name'),
-                supabase.from('product_variants').select('id, product_id, name, sale_price, cpp').eq('store_id', store.id).eq('is_active', true).order('name'),
-            ])
-
-            if (prodRes.data) setProducts(prodRes.data)
-            if (provRes.data) setProviders(provRes.data)
-
-            if (variantsRes.data) {
-                const grouped: Record<string, Variant[]> = {}
-                for (const v of variantsRes.data) {
-                    if (!grouped[v.product_id]) grouped[v.product_id] = []
-                    grouped[v.product_id].push(v)
-                }
-                setVariantsByProduct(grouped)
-            }
-
-            // Si viene un pedido armado desde Inventario, la compra
-            // arranca con todo adentro: el dueño solo ajusta y confirma
-            const pedido = tomarPedido()
-            if (pedido.length > 0 && prodRes.data) {
-                const byProduct = new Map(prodRes.data.map(p => [p.id, p]))
-                const byVariant = new Map((variantsRes.data ?? []).map(v => [v.id, v]))
-                const precargado: SelectedItem[] = []
-
-                for (const linea of pedido) {
-                    const product = byProduct.get(linea.productId)
-                    if (!product) continue
-                    const variant = linea.variantId ? byVariant.get(linea.variantId) : null
-                    if (linea.variantId && !variant) continue
-                    const cost = variant ? (variant.cpp ?? product.cpp) : (product.cpp || product.cost_price || 0)
-                    precargado.push({
-                        itemKey: `${product.id}:${linea.variantId ?? ''}`,
-                        product,
-                        variantId: variant?.id,
-                        variantName: variant?.name,
-                        quantity: String(Math.max(Math.round(linea.quantity), 1)),
-                        cost: String(cost),
-                    })
-                }
-                if (precargado.length > 0) {
-                    setSelectedItems(precargado)
-                    toast.success(`${precargado.length} ${precargado.length === 1 ? 'producto listo' : 'productos listos'} en el pedido`)
-                }
-            }
-
-            setLoading(false)
-        }
-        load()
-    }, [supabase])
-
-    const sortedProducts = [...products].sort((a, b) => {
-        if (sortBy === 'A-Z') return a.name.localeCompare(b.name)
-        if (sortBy === 'Stock') return a.stock - b.stock
-        if (sortBy === 'Recientes') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        return 0
-    })
-
-    const productsToShow = sortedProducts.filter(p =>
-        searchQuery === '' ? true : (
-            p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (p.reference && p.reference.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
-    )
-
-    const toggleExpand = (productId: string) => {
-        setExpandedInPicker(prev => {
-            const next = new Set(prev)
-            next.has(productId) ? next.delete(productId) : next.add(productId)
-            return next
-        })
-    }
-
-    const addItem = (product: Product, variantId?: string, variantName?: string) => {
-        const itemKey = `${product.id}:${variantId ?? ''}`
-        if (selectedItems.find(i => i.itemKey === itemKey)) return
-        const defaultCost = variantId
-            ? (variantsByProduct[product.id]?.find(v => v.id === variantId)?.cpp ?? product.cpp)
-            : (product.cpp || product.cost_price || 0)
-        setSelectedItems(prev => [...prev, { itemKey, product, variantId, variantName, quantity: '1', cost: String(defaultCost) }])
-        setSearchQuery('')
-    }
-
-    const updateItem = (itemKey: string, field: 'quantity' | 'cost', value: string) => {
-        setSelectedItems(items => items.map(item =>
-            item.itemKey === itemKey ? { ...item, [field]: value } : item
-        ))
-    }
-
-    const removeItem = (itemKey: string) => {
-        setSelectedItems(items => items.filter(i => i.itemKey !== itemKey))
-    }
-
-    const subtotal = selectedItems.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.cost)), 0)
-    const total = subtotal
-
-    // Abonar más de lo que vale la compra deja un saldo negativo en
-    // pantalla y el servidor lo rechaza con un error crudo
-    const abonoDemasiado = paymentMethod === 'credit' && Number(onlyDigits(initialPayment) || 0) > total
-    // Lo que se paga hoy tiene que decir de dónde salió
-    const pagado = paymentMethod === 'credit' ? Math.round(Number(onlyDigits(initialPayment) || 0)) : Math.round(total)
-    const faltaCuenta = pagado > 0 && !cuenta
-
-    const handleSubmit = async () => {
-        if (faltaCuenta) { toast.error('Elige con qué pagaste'); return }
-        setSaving(true)
-        try {
-            const response = await fetch('/api/purchases', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    providerId: selectedProviderId,
-                    subtotal,
-                    total,
-                    isCredit: paymentMethod === 'credit',
-                    paidNow: pagado,
-                    ...cuentaParaGuardar(pagado > 0 ? cuenta : null),
-                    dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-                    items: selectedItems.map(item => ({
-                        productId: item.product.id,
-                        variantId: item.variantId ?? null,
-                        quantity: Number(item.quantity),
-                        unitCost: Number(item.cost)
-                    }))
-                })
-            })
-
-            const result = await response.json()
-            if (!response.ok) throw new Error(result.error || 'Error al procesar la compra')
-
-            if (pagado > 0) recordarCuenta('compra', cuenta)
-            toast.success('Compra registrada con éxito!')
-            router.push('/inventory')
-        } catch (e: unknown) {
-            toast.error(e instanceof Error ? e.message : 'No se pudo registrar la compra')
-            setSaving(false)
-        }
-    }
+    // Sin internet no se puede armar la compra: se dice, no se queda cargando
+    if (sinDatos) return <SinInternet onRetry={reintentar} que="tus productos y proveedores" />
 
     if (!isMobile) {
         if (loading) return (
@@ -235,37 +62,7 @@ export default function NewPurchaseFlow() {
                 </div>
             </div>
         )
-        return (
-            <DesktopPurchase
-                products={products}
-                variantsByProduct={variantsByProduct}
-                providers={providers}
-                selectedItems={selectedItems}
-                addItem={addItem}
-                updateItem={updateItem}
-                removeItem={removeItem}
-                expandedInPicker={expandedInPicker}
-                toggleExpand={toggleExpand}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-                paymentMethod={paymentMethod}
-                setPaymentMethod={setPaymentMethod}
-                initialPayment={initialPayment}
-                setInitialPayment={setInitialPayment}
-                selectedProviderId={selectedProviderId}
-                setSelectedProviderId={setSelectedProviderId}
-                dueDate={dueDate}
-                setDueDate={setDueDate}
-                cuenta={cuenta}
-                setCuenta={setCuenta}
-                subtotal={subtotal}
-                total={total}
-                saving={saving}
-                onSubmit={handleSubmit}
-            />
-        )
+        return <DesktopPurchase compra={compra} />
     }
 
     // Buscador + lista para agregar productos. Sin productos va en la
@@ -463,15 +260,17 @@ export default function NewPurchaseFlow() {
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
                                                 <label className="text-[10px] uppercase font-bold tracking-wider mb-1 block" style={{ color: 'var(--toul-text-subtle)' }}>Cantidad</label>
-                                                <input type="number" min="1" value={item.quantity}
-                                                    onChange={e => updateItem(item.itemKey, 'quantity', e.target.value)}
-                                                    className="toul-input w-full py-1.5 min-h-[36px] text-sm" />
+                                                <input type="text" inputMode="numeric" pattern="[0-9]*" value={item.quantity}
+                                                    onChange={e => updateItem(item.itemKey, 'quantity', soloCantidad(e.target.value))}
+                                                    aria-invalid={!cantidadValida(item.quantity)}
+                                                    className="toul-input w-full py-1.5 min-h-[36px]"
+                                                    style={cantidadValida(item.quantity) ? undefined : { borderColor: 'var(--toul-error)' }} />
                                             </div>
                                             <div>
                                                 <label className="text-[10px] uppercase font-bold tracking-wider mb-1 block" style={{ color: 'var(--toul-text-subtle)' }}>Costo unitario</label>
                                                 <input type="text" inputMode="numeric" value={withThousands(toMoneyDigits(item.cost))}
                                                     onChange={e => updateItem(item.itemKey, 'cost', onlyDigits(e.target.value))}
-                                                    className="toul-input w-full py-1.5 min-h-[36px] text-sm" />
+                                                    className="toul-input w-full py-1.5 min-h-[36px]" />
                                             </div>
                                         </div>
                                     </div>
@@ -573,7 +372,7 @@ export default function NewPurchaseFlow() {
                                                 className="toul-input w-full"
                                                 value={dueDate}
                                                 onChange={(e) => setDueDate(e.target.value)}
-                                                min={new Date().toISOString().split('T')[0]}
+                                                min={diaColombia(new Date())}
                                                 required
                                             />
                                         </div>
@@ -591,7 +390,7 @@ export default function NewPurchaseFlow() {
                             )}
 
                             <button
-                                disabled={(paymentMethod === 'credit' && (!selectedProviderId || !dueDate || abonoDemasiado)) || faltaCuenta}
+                                disabled={!puedeVerResumen}
                                 onClick={() => setStep(3)}
                                 className="toul-btn-primary w-full mt-6 flex items-center justify-center gap-2">
                                 Revisar resumen <Navigation size={18} />
@@ -630,18 +429,18 @@ export default function NewPurchaseFlow() {
                                             </span>
                                         </div>
                                     )}
-                                    {paymentMethod === 'credit' && Number(initialPayment) > 0 && (
+                                    {paymentMethod === 'credit' && abono > 0 && (
                                         <>
                                             <div className="flex justify-between text-sm">
                                                 <span style={{ color: 'var(--toul-text-muted)' }}>Abono inicial</span>
                                                 <span className="font-medium" style={{ color: 'var(--toul-accent)' }}>
-                                                    {formatCOP(Number(initialPayment))}
+                                                    {formatCOP(abono)}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between text-sm font-bold pt-2 border-t" style={{ borderColor: 'var(--toul-border)' }}>
                                                 <span style={{ color: 'var(--toul-text-muted)' }}>Saldo Pendiente</span>
                                                 <span style={{ color: 'var(--toul-error)' }}>
-                                                    {formatCOP(Math.max(0, total - Number(initialPayment)))}
+                                                    {formatCOP(saldoPendiente(total, abono))}
                                                 </span>
                                             </div>
                                         </>
@@ -650,7 +449,7 @@ export default function NewPurchaseFlow() {
                                         <div className="flex justify-between text-sm">
                                             <span style={{ color: 'var(--toul-text-muted)' }}>Plazo</span>
                                             <span className="font-medium" style={{ color: 'var(--toul-error)' }}>
-                                                {new Date(dueDate).toLocaleDateString('es-CO')}
+                                                {formatoColombia(instanteDeDia(dueDate), { day: 'numeric', month: 'short', year: 'numeric' })}
                                             </span>
                                         </div>
                                     )}
@@ -669,8 +468,8 @@ export default function NewPurchaseFlow() {
                             </div>
 
                             <button
-                                disabled={saving || faltaCuenta}
-                                onClick={handleSubmit}
+                                disabled={saving || faltaCuenta || !cantidadesBien}
+                                onClick={guardar}
                                 className="toul-btn-primary w-full flex items-center justify-center gap-2"
                                 style={{ background: 'var(--toul-accent)', boxShadow: '0 4px 16px rgba(16,185,129,0.3)' }}>
                                 {saving ? (
@@ -696,15 +495,16 @@ export default function NewPurchaseFlow() {
                 }}>
                     <div className="max-w-2xl mx-auto" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: 0 }}>
+                            <p style={{ fontSize: 12, color: cantidadesBien ? 'var(--toul-text-dim)' : 'var(--toul-error)', margin: 0 }}>
                                 {selectedItems.length === 0 ? 'Elige qué compraste'
+                                    : !cantidadesBien ? 'Cada producto necesita 1 o más'
                                     : selectedItems.length === 1 ? '1 producto' : `${selectedItems.length} productos`}
                             </p>
                             <p style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: 0, lineHeight: 1.2 }}>
                                 {formatCOP(Math.round(total))}
                             </p>
                         </div>
-                        <button disabled={selectedItems.length === 0} onClick={() => setStep(2)}
+                        <button disabled={selectedItems.length === 0 || !cantidadesBien} onClick={() => setStep(2)}
                             className="toul-btn-primary flex items-center justify-center gap-2"
                             style={{ width: 'auto', padding: '0 22px', flexShrink: 0 }}>
                             Siguiente <Navigation size={17} />
@@ -712,6 +512,11 @@ export default function NewPurchaseFlow() {
                     </div>
                 </div>
             )}
+
+            <ConfirmSheet open={avisoCero} onClose={revisarCostos} onConfirm={guardarIgual}
+                title="Hay productos con costo $0"
+                message={`${nombresEnCero.join(', ')} ${nombresEnCero.length === 1 ? 'va' : 'van'} con costo $0. Si la guardas así, su costo promedio baja y la ganancia se verá más alta de lo que es.`}
+                confirmLabel="Guardar igual" cancelLabel="Revisar costos" />
 
             <Sheet open={pickerOpen} onClose={cerrarPicker} title="Agregar productos" width={520}
                 footer={<button className="toul-btn-primary" onClick={cerrarPicker}>Listo</button>}>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import toast from 'react-hot-toast'
+import { explainError } from '@/lib/errors'
 import { Package, Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Sheet } from '@/components/isla/Sheet'
@@ -28,8 +29,9 @@ const MOTIVOS: Record<Direction, { id: string; label: string }[]> = {
         { id: 'expired', label: 'Se venció' },
         { id: 'other', label: 'Otro' },
     ],
+    // Lo que un cliente devuelve entra por Devoluciones, con su venta:
+    // así se devuelve también la plata y la ganancia queda bien
     in: [
-        { id: 'return', label: 'Un cliente lo devolvió' },
         { id: 'found', label: 'Apareció' },
         { id: 'gift', label: 'Regalo del proveedor' },
         { id: 'other', label: 'Otro' },
@@ -160,7 +162,8 @@ export function StockAdjustSheet({ open, storeId, onClose, onDone, preselect }: 
                 }),
             })
             const result = await response.json()
-            if (!response.ok) throw new Error(result.error || 'No se pudo ajustar el inventario')
+            // El servidor ya responde en español (lo técnico lo traduce allá)
+            if (!response.ok) throw Object.assign(new Error(result.error || 'No se pudo ajustar el inventario'), { delServidor: true })
 
             toast.success(direction === 'out'
                 ? `Diste de baja ${amount} de ${unit.sub ? `${unit.label} ${unit.sub}` : unit.label}`
@@ -168,7 +171,9 @@ export function StockAdjustSheet({ open, storeId, onClose, onDone, preselect }: 
             onDone()
             onClose()
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'No se pudo ajustar el inventario')
+            toast.error(error instanceof Error && (error as { delServidor?: boolean }).delServidor
+                ? error.message
+                : explainError(error, 'No se pudo ajustar el inventario. Intenta de nuevo.'))
             setSaving(false)
         }
     }

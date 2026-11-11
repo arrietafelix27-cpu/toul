@@ -1,21 +1,19 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import useSWR from 'swr'
-import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowLeft, Package, Search } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
 import { useStore } from '@/lib/hooks/useData'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
-import { PurchaseDetail, type PurchaseDetailData } from '@/components/inventory/PurchaseDetail'
+import { PurchaseDetail } from '@/components/inventory/PurchaseDetail'
 import { fadeUp, staggerContainer, staggerItem } from '@/lib/motion'
-import { diasEntre, instanteDeDia } from '@/lib/periodos'
-
-const supabase = createClient()
+import { estaVencida, fechaCompra, useCompras } from '@/lib/inventory/useCompras'
+import { unidadesDeCompra, type FiltroCompras } from '@/lib/inventory/calculos'
+import { SelectorPeriodo } from '@/components/dashboard/Desplegable'
+import { useIsMobile } from '@/lib/hooks/useIsMobile'
+import { SinInternet } from '@/components/inventory/SinInternet'
 
 /* ══════════════════════════════════════════════════════════════
    Historial de compras.
@@ -30,66 +28,12 @@ const supabase = createClient()
    importar cuándo compraste.
    ══════════════════════════════════════════════════════════════ */
 
-interface PurchaseRow {
-    id: string
-    created_at: string
-    total: number
-    is_credit: boolean
-    provider_id: string | null
-    providers: { name: string } | null
-    purchase_items: { quantity: number; products: { name: string } | null }[]
-}
-
-interface Resumen {
-    gastado: number
-    compras: number
-    aCredito: number
-    porPagar: number
-    vencidas: number
-}
-
-type Periodo = 'semana' | 'mes' | 'anio' | 'todo'
-type Filtro = 'todas' | 'contado' | 'credito' | 'debiendo'
-
-const PERIODOS: { key: Periodo; label: string }[] = [
-    { key: 'semana', label: 'Semana' },
-    { key: 'mes', label: 'Mes' },
-    { key: 'anio', label: 'Año' },
-    { key: 'todo', label: 'Todo' },
-]
-
-const FILTROS: { key: Filtro; label: string }[] = [
+const FILTROS: { key: FiltroCompras; label: string }[] = [
     { key: 'todas', label: 'Todas' },
     { key: 'contado', label: 'De contado' },
     { key: 'credito', label: 'A crédito' },
     { key: 'debiendo', label: 'Sin pagar' },
 ]
-
-const PAGINA = 30
-
-function desde(p: Periodo): string | null {
-    if (p === 'todo') return null
-    const d = new Date()
-    if (p === 'semana') d.setDate(d.getDate() - 7)
-    if (p === 'mes') d.setMonth(d.getMonth() - 1)
-    if (p === 'anio') d.setFullYear(d.getFullYear() - 1)
-    return d.toISOString()
-}
-
-const fecha = (iso: string) => {
-    const d = new Date(iso)
-    const esteAnio = d.getFullYear() === new Date().getFullYear()
-    return d.toLocaleDateString('es-CO', esteAnio
-        ? { day: 'numeric', month: 'short' }
-        : { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-/** Un plazo que ya pasó deja de ser un dato y pasa a ser un aviso */
-function estaVencida(iso: string | null) {
-    if (!iso) return false
-    // El plazo es un día del calendario; "hoy" es el de Colombia
-    return diasEntre(instanteDeDia(iso.slice(0, 10)), new Date()) > 0
-}
 
 const CSS = PANEL_CSS + `
 .hc-page, .hc-wrap { container-type: inline-size; }
@@ -151,117 +95,12 @@ export default function ComprasPage() {
     const { data: store } = useStore()
     const storeId = store?.id || null
 
-    const [periodo, setPeriodo] = useState<Periodo>('mes')
-    const [filtro, setFiltro] = useState<Filtro>('todas')
-    const [busca, setBusca] = useState('')
-    const [limite, setLimite] = useState(PAGINA)
-    const [hayMas, setHayMas] = useState(false)
-    const [abierta, setAbierta] = useState<PurchaseDetailData | null>(null)
-    const [abriendo, setAbriendo] = useState<string | null>(null)
-    const sentinela = useRef<HTMLDivElement>(null)
-
-    // Cambiar de período o de filtro vuelve a empezar la lista
-    const verPeriodo = (p: Periodo) => { setPeriodo(p); setLimite(PAGINA) }
-    const verFiltro = (f: Filtro) => { setFiltro(f); setLimite(PAGINA) }
-
-    // Los totales salen de la base, no de la página que estás viendo:
-    // si no, el gasto cambiaría cada vez que bajas por la lista
-    const { data: resumen } = useSWR<Resumen>(
-        storeId ? ['compras-resumen', storeId, periodo] : null,
-        async () => {
-            const { data, error } = await supabase.rpc('toul_purchases_summary', {
-                p_from: desde(periodo), p_to: null,
-            })
-            if (error) throw error
-            return data as Resumen
-        },
-        { revalidateOnFocus: false },
-    )
-
-    const { data: compras, isLoading, isValidating, mutate } = useSWR<PurchaseRow[]>(
-        storeId ? ['compras', storeId, periodo, filtro, limite] : null,
-        async () => {
-            let q = supabase.from('purchases')
-                .select('id, created_at, total, is_credit, provider_id, providers(name), purchase_items(quantity, products(name))')
-                .eq('store_id', storeId!)
-                .order('created_at', { ascending: false })
-            const from = desde(periodo)
-            if (from) q = q.gte('created_at', from)
-            if (filtro === 'contado') q = q.eq('is_credit', false)
-            if (filtro === 'credito' || filtro === 'debiendo') q = q.eq('is_credit', true)
-
-            const { data, error } = await q.limit(limite + 1)
-            if (error) throw error
-            const filas = (data ?? []) as unknown as PurchaseRow[]
-            setHayMas(filas.length > limite)
-            return filas.slice(0, limite)
-        },
-        { revalidateOnFocus: false, keepPreviousData: true },
-    )
-
-    // Las que siguen sin pagar: la deuda vive aparte de la compra
-    const { data: deudas } = useSWR(
-        storeId ? ['compras-deudas', storeId] : null,
-        async () => {
-            const { data } = await supabase.from('provider_debts')
-                .select('purchase_id, remaining_amount, due_date, status')
-                .eq('store_id', storeId!).neq('status', 'paid').gt('remaining_amount', 0)
-            const m = new Map<string, { falta: number; vence: string | null }>()
-            for (const d of data ?? []) {
-                if (d.purchase_id) m.set(d.purchase_id, { falta: Number(d.remaining_amount), vence: d.due_date })
-            }
-            return m
-        },
-        { revalidateOnFocus: false },
-    )
-
-    // Al llegar al final se cargan más solas
-    useEffect(() => {
-        const node = sentinela.current
-        if (!node || !hayMas || isValidating) return
-        const obs = new IntersectionObserver(e => {
-            if (e[0]?.isIntersecting) setLimite(l => l + PAGINA)
-        }, { rootMargin: '200px' })
-        obs.observe(node)
-        return () => obs.disconnect()
-    }, [hayMas, isValidating])
-
-    async function abrir(id: string) {
-        setAbriendo(id)
-        const { data, error } = await supabase.rpc('toul_purchase_detail', { p_purchase_id: id })
-        setAbriendo(null)
-        if (error || !data) { toast.error('No se pudo abrir esa compra'); return }
-        setAbierta(data as PurchaseDetailData)
-    }
-
-    // Desde Movimientos ("Ver la compra") se llega con ?compra=<id>: abre de una.
-    // La dirección se limpia solo cuando ya abrió
-    useEffect(() => {
-        const id = new URLSearchParams(window.location.search).get('compra')
-        if (!id) return
-        let vivo = true
-        ;(async () => {
-            const { data, error } = await supabase.rpc('toul_purchase_detail', { p_purchase_id: id })
-            if (!vivo) return
-            window.history.replaceState(null, '', window.location.pathname)
-            if (error || !data) { toast.error('No se pudo abrir esa compra'); return }
-            setAbierta(data as PurchaseDetailData)
-        })()
-        return () => { vivo = false }
-    }, [])
-
-    // La búsqueda corre sobre lo cargado: por proveedor o por producto
-    const lista = useMemo(() => {
-        const filas = compras ?? []
-        const conDeuda = filtro === 'debiendo'
-            ? filas.filter(c => (deudas?.get(c.id)?.falta ?? 0) > 0)
-            : filas
-        if (!busca.trim()) return conDeuda
-        const t = busca.toLowerCase()
-        return conDeuda.filter(c =>
-            (c.providers?.name ?? '').toLowerCase().includes(t) ||
-            (c.purchase_items ?? []).some(i => (i.products?.name ?? '').toLowerCase().includes(t)))
-    }, [compras, deudas, filtro, busca])
+    const {
+        periodo, verPeriodo, rango, setRango, sinDatos, reintentar, filtro, verFiltro, busca, setBusca,
+        resumen, compras, lista, deudas, isLoading, isValidating,
+        hayMas, sentinela, abierta, abriendo, abrir, cerrar, alCambiar,
+    } = useCompras(storeId)
+    const esMovil = useIsMobile()
 
     return (
         <div className="px-4 md:px-8 py-6 pb-24" style={{ position: 'relative' }}>
@@ -282,6 +121,8 @@ export default function ComprasPage() {
                     </div>
                 </div>
 
+                {/* Sin internet: ni "Comprado $0" ni una lista vacía que parezcan reales */}
+                {sinDatos ? <SinInternet onRetry={reintentar} que="tus compras" /> : <>
                 {/* ── Cuánto has comprado ── */}
                 <motion.div variants={fadeUp} initial="hidden" animate="visible"
                     style={{ borderRadius: 22, padding: '18px 20px', marginBottom: 14,
@@ -290,11 +131,13 @@ export default function ComprasPage() {
                     <p className="pnl-label">Comprado</p>
                     <p style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.045em', lineHeight: 1.1,
                         margin: '6px 0 0', color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }}>
-                        {formatCOP(Number(resumen?.gastado ?? 0))}
+                        {resumen ? formatCOP(Math.round(Number(resumen.gastado ?? 0))) : <span className="skeleton" aria-hidden="true" style={{ display: 'inline-block', width: 150, height: 36, borderRadius: 12, verticalAlign: 'middle' }} />}
                     </p>
                     <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '4px 0 0' }}>
-                        {resumen?.compras ?? 0} {(resumen?.compras ?? 0) === 1 ? 'compra' : 'compras'}
-                        {Number(resumen?.aCredito ?? 0) > 0 && <> · {formatCOP(Number(resumen!.aCredito))} a crédito</>}
+                        {resumen ? <>
+                            {resumen.compras ?? 0} {(resumen.compras ?? 0) === 1 ? 'compra' : 'compras'}
+                            {Number(resumen.aCredito ?? 0) > 0 && <> · {formatCOP(Math.round(Number(resumen.aCredito)))} a crédito</>}
+                        </> : <span className="skeleton" aria-hidden="true" style={{ display: 'inline-block', width: 110, height: 14, borderRadius: 6, verticalAlign: 'middle' }} />}
                     </p>
 
                     {Number(resumen?.porPagar ?? 0) > 0 && (
@@ -315,13 +158,12 @@ export default function ComprasPage() {
                     )}
                 </motion.div>
 
-                {/* ── Filtros ── */}
-                <motion.div variants={fadeUp} initial="hidden" animate="visible" className="hc-chips" style={{ marginBottom: 8 }}>
-                    {PERIODOS.map(p => (
-                        <button key={p.key} className="hc-chip" data-on={periodo === p.key}
-                            onClick={() => verPeriodo(p.key)}>{p.label}</button>
-                    ))}
+                {/* ── El periodo: el mismo selector de Reportes, más "Todo" ── */}
+                <motion.div variants={fadeUp} initial="hidden" animate="visible" style={{ marginBottom: 10 }}>
+                    <SelectorPeriodo variante={esMovil ? 'movil' : 'pc'} forma="boton" conAno conTodo lado="izquierda"
+                        period={periodo} setPeriod={verPeriodo} rango={rango} setRango={setRango} />
                 </motion.div>
+                {/* ── Filtros ── */}
                 <motion.div variants={fadeUp} initial="hidden" animate="visible" className="hc-chips" style={{ marginBottom: 10 }}>
                     {FILTROS.map(f => (
                         <button key={f.key} className="hc-chip" data-on={filtro === f.key}
@@ -359,27 +201,31 @@ export default function ComprasPage() {
                         <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                             className="hc-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                             {lista.map(c => {
-                                const unidades = (c.purchase_items ?? []).reduce((s, i) => s + Number(i.quantity), 0)
+                                const unidades = unidadesDeCompra(c.purchase_items)
                                 const refs = (c.purchase_items ?? []).length
                                 const deuda = deudas?.get(c.id)
                                 const vencida = deuda ? estaVencida(deuda.vence) : false
+                                const anulada = c.status === 'voided'
+                                // Anulada: se ve en el historial, pero su total no cuenta
+                                const estiloTotal = anulada ? { color: 'var(--toul-text-dim)', textDecoration: 'line-through' } : { color: 'var(--toul-text)' }
                                 return (
                                     <motion.div key={c.id} variants={staggerItem}>
                                         {/* PC: una fila de tabla */}
                                         <button className="hc-fila hc-pc" disabled={abriendo === c.id} onClick={() => abrir(c.id)}>
-                                            <span style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>{fecha(c.created_at)}</span>
+                                            <span style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>{fechaCompra(c.created_at)}</span>
                                             <span style={{ fontSize: 14, fontWeight: 600, color: c.providers ? 'var(--toul-text)' : 'var(--toul-text-dim)' }}>
                                                 {c.providers?.name ?? 'Sin proveedor'}
                                             </span>
                                             <span style={{ fontSize: 13, color: 'var(--toul-text-muted)' }}>
                                                 {refs} {refs === 1 ? 'producto' : 'productos'} · {unidades} und
                                             </span>
-                                            <span style={{ fontSize: 13, fontWeight: deuda ? 600 : 400,
-                                                color: deuda ? (vencida ? 'var(--toul-error)' : 'var(--toul-warning)') : 'var(--toul-text-dim)' }}>
-                                                {deuda ? `Debes ${formatCOP(deuda.falta)}${vencida ? ' · vencida' : ''}`
+                                            <span style={{ fontSize: 13, fontWeight: deuda || anulada ? 600 : 400,
+                                                color: anulada ? 'var(--toul-error)' : deuda ? (vencida ? 'var(--toul-error)' : 'var(--toul-warning)') : 'var(--toul-text-dim)' }}>
+                                                {anulada ? 'Anulada'
+                                                    : deuda ? `Debes ${formatCOP(deuda.falta)}${vencida ? ' · vencida' : ''}`
                                                     : c.is_credit ? 'Crédito pagado' : 'De contado'}
                                             </span>
-                                            <span className="hc-num" style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--toul-text)' }}>
+                                            <span className="hc-num" style={{ fontSize: 14.5, fontWeight: 700, ...estiloTotal }}>
                                                 {abriendo === c.id ? '…' : formatCOP(Number(c.total))}
                                             </span>
                                         </button>
@@ -397,8 +243,9 @@ export default function ComprasPage() {
                                                 </span>
                                                 <span style={{ display: 'block', fontSize: 12, color: 'var(--toul-text-dim)',
                                                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {fecha(c.created_at)} · {refs} {refs === 1 ? 'producto' : 'productos'}
+                                                    {fechaCompra(c.created_at)} · {refs} {refs === 1 ? 'producto' : 'productos'}
                                                     <span className="hc-und"> · {unidades} und</span>
+                                                    {anulada && <span style={{ color: 'var(--toul-error)', fontWeight: 600 }}> · Anulada</span>}
                                                     {deuda && (
                                                         <span className="hc-debe" style={{ color: estaVencida(deuda.vence) ? 'var(--toul-error)' : 'var(--toul-warning)' }}>
                                                             <span className="hc-und"> · </span>
@@ -408,7 +255,7 @@ export default function ComprasPage() {
                                                     )}
                                                 </span>
                                             </span>
-                                            <span style={{ fontSize: 14.5, fontWeight: 700, flexShrink: 0, color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }}>
+                                            <span style={{ fontSize: 14.5, fontWeight: 700, flexShrink: 0, fontVariantNumeric: 'tabular-nums', ...estiloTotal }}>
                                                 {abriendo === c.id ? '…' : formatCOP(Number(c.total))}
                                             </span>
                                         </button>
@@ -436,12 +283,13 @@ export default function ComprasPage() {
                         </span>
                     </div>
                 )}
+                </>}
             </div>
 
             <PurchaseDetail
                 purchase={abierta}
-                onClose={() => setAbierta(null)}
-                onChanged={() => { setAbierta(null); mutate() }}
+                onClose={cerrar}
+                onChanged={alCambiar}
             />
         </div>
     )

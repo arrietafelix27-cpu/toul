@@ -29,7 +29,7 @@ interface VariantRow {
 const CSS = PANEL_CSS + `
 .vm-input { height: 42px; border-radius: 12px; padding: 0 12px; font-family: inherit;
     background: var(--toul-surface-2); border: 1px solid var(--toul-border); color: var(--toul-text);
-    font-size: 15px; outline: none; min-width: 0; }
+    font-size: 16px; outline: none; min-width: 0; }
 .vm-input:focus { border-color: var(--toul-border-focused); }
 `
 

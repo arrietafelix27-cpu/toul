@@ -14,6 +14,7 @@ import type { Product } from '@/lib/types'
 import { CatalogCard, CATALOG_CARD_CSS, type CatalogCardData } from '@/components/products/CatalogCard'
 import { PANEL_CSS } from '@/components/dashboard/panelStyles'
 import { buildSignalContext, computeProductSignal, getSignalStyle, type SignalContext } from '@/lib/products/signals'
+import { estadoDelProducto, type EstadoStock } from '@/lib/inventory/calculos'
 
 const ShareCatalogSheet = dynamic(() => import('@/components/products/ShareCatalogSheet').then(m => m.ShareCatalogSheet), { ssr: false })
 const CategoriesModal = dynamic(() => import('@/components/products/CategoriesModal').then(m => m.CategoriesModal), { ssr: false })
@@ -55,6 +56,26 @@ async function fetchVariants(storeId: string) {
     return (data || []) as VariantRow[]
 }
 
+/** Agotado o por acabarse de cada producto, con la misma regla de Inventario:
+ *  "Sin stock" si se agotaron todas sus presentaciones, "Pocas unidades" si
+ *  alguna está en su mínimo o agotada */
+async function fetchEstados(): Promise<Record<string, EstadoStock>> {
+    const { data, error } = await supabase.rpc('toul_estado_stock')
+    if (error) return {}
+    const porProducto = new Map<string, EstadoStock[]>()
+    for (const fila of (data ?? []) as { product_id: string; estado: EstadoStock }[]) {
+        const lista = porProducto.get(fila.product_id) ?? []
+        lista.push(fila.estado)
+        porProducto.set(fila.product_id, lista)
+    }
+    const estados: Record<string, EstadoStock> = {}
+    for (const [productId, lista] of porProducto) {
+        const estado = estadoDelProducto(lista)
+        if (estado) estados[productId] = estado
+    }
+    return estados
+}
+
 async function fetchSaleItems(storeId: string) {
     const { data, error } = await supabase.from('sale_items')
         .select('product_id, quantity, sales!inner(created_at)').eq('store_id', storeId)
@@ -84,6 +105,7 @@ export default function ProductsPage() {
     const { data: combos } = useSWR(storeId ? ['combos-catalog', storeId] : null, ([, id]) => fetchCombos(id as string), { revalidateOnFocus: false, dedupingInterval: 60_000 })
     const { data: variantRows } = useSWR(storeId ? ['variants-catalog', storeId] : null, ([, id]) => fetchVariants(id as string), { revalidateOnFocus: false, dedupingInterval: 60_000 })
     const { data: saleItems } = useSWR(storeId ? ['sale-items-signals', storeId] : null, ([, id]) => fetchSaleItems(id as string), { revalidateOnFocus: false, dedupingInterval: 60_000 })
+    const { data: estados } = useSWR(storeId ? ['estado-stock', storeId] : null, fetchEstados, { revalidateOnFocus: false, dedupingInterval: 60_000 })
 
     const [search, setSearch] = useState('')
     const [typeFilter, setTypeFilter] = useState<TypeFilter>('todos')
@@ -106,8 +128,8 @@ export default function ProductsPage() {
     }, [saleItems])
 
     const signalContext = useMemo<SignalContext | null>(
-        () => (products ? buildSignalContext(products, saleItems || []) : null),
-        [products, saleItems],
+        () => (products ? buildSignalContext(products, saleItems || [], estados) : null),
+        [products, saleItems, estados],
     )
 
     /** Todo el catálogo convertido a la misma forma de tarjeta. */
@@ -139,6 +161,7 @@ export default function ProductsPage() {
                 priceLabel: min === max ? formatCOP(min) : `Desde ${formatCOP(min)}`,
                 image: product.images?.[0] || product.image_url || null,
                 stock: Number(product.stock) || 0,
+                estado: estados?.[product.id] ?? null,
                 presentations: variants.length,
                 badge: signal && signalStyle && !/stock/i.test(signal.label)
                     ? { label: signal.label, bg: signalStyle.bg, text: signalStyle.text }
@@ -178,7 +201,7 @@ export default function ProductsPage() {
         })
 
         return sorted.map(({ sortName, sortPrice, sortUnits, ...card }) => card)
-    }, [products, combos, variantsByProduct, unitsByProduct, signalContext, search, typeFilter, sortOrder])
+    }, [products, combos, variantsByProduct, unitsByProduct, signalContext, estados, search, typeFilter, sortOrder])
 
     const isLoading = productsLoading || storeLoading
 

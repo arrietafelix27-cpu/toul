@@ -76,6 +76,22 @@ test('Inicio: "Quedó fiado" es lo vendido que no se pagó, menos la deuda que b
     assert.equal(resumenInicio(reporte({ ventas: 150_500, costo: 69_800 })).fiado, 0, 'todo de contado')
 })
 
+test('Inicio: "Se perdió" es la mercancía perdida menos la recuperada, y no baja de cero', () => {
+    const conMercancia = (perdida: number, recuperada: number) => resumenInicio(resumir({
+        ventas: { total: 640_000, cantidad: 3, contado: 640_000, credito: 0, costo: 330_000 },
+        devoluciones: { total: 0, costo: 0, reembolsado: 0 },
+        abonos: 0, gastos: 40_000, mercanciaPagada: 0,
+        mercanciaPerdida: perdida, mercanciaRecuperada: recuperada,
+    }))
+    assert.equal(conMercancia(60_000, 0).sePerdio, 60_000)
+    assert.equal(conMercancia(60_000, 15_000).sePerdio, 45_000)
+    assert.equal(conMercancia(10_000, 25_000).sePerdio, 0, 'se recuperó más de lo que se perdió')
+    assert.equal(conMercancia(0, 0).sePerdio, 0)
+    // Ganaste de Inicio ya la trae restada: 640 − 330 − 40 − 45 = 225
+    assert.equal(conMercancia(60_000, 15_000).ganaste, 225_000)
+    assert.equal(reporte({ ventas: 150_500, costo: 69_800 }).mercanciaNeta, 0, 'sin el dato, no hay pérdida')
+})
+
 test('La tendencia se esconde cuando antes no hubo ganancia', () => {
     assert.equal(porcentajeTendencia({ ahora: 500_000, antes: 0, ventasAntes: 4 }), null)
     assert.equal(porcentajeTendencia({ ahora: 500_000, antes: -80_000, ventasAntes: 4 }), null)
@@ -159,6 +175,50 @@ test('El resumen: Ganaste, Plata que entró y Plata que salió', () => {
     assert.equal(r.margen, 40)
     assert.equal(r.ticket, 200_000)
     assert.equal(r.pctCredito, 40)
+})
+
+test('Ganaste resta la mercancía perdida y suma la recuperada', () => {
+    const base = {
+        ventas: { total: 500_000, cantidad: 2, contado: 300_000, credito: 200_000, costo: 300_000 },
+        devoluciones: { total: 100_000, costo: 60_000, reembolsado: 100_000 },
+        abonos: 60_000, gastos: 80_000, mercanciaPagada: 300_000,
+    }
+    const r = resumir({ ...base, mercanciaPerdida: 60_000, mercanciaRecuperada: 15_000 })
+    assert.equal(r.gananciaVentas, 160_000)
+    assert.equal(r.mercanciaPerdida, 60_000)
+    assert.equal(r.mercanciaRecuperada, 15_000)
+    assert.equal(r.mercanciaNeta, -45_000)
+    // 160.000 − 80.000 − 60.000 + 15.000
+    assert.equal(r.ganaste, 35_000)
+    // Perder mercancía no mueve plata de la caja
+    assert.equal(r.entro, 360_000)
+    assert.equal(r.salio, 480_000)
+
+    // Si la base todavía no la manda, Ganaste queda como antes
+    assert.equal(resumir(base).ganaste, 80_000)
+    assert.equal(resumir(base).mercanciaNeta, 0)
+})
+
+test('De cada $100 con mercancía perdida: cuatro tramos que suman 100', () => {
+    const r = deCada100({ ventas: 1_000_000, costo: 440_000, gastos: 20_000, sePerdio: 60_000 })
+    assert.ok(r)
+    assert.deepEqual([r.mercancia, r.gastos, r.sePerdio, r.quedo], [44, 2, 6, 48])
+    assert.equal(r.barra.mercancia + r.barra.gastos + r.barra.sePerdio + r.barra.quedo, 100)
+    assert.equal(r.perdida, false)
+
+    // Sin mercancía perdida el tramo no existe
+    const sin = deCada100({ ventas: 1_000_000, costo: 440_000, gastos: 20_000 })
+    assert.ok(sin)
+    assert.equal(sin.sePerdio, 0)
+    assert.equal(sin.barra.sePerdio, 0)
+
+    // Con pérdida la barra reparte el 100 entre los tres que se fueron
+    const mal = deCada100({ ventas: 100_000, costo: 70_000, gastos: 20_000, sePerdio: 30_000 })
+    assert.ok(mal)
+    assert.equal(mal.perdida, true)
+    assert.equal(mal.quedo, 0)
+    assert.equal(mal.sePerdio, 30)
+    assert.equal(mal.barra.mercancia + mal.barra.gastos + mal.barra.sePerdio, 100)
 })
 
 test('Los porcentajes de menos de 1% se dicen así, no 0% ni 1%', () => {

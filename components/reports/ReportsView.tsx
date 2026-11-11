@@ -19,7 +19,7 @@ import type { MesReporte, ReporteSQL } from '@/lib/reports/types'
 
    Arriba, cuánto ganaste y cómo va. Debajo, cuatro números que lo
    explican; la plata que entró y salió; el mes a mes; de cada $100
-   qué se fue en mercancía, en gastos y qué te quedó; y en qué
+   qué se fue en mercancía, en gastos, qué se perdió y qué te quedó; y en qué
    gastaste, qué te dejó más y cómo te pagan.
 
    Sin cajas: lo separa una línea de 1 px. El verde es solo para lo
@@ -43,6 +43,10 @@ const CSS = ENTRADA_INICIO_CSS + `
 .rp-tendencia-pct { color: var(--toul-text); font-weight: 600; font-variant-numeric: tabular-nums; margin-right: 2px; }
 .rp-proyeccion { margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: var(--toul-text-subtle); }
 .rp-proyeccion b { font-weight: 600; color: var(--toul-text); white-space: nowrap; }
+/* Lo que Ganaste ya descuenta (o suma) por mercancía perdida o recuperada */
+.rp-merma { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 10px 0 0; padding: 0; list-style: none;
+    font-size: 13px; color: var(--toul-text-subtle); }
+.rp-merma b { margin-left: 6px; font-weight: 600; color: var(--toul-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .rp-linea { height: 1px; border: none; background: var(--toul-border); margin: 28px 0; }
 
@@ -432,6 +436,12 @@ function Principal({ r, antes, anteriorVentas, periodo, tramo, clave, cargando }
                         color: nada ? 'var(--toul-text-dim)' : perdio ? 'var(--toul-error)' : ganaste > 0 ? 'var(--toul-accent)' : 'var(--toul-text)',
                     }} />
             )}
+            {!cargando && r && (r.mercanciaPerdida > 0 || r.mercanciaRecuperada > 0) && (
+                <ul className="rp-merma">
+                    {r.mercanciaPerdida > 0 && <li>Mercancía perdida<b>−{formatPrecio(r.mercanciaPerdida)}</b></li>}
+                    {r.mercanciaRecuperada > 0 && <li>Mercancía recuperada<b>+{formatPrecio(r.mercanciaRecuperada)}</b></li>}
+                </ul>
+            )}
             {!cargando && tendencia !== null && (
                 <p className="rp-tendencia">
                     {tendencia > 0 && <ArrowUpRight size={16} strokeWidth={2.6} style={{ color: 'var(--toul-accent)' }} aria-label="Sube" />}
@@ -647,12 +657,16 @@ function MesAMes({ meses }: { meses: MesReporte[] | null }) {
 /* ── De cada $100 ───────────────────────────────────────────── */
 
 function DeCadaCien({ r, cargando }: { r: ResumenReporte | null; cargando: boolean }) {
-    const cien = r ? deCada100({ ventas: r.vendiste, costo: r.costoNeto, gastos: r.gastos }) : null
+    // "Se perdió" es la mercancía perdida que no se recuperó; si se recuperó
+    // más de lo que se perdió, no hay tramo
+    const cien = r ? deCada100({ ventas: r.vendiste, costo: r.costoNeto, gastos: r.gastos, sePerdio: Math.max(-r.mercanciaNeta, 0) }) : null
     const tramos = cien ? [
         { clave: 'mercancia', rotulo: 'Se fue en mercancía', valor: cien.mercancia, barra: cien.barra.mercancia,
             color: 'color-mix(in srgb, var(--toul-text) 22%, transparent)' },
         { clave: 'gastos', rotulo: 'Se fue en gastos', valor: cien.gastos, barra: cien.barra.gastos,
             color: 'color-mix(in srgb, var(--toul-text) 55%, transparent)' },
+        ...(cien.sePerdio > 0 ? [{ clave: 'perdio', rotulo: 'Se perdió', valor: cien.sePerdio, barra: cien.barra.sePerdio,
+            color: 'color-mix(in srgb, var(--toul-error) 70%, transparent)' }] : []),
         { clave: 'quedo', rotulo: 'Te quedó', valor: cien.quedo, barra: cien.barra.quedo, color: 'var(--toul-accent)' },
     ] : []
 
@@ -679,7 +693,13 @@ function DeCadaCien({ r, cargando }: { r: ResumenReporte | null; cargando: boole
                             </div>
                         ))}
                     </div>
-                    {cien.perdida && <p className="rp-perdida">Gastaste más de lo que te dejaron las ventas</p>}
+                    {cien.perdida && (
+                        <p className="rp-perdida">
+                            {cien.sePerdio > 0
+                                ? 'Entre gastos y lo perdido se fue más de lo que dejaron las ventas'
+                                : 'Gastaste más de lo que te dejaron las ventas'}
+                        </p>
+                    )}
                 </>
             )}
         </section>

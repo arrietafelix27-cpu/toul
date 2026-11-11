@@ -2,99 +2,35 @@
 import { onlyDigits, toMoneyDigits, withThousands } from '@/lib/format/text'
 import { formatCOP } from '@/lib/utils'
 import {
-    ArrowLeft, Package, Plus, Search, Layers, ChevronRight,
-    CreditCard, CheckCircle2, Trash2, Navigation
+    ArrowLeft, Package, Search, Layers, ChevronRight,
+    CreditCard, CheckCircle2, Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AddedMark } from './AddedMark'
-import type { Product, Provider } from '@/lib/types'
 import { CuentaChips } from '@/components/movimientos/CuentaChips'
+import type { CompraEnCurso } from '@/lib/inventory/useCompra'
+import { cantidadValida, saldoPendiente, soloCantidad } from '@/lib/inventory/calculos'
+import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
+import { diaColombia } from '@/lib/periodos'
 
-// ─── Types (mirror purchase/page.tsx) ───────────────────────
-
-type Variant = { id: string; product_id: string; name: string; sale_price: number; cpp: number }
-
-type SelectedItem = {
-    itemKey: string
-    product: Product
-    variantId?: string
-    variantName?: string
-    quantity: string
-    cost: string
-}
-
-interface Props {
-    // Data
-    products: Product[]
-    variantsByProduct: Record<string, Variant[]>
-    providers: Provider[]
-    // Cart state
-    selectedItems: SelectedItem[]
-    addItem: (product: Product, variantId?: string, variantName?: string) => void
-    updateItem: (itemKey: string, field: 'quantity' | 'cost', value: string) => void
-    removeItem: (itemKey: string) => void
-    expandedInPicker: Set<string>
-    toggleExpand: (productId: string) => void
-    searchQuery: string
-    setSearchQuery: (v: string) => void
-    sortBy: 'A-Z' | 'Stock' | 'Recientes'
-    setSortBy: (v: 'A-Z' | 'Stock' | 'Recientes') => void
-    // Payment state
-    paymentMethod: 'cash' | 'credit'
-    setPaymentMethod: (v: 'cash' | 'credit') => void
-    initialPayment: string
-    setInitialPayment: (v: string) => void
-    selectedProviderId: string
-    setSelectedProviderId: (v: string) => void
-    dueDate: string
-    setDueDate: (v: string) => void
-    /** "¿Con qué pagaste?": el número de la cuenta o "Plata mía" */
-    cuenta: string | null
-    setCuenta: (v: string) => void
-    // Submit
-    subtotal: number
-    total: number
-    saving: boolean
-    onSubmit: () => void
-}
+/* La compra en PC: una sola pantalla. Cuenta, valida y guarda con la
+   misma lógica del celular (useCompra); aquí solo se dibuja. */
 
 // ─── Component ───────────────────────────────────────────────
 
-export function DesktopPurchase({
-    products, variantsByProduct, providers,
-    selectedItems, addItem, updateItem, removeItem,
-    expandedInPicker, toggleExpand, searchQuery, setSearchQuery, sortBy, setSortBy,
-    paymentMethod, setPaymentMethod,
-    initialPayment, setInitialPayment,
-    selectedProviderId, setSelectedProviderId, dueDate, setDueDate,
-    cuenta, setCuenta,
-    subtotal, total, saving, onSubmit,
-}: Props) {
-    // Abonar más de lo que vale la compra deja un saldo negativo en
-    // pantalla y el servidor lo rechaza con un error crudo
-    const abonoDemasiado = paymentMethod === 'credit' && Number(onlyDigits(initialPayment) || 0) > total
-
-    // Lo que se paga hoy tiene que decir de dónde salió
-    const pagado = paymentMethod === 'credit' ? Math.round(Number(onlyDigits(initialPayment) || 0)) : Math.round(total)
-    const faltaCuenta = pagado > 0 && !cuenta
-
-    const canSubmit = selectedItems.length > 0
-        && !(paymentMethod === 'credit' && (!selectedProviderId || !dueDate))
-        && !abonoDemasiado
-        && !faltaCuenta
-        && !saving
-
-    const productsToShow = [...products]
-        .sort((a, b) => {
-            if (sortBy === 'A-Z') return a.name.localeCompare(b.name)
-            if (sortBy === 'Stock') return a.stock - b.stock
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        })
-        .filter(p => searchQuery === '' ? true : (
-            p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (p.reference && p.reference.toLowerCase().includes(searchQuery.toLowerCase()))
-        ))
+export function DesktopPurchase({ compra }: { compra: CompraEnCurso }) {
+    const {
+        productsToShow, variantsByProduct, providers,
+        selectedItems, addItem, updateItem, removeItem,
+        expandedInPicker, toggleExpand, searchQuery, setSearchQuery, sortBy, setSortBy,
+        paymentMethod, setPaymentMethod,
+        initialPayment, setInitialPayment,
+        selectedProviderId, setSelectedProviderId, dueDate, setDueDate,
+        cuenta, setCuenta,
+        total, abono, pagado, abonoDemasiado, canSubmit, cantidadesBien, saving, guardar,
+        avisoCero, nombresEnCero, guardarIgual, cerrarAvisoCero,
+    } = compra
 
     return (
         <div className="px-8 pt-6 pb-12 max-w-6xl mx-auto">
@@ -263,16 +199,17 @@ export function DesktopPurchase({
                                         <div className="flex items-center gap-2">
                                             <div className="flex flex-col items-end">
                                                 <label className="text-[10px] uppercase font-bold tracking-wider mb-1" style={{ color: 'var(--toul-text-subtle)' }}>Cant.</label>
-                                                <input type="number" min="1" value={item.quantity}
-                                                    onChange={e => updateItem(item.itemKey, 'quantity', e.target.value)}
-                                                    className="toul-input py-1 text-sm text-right"
-                                                    style={{ width: '64px' }} />
+                                                <input type="text" inputMode="numeric" pattern="[0-9]*" value={item.quantity}
+                                                    onChange={e => updateItem(item.itemKey, 'quantity', soloCantidad(e.target.value))}
+                                                    aria-invalid={!cantidadValida(item.quantity)}
+                                                    className="toul-input py-1 text-right"
+                                                    style={{ width: '64px', ...(cantidadValida(item.quantity) ? {} : { borderColor: 'var(--toul-error)' }) }} />
                                             </div>
                                             <div className="flex flex-col items-end">
                                                 <label className="text-[10px] uppercase font-bold tracking-wider mb-1" style={{ color: 'var(--toul-text-subtle)' }}>Costo unit.</label>
                                                 <input type="text" inputMode="numeric" value={withThousands(toMoneyDigits(item.cost))}
                                                     onChange={e => updateItem(item.itemKey, 'cost', onlyDigits(e.target.value))}
-                                                    className="toul-input py-1 text-sm text-right"
+                                                    className="toul-input py-1 text-right"
                                                     style={{ width: '100px' }} />
                                             </div>
                                             <button onClick={() => removeItem(item.itemKey)}
@@ -355,7 +292,7 @@ export function DesktopPurchase({
                                     <input type="date" className="toul-input w-full"
                                         value={dueDate}
                                         onChange={(e) => setDueDate(e.target.value)}
-                                        min={new Date().toISOString().split('T')[0]} />
+                                        min={diaColombia(new Date())} />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
@@ -390,11 +327,11 @@ export function DesktopPurchase({
                             <span className="text-sm font-medium" style={{ color: 'var(--toul-text-muted)' }}>Total a pagar</span>
                             <span className="text-2xl font-bold" style={{ color: 'var(--toul-accent)' }}>{formatCOP(total)}</span>
                         </div>
-                        {paymentMethod === 'credit' && Number(initialPayment) > 0 && (
+                        {paymentMethod === 'credit' && abono > 0 && (
                             <div className="flex justify-between items-center pt-3 border-t" style={{ borderColor: 'var(--toul-border)' }}>
                                 <span className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>Saldo pendiente</span>
                                 <span className="text-sm font-bold" style={{ color: 'var(--toul-error)' }}>
-                                    {formatCOP(Math.max(0, total - Number(initialPayment)))}
+                                    {formatCOP(saldoPendiente(total, abono))}
                                 </span>
                             </div>
                         )}
@@ -404,9 +341,14 @@ export function DesktopPurchase({
                                 {paymentMethod === 'credit' && ' La deuda queda registrada con el proveedor.'}
                             </p>
                         )}
+                        {selectedItems.length > 0 && !cantidadesBien && (
+                            <p className="text-xs" style={{ color: 'var(--toul-error)', margin: 0 }}>
+                                Cada producto necesita una cantidad de 1 o más, sin decimales.
+                            </p>
+                        )}
                         <button
                             disabled={!canSubmit}
-                            onClick={onSubmit}
+                            onClick={guardar}
                             className="toul-btn-primary w-full flex items-center justify-center gap-2"
                             style={{ background: 'var(--toul-accent)', boxShadow: canSubmit ? '0 4px 16px rgba(16,185,129,0.3)' : 'none' }}>
                             {saving ? (
@@ -421,6 +363,11 @@ export function DesktopPurchase({
                     </div>
                 </div>
             </div>
+
+            <ConfirmSheet open={avisoCero} onClose={cerrarAvisoCero} onConfirm={guardarIgual}
+                title="Hay productos con costo $0"
+                message={`${nombresEnCero.join(', ')} ${nombresEnCero.length === 1 ? 'va' : 'van'} con costo $0. Si la guardas así, su costo promedio baja y la ganancia se verá más alta de lo que es.`}
+                confirmLabel="Guardar igual" cancelLabel="Revisar costos" />
         </div>
     )
 }

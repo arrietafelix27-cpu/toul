@@ -1,15 +1,16 @@
 'use client'
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { use, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import toast from 'react-hot-toast'
 import { ArrowLeft, Search, Eye, EyeOff, Check } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { formatCOP } from '@/lib/utils'
-import { useSessionContext } from '@/lib/isla/useSession'
 import { Sheet } from '@/components/isla/Sheet'
+import { ConfirmSheet } from '@/components/isla/ConfirmSheet'
 import { EASE_OUT_EMIL } from '@/components/ui'
+import { useConteo } from '@/lib/inventory/useConteo'
+import { SinInternet } from '@/components/inventory/SinInternet'
+import { diferenciasDelConteo, llaveDeConteo } from '@/lib/inventory/calculos'
 
 const CSS = `
 .cd-caja { border-radius: 16px; background: rgba(255,255,255,0.022);
@@ -17,190 +18,14 @@ const CSS = `
 .cd-fila { display: flex; align-items: center; gap: 12px; padding: 12px 12px; border-radius: 14px; }
 `
 
-const supabase = createClient()
-
-interface Row {
-    key: string
-    productId: string
-    variantId: string | null
-    name: string
-    reference: string | null
-    expected: number
-    cost: number
-}
-
-interface CountState {
-    id: string
-    status: 'open' | 'applied' | 'cancelled'
-    started_at: string
-    started_by_name: string | null
-    applied_at: string | null
-    counted_items: number
-    diff_units: number
-    diff_value: number
-    notes: string | null
-}
-
-interface AppliedItem {
-    product_id: string
-    variant_id: string | null
-    counted_qty: number
-    expected_qty: number | null
-    difference: number | null
-    unit_cost: number | null
-}
-
 export default function ConteoPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params)
-    const { data: ctx } = useSessionContext()
-
-    const [count, setCount] = useState<CountState | null>(null)
-    const [rows, setRows] = useState<Row[]>([])
-    const [counted, setCounted] = useState<Record<string, string>>({})
-    const [applied, setApplied] = useState<AppliedItem[]>([])
-    const [loading, setLoading] = useState(true)
-    const [search, setSearch] = useState('')
+    const {
+        count, rows, counted, applied, loading, sinDatos, reintentar, search, setSearch,
+        confirmOpen, setConfirmOpen, cancelOpen, setCancelOpen, saving, handleChange, apply, cancel, fotos,
+        filtered, countedRows, nameByKey,
+    } = useConteo(id)
     const [showExpected, setShowExpected] = useState(false)
-    const [confirmOpen, setConfirmOpen] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-    // Los guardados de un mismo producto van en fila, uno detrás de otro:
-    // si se escribe rápido, no se pisan ni se duplican renglones
-    const saveChains = useRef<Record<string, Promise<void>>>({})
-    const itemIdsRef = useRef<Record<string, string>>({})
-
-    // ─── Cargar conteo, catálogo y lo ya contado ──────────────
-    useEffect(() => {
-        if (!ctx) return
-        let cancelled = false
-
-        async function load() {
-            const [countRes, productsRes, variantsRes, adjRes, itemsRes] = await Promise.all([
-                supabase.from('inventory_counts').select('*').eq('id', id).single(),
-                supabase.from('products').select('id, name, reference, stock, cpp').eq('store_id', ctx!.storeId).eq('is_active', true).order('name'),
-                supabase.from('product_variants').select('id, product_id, name, cpp').eq('store_id', ctx!.storeId).eq('is_active', true),
-                supabase.from('inventory_adjustments').select('variant_id, quantity').eq('store_id', ctx!.storeId).not('variant_id', 'is', null),
-                supabase.from('inventory_count_items').select('*').eq('count_id', id),
-            ])
-            if (cancelled) return
-
-            const stockByVariant: Record<string, number> = {}
-            for (const adj of adjRes.data ?? []) {
-                if (adj.variant_id) stockByVariant[adj.variant_id] = (stockByVariant[adj.variant_id] ?? 0) + Number(adj.quantity)
-            }
-
-            const variantsByProduct: Record<string, { id: string; name: string; cpp: number }[]> = {}
-            for (const v of variantsRes.data ?? []) {
-                (variantsByProduct[v.product_id] ??= []).push(v)
-            }
-
-            const built: Row[] = []
-            for (const p of productsRes.data ?? []) {
-                const variants = variantsByProduct[p.id]
-                if (variants?.length) {
-                    for (const v of variants) {
-                        built.push({
-                            key: `${p.id}:${v.id}`, productId: p.id, variantId: v.id,
-                            name: `${p.name} · ${v.name}`, reference: p.reference,
-                            expected: Math.max(0, stockByVariant[v.id] ?? 0), cost: Number(v.cpp) || 0,
-                        })
-                    }
-                } else {
-                    built.push({
-                        key: p.id, productId: p.id, variantId: null, name: p.name, reference: p.reference,
-                        expected: Number(p.stock) || 0, cost: Number(p.cpp) || 0,
-                    })
-                }
-            }
-
-            const values: Record<string, string> = {}
-            const ids: Record<string, string> = {}
-            for (const item of itemsRes.data ?? []) {
-                const key = item.variant_id ? `${item.product_id}:${item.variant_id}` : item.product_id
-                values[key] = String(Math.round(Number(item.counted_qty)))
-                ids[key] = item.id
-            }
-
-            itemIdsRef.current = ids
-            setCount(countRes.data as CountState)
-            setApplied((itemsRes.data ?? []) as AppliedItem[])
-            setRows(built)
-            setCounted(values)
-            setLoading(false)
-        }
-
-        load()
-        return () => { cancelled = true }
-    }, [ctx, id])
-
-    // ─── Guardar cada renglón mientras se cuenta ──────────────
-    const saveRow = useCallback(async (row: Row, value: string) => {
-        if (!ctx) return
-        const qty = Number(value)
-        if (value === '' || Number.isNaN(qty) || qty < 0) return
-        const counted_qty = Math.round(qty)
-
-        const existingId = itemIdsRef.current[row.key]
-        if (existingId) {
-            const { error } = await supabase.from('inventory_count_items').update({ counted_qty }).eq('id', existingId)
-            if (error) toast.error('No se pudo guardar ese conteo')
-            return
-        }
-
-        const { data, error } = await supabase.from('inventory_count_items').insert({
-            count_id: id, store_id: ctx.storeId, product_id: row.productId,
-            variant_id: row.variantId, counted_qty,
-        }).select('id').single()
-
-        if (data) {
-            itemIdsRef.current[row.key] = data.id
-            return
-        }
-
-        // El renglón ya existía (doble guardado): se actualiza en vez de duplicar
-        if (error) {
-            let query = supabase.from('inventory_count_items').update({ counted_qty })
-                .eq('count_id', id).eq('product_id', row.productId)
-            query = row.variantId ? query.eq('variant_id', row.variantId) : query.is('variant_id', null)
-            const { error: updateError } = await query
-            if (updateError) toast.error('No se pudo guardar ese conteo')
-        }
-    }, [ctx, id])
-
-    const handleChange = (row: Row, value: string) => {
-        const clean = value.replace(/[^0-9]/g, '')
-        setCounted(prev => ({ ...prev, [row.key]: clean }))
-        clearTimeout(timers.current[row.key])
-        timers.current[row.key] = setTimeout(() => {
-            saveChains.current[row.key] = (saveChains.current[row.key] ?? Promise.resolve())
-                .then(() => saveRow(row, clean))
-                .catch(() => { /* ya se avisó al usuario */ })
-        }, 600)
-    }
-
-    async function apply() {
-        setSaving(true)
-        const { error } = await supabase.rpc('toul_apply_inventory_count', { p_count_id: id, p_notes: null })
-        setSaving(false)
-        setConfirmOpen(false)
-        if (error) { toast.error(error.message); return }
-        toast.success('Conteo aplicado. Inventario actualizado.')
-        const [countRes, itemsRes] = await Promise.all([
-            supabase.from('inventory_counts').select('*').eq('id', id).single(),
-            supabase.from('inventory_count_items').select('*').eq('count_id', id),
-        ])
-        setCount(countRes.data as CountState)
-        setApplied((itemsRes.data ?? []) as AppliedItem[])
-    }
-
-    const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase()
-        if (!q) return rows
-        return rows.filter(r => r.name.toLowerCase().includes(q) || r.reference?.toLowerCase().includes(q))
-    }, [rows, search])
-
-    const countedRows = Object.values(counted).filter(v => v !== '').length
-    const nameByKey = useMemo(() => Object.fromEntries(rows.map(r => [r.key, r.name])), [rows])
 
     if (loading) {
         return (
@@ -210,11 +35,11 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
         )
     }
 
+    if (sinDatos) return <SinInternet onRetry={reintentar} que="este conteo" />
+
     // ─── Conteo ya aplicado: resultado ────────────────────────
     if (count?.status === 'applied') {
-        const differences = applied
-            .filter(i => Number(i.difference ?? 0) !== 0)
-            .sort((a, b) => Math.abs(Number(b.difference)) - Math.abs(Number(a.difference)))
+        const differences = diferenciasDelConteo(applied)
         const diffValue = Math.round(Number(count.diff_value))
 
         return (
@@ -257,7 +82,7 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
                         <p className="toul-section-label">Diferencias</p>
                         <div className="cd-caja" style={{ padding: '4px 16px' }}>
                             {differences.map((item, i) => {
-                                const key = item.variant_id ? `${item.product_id}:${item.variant_id}` : item.product_id
+                                const key = llaveDeConteo(item.product_id, item.variant_id)
                                 const diff = Number(item.difference)
                                 return (
                                     <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--toul-divider)' : 'none' }}>
@@ -279,6 +104,28 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
                         </div>
                     </>
                 )}
+            </div>
+        )
+    }
+
+    // ─── Conteo cancelado: no tocó el inventario ──────────────
+    if (count?.status === 'cancelled') {
+        return (
+            <div className="px-4 md:px-8 py-6 pb-24 max-w-2xl mx-auto" style={{ position: 'relative' }}>
+                <div className="toul-ambient" />
+                <div className="flex items-center gap-3 mb-5" style={{ position: 'relative' }}>
+                    <Link href="/inventory/conteo" aria-label="Volver"
+                        style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ArrowLeft size={17} color="rgba(255,255,255,0.7)" />
+                    </Link>
+                    <div>
+                        <p style={{ fontSize: 13, color: 'var(--toul-text-dim)', margin: '0 0 2px' }}>Conteo</p>
+                        <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--toul-text)', margin: 0 }}>Cancelado</h1>
+                    </div>
+                </div>
+                <p style={{ fontSize: 14.5, color: 'var(--toul-text-muted)', margin: 0, lineHeight: 1.5, position: 'relative' }}>
+                    Este conteo se canceló. El inventario quedó como estaba.
+                </p>
             </div>
         )
     }
@@ -322,7 +169,9 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
                 {filtered.map(row => {
                     const value = counted[row.key] ?? ''
                     const done = value !== ''
-                    const diff = done ? Number(value) - row.expected : 0
+                    // Contra lo que decía el sistema al contarlo, si ya se guardó
+                    const sistema = fotos[row.key] ?? row.expected
+                    const diff = done ? Number(value) - sistema : 0
                     return (
                         <div key={row.key} className="cd-fila"
                             style={{
@@ -336,7 +185,7 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
                                     {row.name}
                                 </p>
                                 <p style={{ fontSize: 12, color: 'var(--toul-text-dim)', margin: '2px 0 0' }}>
-                                    {showExpected ? `Sistema: ${row.expected}` : row.reference || 'Cuenta y escribe'}
+                                    {showExpected ? `Sistema: ${sistema}` : row.reference || 'Cuenta y escribe'}
                                     {showExpected && done && diff !== 0 && (
                                         <span style={{ color: diff < 0 ? 'var(--toul-error)' : 'var(--toul-warning)', fontWeight: 600 }}>
                                             {' · '}{diff > 0 ? '+' : '−'}{Math.abs(diff)}
@@ -361,6 +210,14 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
                         </div>
                     )
                 })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 22 }}>
+                <button type="button" onClick={() => setCancelOpen(true)} disabled={saving}
+                    style={{ height: 40, padding: '0 14px', borderRadius: 12, border: 'none', background: 'none',
+                        fontSize: 13.5, fontWeight: 600, color: 'var(--toul-text-dim)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Cancelar conteo
+                </button>
             </div>
 
             {/* Barra fija para terminar */}
@@ -388,7 +245,7 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
 
             <Sheet open={confirmOpen} onClose={() => !saving && setConfirmOpen(false)}
                 title="¿Terminar el conteo?"
-                subtitle="El inventario queda en lo que contaste. Los productos que no contaste no se tocan."
+                subtitle="Se ajusta lo que no cuadró. Lo que se vendió mientras contabas no se pierde, y lo que no contaste no se toca."
                 footer={
                     <div style={{ display: 'flex', gap: 10 }}>
                         <button className="toul-btn-secondary" style={{ color: 'var(--toul-text)' }} onClick={() => setConfirmOpen(false)} disabled={saving}>Seguir contando</button>
@@ -400,6 +257,18 @@ export default function ConteoPage({ params }: { params: Promise<{ id: string }>
                     Al terminar verás los faltantes y sobrantes, en unidades y en plata.
                 </p>
             </Sheet>
+
+            <ConfirmSheet
+                open={cancelOpen}
+                onClose={() => !saving && setCancelOpen(false)}
+                onConfirm={cancel}
+                busy={saving}
+                danger
+                title="¿Cancelar el conteo?"
+                message="Lo que contaste se descarta y el inventario queda como está."
+                confirmLabel="Sí, cancelar"
+                cancelLabel="Seguir contando"
+            />
         </div>
     )
 }

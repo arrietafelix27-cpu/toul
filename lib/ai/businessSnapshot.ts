@@ -4,6 +4,7 @@ import { resumir } from '@/lib/reports/calculos'
 import { REPORTE_VACIO, type ReporteSQL } from '@/lib/reports/types'
 import { capitalizeFirst } from '@/lib/format/text'
 import { nombreCategoria } from '@/lib/types'
+import { estadoDelProducto, type EstadoStock } from '@/lib/inventory/calculos'
 
 // ─── Business Snapshot Builder ──────────────────────────────────────────────
 // Pre-fetches ALL business data and builds a structured context string
@@ -29,6 +30,7 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
         { data: rep30 },
         { data: rep90 },
         { data: repAntes },
+        { data: estadosStock, error: errorEstados },
     ] = await Promise.all([
         supabase.from('products').select('id, name, stock, sale_price, cost_price, cpp, low_stock_threshold, is_active, created_at').eq('store_id', storeId).eq('is_active', true),
         supabase.from('sales').select('id, total, created_at, payment_method, is_credit').eq('store_id', storeId).gte('created_at', daysAgo(7)),
@@ -47,6 +49,8 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
         supabase.rpc('toul_reporte', { p_desde: daysAgo(30), p_hasta: now.toISOString() }),
         supabase.rpc('toul_reporte', { p_desde: daysAgo(90), p_hasta: now.toISOString() }),
         supabase.rpc('toul_reporte', { p_desde: daysAgo(60), p_hasta: daysAgo(30) }),
+        // Agotado y por acabarse: la misma regla de Inventario y del Catálogo
+        supabase.rpc('toul_estado_stock'),
     ])
 
     // ── Compute Derived Metrics ─────────────────────────────────────────────
@@ -111,8 +115,15 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
 
     // Inventory
     const inventoryValue = Number((inventario as { value?: number } | null)?.value ?? 0)
-    const outOfStock = prods.filter(p => p.stock === 0)
-    const lowStock = prods.filter(p => p.stock > 0 && p.stock <= (p.low_stock_threshold || 5))
+    // Cada presentación por aparte, contra su mínimo; el stock negativo es agotado
+    type Unidad = { product_id: string; product_name: string; variant_name: string | null; stock: number; min_stock: number; estado: EstadoStock }
+    const unidades = (errorEstados ? [] : (estadosStock ?? [])) as Unidad[]
+    const nombreUnidad = (u: Unidad) => u.variant_name ? `${u.product_name} · ${u.variant_name}` : u.product_name
+    const outOfStock = unidades.filter(u => u.estado === 'agotado').map(u => ({ name: nombreUnidad(u), stock: Math.round(Number(u.stock)) }))
+    const lowStock = unidades.filter(u => u.estado === 'pocas').map(u => ({ name: nombreUnidad(u), stock: Math.round(Number(u.stock)), minimo: u.min_stock }))
+    const estadoDe = new Map<string, EstadoStock[]>()
+    for (const u of unidades) estadoDe.set(u.product_id, [...(estadoDe.get(u.product_id) ?? []), u.estado])
+    const productoAgotado = (id: string) => estadoDelProducto(estadoDe.get(id) ?? []) === 'agotado'
     const noRotation = prodList.filter(p => p.units === 0 && p.stock > 0)
     const trappedCapitalTotal = noRotation.reduce((s, p) => s + p.trappedCapital, 0)
 
@@ -194,7 +205,7 @@ export async function buildBusinessSnapshot(supabase: SupabaseClient, storeId: s
     if (totalDebt > rev30 * 0.5 && totalDebt > 0) signals.push(`⚠️ EXPOSICIÓN A DEUDAS: Las cuentas por cobrar ($${fmt(totalDebt)}) representan más del 50% de la facturación mensual.`)
 
     // Out of stock on top products
-    const topOutOfStock = top5Revenue.filter(p => p.stock === 0)
+    const topOutOfStock = top5Revenue.filter(p => productoAgotado(p.id))
     if (topOutOfStock.length > 0) signals.push(`🔴 QUIEBRE DE STOCK: ${topOutOfStock.map(p => p.name).join(', ')} — productos estrella sin inventario.`)
 
     // Credit sales exposure
@@ -240,6 +251,9 @@ RENTABILIDAD
 • Ganancia bruta (30d): $${fmt(grossProfit)}
 • Gastos totales (30d): $${fmt(totalExpenses)}
 • Principales gastos: ${topExpCats.map(([c, v]) => `${c}: $${fmt(v)}`).join(' | ') || 'sin gastos registrados'}
+• Mercancía perdida (30d): $${fmt(r30.mercanciaPerdida)} (dañada, perdida, robada, vencida y lo que faltó al contar, a costo)
+• Mercancía recuperada (30d): $${fmt(r30.mercanciaRecuperada)} (lo que apareció, regalos del proveedor y lo que sobró al contar, a costo)
+• Ganaste (30d): $${fmt(r30.ganaste)} (ganancia bruta − gastos − mercancía perdida + recuperada; el mismo número de Reportes)
 
 ═══════════════════════════════════════════════════
 FLUJO DE CAJA
@@ -260,8 +274,8 @@ INVENTARIO
 ═══════════════════════════════════════════════════
 • Valor total del inventario: $${fmt(inventoryValue)}
 • Total productos activos: ${prods.length}
-• Sin stock: ${outOfStock.length} productos${outOfStock.length > 0 ? ` (${outOfStock.slice(0, 5).map(p => p.name).join(', ')})` : ''}
-• Stock bajo: ${lowStock.length} productos${lowStock.length > 0 ? ` (${lowStock.slice(0, 5).map(p => `${p.name}: ${p.stock} uds`).join(', ')})` : ''}
+• Sin stock (agotado, igual que en Inventario): ${errorEstados ? 'sin dato' : `${outOfStock.length}${outOfStock.length > 0 ? ` (${outOfStock.slice(0, 5).map(p => p.name).join(', ')})` : ''}`}
+• Stock bajo (en su mínimo o menos, igual que "Por acabarse" en Inventario): ${errorEstados ? 'sin dato' : `${lowStock.length}${lowStock.length > 0 ? ` (${lowStock.slice(0, 5).map(p => `${p.name}: ${p.stock} uds, mínimo ${p.minimo}`).join(', ')})` : ''}`}
 • Sin rotación (0 ventas en 30d): ${noRotation.length} productos — capital atrapado: $${fmt(trappedCapitalTotal)}${noRotation.length > 0 ? `\n  → ${noRotation.slice(0, 5).map(p => `${p.name}: ${p.stock} uds, $${fmt(p.trappedCapital)} atrapados`).join('\n  → ')}` : ''}
 
 ═══════════════════════════════════════════════════
