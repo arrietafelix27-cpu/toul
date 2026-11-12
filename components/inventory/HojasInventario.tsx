@@ -15,6 +15,8 @@ import {
    Las hojas de Inventario: Ordenar, Filtrar y Compra sugerida.
    Ninguna calcula nada: ordenan, filtran o arman el pedido con lo
    que ya sale de lib/inventory/calculos.ts.
+   En PC, Compra sugerida va además abierta en la pantalla
+   (PanelCompraSugerida), con la misma cuenta y el mismo botón.
    ══════════════════════════════════════════════════════════════ */
 
 export const ETIQUETA_MOSTRAR: Record<Mostrar, string> = {
@@ -87,8 +89,23 @@ const CSS = `
     font-size: 14px; color: var(--toul-text-muted); }
 .hj-total b { font-size: 22px; color: var(--toul-text); letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
 
+/* Compra sugerida abierta (PC) */
+.hj-panel-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.hj-panel-titulo { font-size: 19px; font-weight: 700; letter-spacing: -0.4px; color: var(--toul-text); margin: 0; }
+.hj-panel-total { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; color: var(--toul-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hj-panel .hj-fila { gap: 11px; padding: 8px 0; border-bottom: none; }
+.hj-ver { display: block; height: 36px; padding: 0; border: none; background: none; cursor: pointer; font: inherit;
+    font-size: 15px; font-weight: 500; color: var(--toul-text-subtle); text-align: left;
+    -webkit-tap-highlight-color: transparent; transition: color 160ms ease; }
+.hj-ver:focus-visible { outline: 2px solid var(--toul-accent); outline-offset: 2px; border-radius: 8px; }
+.hj-panel .hj-cta { margin-top: 18px; }
+.hj-panel-ok { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--toul-text-muted); margin: 8px 0 0; }
+@media (hover: hover) and (pointer: fine) {
+    .hj-ver:hover { color: var(--toul-text); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .hj-pildora, .hj-cta, .hj-check, .hj-check svg, .hj-fila .hj-apaga { transition: none; }
+    .hj-pildora, .hj-cta, .hj-check, .hj-check svg, .hj-fila .hj-apaga, .hj-ver { transition: none; }
 }
 `
 
@@ -184,6 +201,86 @@ export function HojaFiltrar({
 
 /* ── Compra sugerida ─────────────────────────────────────────── */
 
+/** Lo marcado, lo que costaría y el paso a Nueva compra: lo mismo en la
+ *  hoja y en el panel de PC */
+function usePedidoSugerido(items: ParaReponer[], fuera: ReadonlySet<string>) {
+    const router = useRouter()
+    const marcados = items.filter(item => !fuera.has(llaveDeSugerida(item)))
+    const total = costoDelPedido(marcados)
+    const irACompra = () => {
+        if (marcados.length === 0) return
+        router.push(guardarPedido(lineasDelPedido(marcados)))
+    }
+    return { marcados, total, irACompra }
+}
+
+/** Una fila con su casilla: tocarla la marca o la desmarca */
+function FilaSugerida({ item, marcado, onAlternar, foto }: {
+    item: ParaReponer
+    marcado: boolean
+    onAlternar: (llave: string) => void
+    foto: number
+}) {
+    const llave = llaveDeSugerida(item)
+    return (
+        <button type="button" role="checkbox" aria-checked={marcado} className="hj-fila" onClick={() => onAlternar(llave)}>
+            <span className="hj-check"><Check size={13} strokeWidth={3} aria-hidden /></span>
+            <span className="hj-apaga" style={{ display: 'flex' }}><Thumb src={item.image} name={item.title} size={foto} radius={10} /></span>
+            <span className="hj-nombre hj-apaga">{nombreCompleto(item.title, item.subtitle)}</span>
+            <span className="hj-cuantas hj-apaga">× {item.toOrder}</span>
+        </button>
+    )
+}
+
+/** En PC, Compra sugerida abierta en la pantalla: se decide ahí mismo.
+ *  Los primeros 5; "Ver los N" abre la hoja con lo mismo marcado */
+export function PanelCompraSugerida({ items, fuera, onAlternar, onVerTodas }: {
+    items: ParaReponer[]
+    fuera: ReadonlySet<string>
+    onAlternar: (llave: string) => void
+    onVerTodas: () => void
+}) {
+    const { marcados, total, irACompra } = usePedidoSugerido(items, fuera)
+
+    if (items.length === 0) {
+        return (
+            <div className="hj-panel">
+                <style>{CSS}</style>
+                <h2 className="hj-panel-titulo">Compra sugerida</h2>
+                <p className="hj-panel-ok">
+                    <Check size={18} strokeWidth={2} style={{ color: 'var(--toul-accent)', flexShrink: 0 }} aria-hidden />
+                    No te falta nada
+                </p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="hj-panel">
+            <style>{CSS}</style>
+            <div className="hj-panel-cab">
+                <h2 className="hj-panel-titulo">Compra sugerida</h2>
+                {/* Si lo marcado no tiene costo conocido, no se inventa un $0 */}
+                {!(marcados.length > 0 && total === 0) && (
+                    <span className="hj-panel-total">{formatCOP(Math.round(total))}</span>
+                )}
+            </div>
+            <div>
+                {items.slice(0, 5).map(item => (
+                    <FilaSugerida key={llaveDeSugerida(item)} item={item} marcado={!fuera.has(llaveDeSugerida(item))}
+                        onAlternar={onAlternar} foto={36} />
+                ))}
+            </div>
+            {items.length > 5 && (
+                <button type="button" className="hj-ver" onClick={onVerTodas}>Ver los {items.length}</button>
+            )}
+            <button type="button" className="hj-cta" disabled={marcados.length === 0} onClick={irACompra}>
+                Ir a nueva compra{marcados.length > 0 ? ` · ${marcados.length}` : ''}
+            </button>
+        </div>
+    )
+}
+
 export function HojaCompraSugerida({ abierta, items, fuera, onAlternar, onCerrar }: {
     abierta: boolean
     /** Lo que está en su mínimo o se acabó, de menos a más stock */
@@ -193,14 +290,7 @@ export function HojaCompraSugerida({ abierta, items, fuera, onAlternar, onCerrar
     onAlternar: (llave: string) => void
     onCerrar: () => void
 }) {
-    const router = useRouter()
-    const marcados = items.filter(item => !fuera.has(llaveDeSugerida(item)))
-    const total = costoDelPedido(marcados)
-
-    function irACompra() {
-        if (marcados.length === 0) return
-        router.push(guardarPedido(lineasDelPedido(marcados)))
-    }
+    const { marcados, total, irACompra } = usePedidoSugerido(items, fuera)
 
     return (
         <Sheet open={abierta} onClose={onCerrar} title="Compra sugerida" width={420} subir
@@ -219,20 +309,10 @@ export function HojaCompraSugerida({ abierta, items, fuera, onAlternar, onCerrar
             }>
             <style>{CSS}</style>
             <div>
-                {items.map(item => {
-                    const llave = llaveDeSugerida(item)
-                    const marcado = !fuera.has(llave)
-                    const nombre = nombreCompleto(item.title, item.subtitle)
-                    return (
-                        <button key={llave} type="button" role="checkbox" aria-checked={marcado} className="hj-fila"
-                            onClick={() => onAlternar(llave)}>
-                            <span className="hj-check"><Check size={13} strokeWidth={3} aria-hidden /></span>
-                            <span className="hj-apaga" style={{ display: 'flex' }}><Thumb src={item.image} name={item.title} size={36} radius={10} /></span>
-                            <span className="hj-nombre hj-apaga">{nombre}</span>
-                            <span className="hj-cuantas hj-apaga">× {item.toOrder}</span>
-                        </button>
-                    )
-                })}
+                {items.map(item => (
+                    <FilaSugerida key={llaveDeSugerida(item)} item={item} marcado={!fuera.has(llaveDeSugerida(item))}
+                        onAlternar={onAlternar} foto={36} />
+                ))}
             </div>
         </Sheet>
     )

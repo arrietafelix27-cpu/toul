@@ -12,9 +12,9 @@ import { Thumb } from '@/components/ui/Thumb'
 import { SinInternet } from '@/components/ui/SinInternet'
 import { StockAdjustSheet } from '@/components/inventory/StockAdjustSheet'
 import { InventoryRow, ROW_CSS } from '@/components/inventory/InventoryRow'
-import { ETIQUETA_MOSTRAR, HojaCompraSugerida, HojaFiltrar, HojaOrdenar } from '@/components/inventory/HojasInventario'
+import { ETIQUETA_MOSTRAR, HojaCompraSugerida, HojaFiltrar, HojaOrdenar, PanelCompraSugerida } from '@/components/inventory/HojasInventario'
 import { useInventario } from '@/lib/inventory/useInventario'
-import { cuantosEnLista, verLista, type Mostrar, type Orden, type VistaDeLista } from '@/lib/inventory/calculos'
+import { cuantosEnLista, textoCosto, verLista, type Mostrar, type Orden, type VistaDeLista } from '@/lib/inventory/calculos'
 
 /* ══════════════════════════════════════════════════════════════
    Inventario.
@@ -113,11 +113,44 @@ const CSS = ROW_CSS + `
 .inv-mas { width: 100%; margin-top: 12px; height: 44px; border-radius: 14px; cursor: pointer; font-family: inherit;
     background: transparent; border: 1px dashed var(--toul-border); color: var(--toul-text-dim); font-size: 13px; font-weight: 500; }
 
-/* PC: una sola columna centrada; arriba la cifra a la izquierda y las acciones a la derecha */
+/* Pantallas medianas: una sola columna centrada; arriba la cifra a la izquierda y las acciones a la derecha */
 @media (min-width: 768px) {
     .inv { padding: 36px 40px 64px; }
     .inv-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
     .inv-acciones { display: flex; gap: 28px; margin: 0 0 4px; }
+}
+
+/* ── PC (desde 1240px: Inventario tiene 1000px al lado del menú) ──
+   Dos columnas. A la izquierda la cifra, las acciones y Compra
+   sugerida abierta; a la derecha "Tus productos" como tabla */
+.inv-sug-pc, .inv-th { display: none; }
+@media (min-width: 1240px) {
+    .inv { max-width: 1164px; padding: 36px 32px 64px; }
+    .inv-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 40px; align-items: start; }
+    .inv-top { display: block; }
+    .inv-acciones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 28px 0 0; }
+    .inv-sug-movil, .inv-hr-movil { display: none; }
+    .inv-sug-pc { display: block; }
+    .inv-der { padding-top: 10px; }
+
+    .inv-th { display: grid; grid-template-columns: minmax(0, 1fr) 76px 150px 124px; gap: 12px; align-items: end;
+        padding: 16px 0 8px; margin-bottom: 4px; border-bottom: 1px solid var(--toul-divider);
+        font-size: 12px; color: var(--toul-text-subtle); }
+    .inv-th span:not(:first-child) { text-align: right; }
+    .inv-tabla .ivr { display: grid; grid-template-columns: minmax(0, 1fr) 76px 150px 124px; gap: 12px;
+        padding-top: 7px; padding-bottom: 7px; border-radius: 12px; }
+    .inv-tabla .ivr-num { justify-content: flex-end; margin-left: 0; }
+    .inv-tabla .ivr-dato { display: block; }
+    /* Las presentaciones, metidas bajo su producto; los números siguen en su columna */
+    .inv-tabla .ivr-hijos { margin: 0 0 4px 31px; padding-left: 0; }
+    .inv-tabla .ivr-hijos .ivr { width: calc(100% + 10px); margin-left: 0; padding-top: 7px; padding-bottom: 7px;
+        border-radius: 0 12px 12px 0; }
+}
+/* La columna izquierda se queda fija al bajar solo si cabe entera
+   (mide unos 740px con 5 productos y "Ver los N"): en una pantalla
+   bajita, el botón verde quedaría escondido */
+@media (min-width: 1240px) and (min-height: 800px) {
+    .inv-izq { position: sticky; top: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -170,6 +203,8 @@ export default function InventoryPage() {
 
     const cerrarHoja = useCallback(() => setHoja(null), [])
     const abrirSugerida = useCallback(() => { setFuera(new Set()); setHoja('sugerida') }, [])
+    // En PC la hoja se abre desde el panel con lo mismo que ya se marcó ahí
+    const verTodasSugeridas = useCallback(() => setHoja('sugerida'), [])
     const alternarSugerida = useCallback((llave: string) => {
         setFuera(prev => {
             const next = new Set(prev)
@@ -202,158 +237,181 @@ export default function InventoryPage() {
             <style>{CSS}</style>
             <div className="toul-ambient" />
 
-            <h1 className="inv-titulo">Inventario</h1>
+            <div className="inv-grid">
+                <div className="inv-izq">
+                    <h1 className="inv-titulo">Inventario</h1>
 
-            {/* ── Tienes en mercancía ── */}
-            <div className="inv-top">
-                <div>
-                    <p className="inv-etiqueta">Tienes en mercancía</p>
-                    {overview ? (
-                        <>
-                            <p className="inv-cifra">
-                                <Cifra valor={aVenta ? overview.retailValue : overview.value} aVenta={aVenta} />
-                            </p>
-                            <div className="inv-seg" data-venta={aVenta}>
-                                <span className="inv-seg-pildora" aria-hidden />
-                                <button type="button" aria-pressed={!aVenta} onClick={() => setAVenta(false)}>A costo</button>
-                                <button type="button" aria-pressed={aVenta} onClick={() => setAVenta(true)}>A precio de venta</button>
+                    {/* ── Tienes en mercancía ── */}
+                    <div className="inv-top">
+                        <div>
+                            <p className="inv-etiqueta">Tienes en mercancía</p>
+                            {overview ? (
+                                <>
+                                    <p className="inv-cifra">
+                                        <Cifra valor={aVenta ? overview.retailValue : overview.value} aVenta={aVenta} />
+                                    </p>
+                                    <div className="inv-seg" data-venta={aVenta}>
+                                        <span className="inv-seg-pildora" aria-hidden />
+                                        <button type="button" aria-pressed={!aVenta} onClick={() => setAVenta(false)}>A costo</button>
+                                        <button type="button" aria-pressed={aVenta} onClick={() => setAVenta(true)}>A precio de venta</button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 6 }}>
+                                    <Skeleton height="46px" width="230px" className="rounded-xl" />
+                                    <Skeleton height="31px" width="200px" className="rounded-full" />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="inv-acciones">
+                            <Link href="/inventory/purchase" className="inv-accion">
+                                <span className="inv-circulo"><ShoppingBag size={22} strokeWidth={1.6} /></span>
+                                Comprar
+                            </Link>
+                            <Link href="/inventory/conteo" className="inv-accion">
+                                <span className="inv-circulo"><ClipboardCheck size={22} strokeWidth={1.6} /></span>
+                                Contar
+                            </Link>
+                            <button type="button" className="inv-accion" onClick={() => setAdjustOpen(true)}>
+                                <span className="inv-circulo"><SlidersHorizontal size={22} strokeWidth={1.6} /></span>
+                                Ajustar
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr className="inv-hr" />
+
+                    {/* ── Compra sugerida: en PC abierta; en celular, una fila que abre la hoja ── */}
+                    <div className="inv-sug-pc">
+                        {!overview ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <Skeleton height="26px" width="180px" className="rounded-lg" />
+                                {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height="36px" className="rounded-xl" />)}
                             </div>
-                        </>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 6 }}>
-                            <Skeleton height="46px" width="230px" className="rounded-xl" />
-                            <Skeleton height="31px" width="200px" className="rounded-full" />
+                        ) : (
+                            <PanelCompraSugerida items={reorder} fuera={fuera} onAlternar={alternarSugerida} onVerTodas={verTodasSugeridas} />
+                        )}
+                    </div>
+                    <div className="inv-sug-movil">
+                        {!overview ? (
+                            <Skeleton height="36px" className="rounded-xl" />
+                        ) : reorder.length === 0 ? (
+                            <p className="inv-ok">
+                                <Check size={18} strokeWidth={2} style={{ color: 'var(--toul-accent)', flexShrink: 0 }} />
+                                No te falta nada
+                            </p>
+                        ) : (
+                            <button type="button" className="inv-sug" onClick={abrirSugerida}>
+                                <span className="inv-pila" aria-hidden>
+                                    {reorder.slice(0, 3).map(item => (
+                                        <span key={`${item.kind}-${item.id}`}><Thumb src={item.image} name={item.title} size={32} radius={10} /></span>
+                                    ))}
+                                </span>
+                                <span style={{ flex: 1, minWidth: 0 }}>
+                                    <span className="inv-sug-titulo">Compra sugerida</span>
+                                    <span className="inv-sug-linea">
+                                        {reorder.length} {reorder.length === 1 ? 'producto' : 'productos'}
+                                        {totalSugerido > 0 ? ` · ${formatCOP(Math.round(totalSugerido))}` : ''}
+                                    </span>
+                                </span>
+                                <ChevronRight size={18} strokeWidth={1.8} style={{ color: 'var(--toul-text-dim)', flexShrink: 0 }} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <hr className="inv-hr inv-hr-movil" />
+
+                {/* ── Tus productos: en PC, una tabla ── */}
+                <section className="inv-der">
+                    <h2 className="inv-sub">Tus productos</h2>
+                    <div className="inv-tools">
+                        <div className="inv-buscar">
+                            <Search size={17} strokeWidth={1.8} />
+                            <input type="search" placeholder="¿Lo tienes? Búscalo aquí" value={vista.busqueda}
+                                enterKeyHint="search" autoComplete="off" aria-label="Buscar producto"
+                                onChange={event => buscar(event.target.value)} />
+                        </div>
+                        <button type="button" className="inv-ib" aria-label="Ordenar" data-on={vista.orden !== 'nombre'}
+                            onClick={() => setHoja('ordenar')}>
+                            <ArrowUpDown size={19} strokeWidth={1.8} />
+                        </button>
+                        <button type="button" className="inv-ib" aria-label="Filtrar" data-on={conFiltro}
+                            onClick={() => setHoja('filtrar')}>
+                            <ListFilter size={19} strokeWidth={2} />
+                        </button>
+                    </div>
+
+                    {/* Con un filtro puesto se ve cuál es, para que nadie crea que se le perdieron productos */}
+                    {conFiltro && (
+                        <div className="inv-chips">
+                            {vista.mostrar !== 'todos' && (
+                                <button type="button" className="inv-chip" onClick={() => cambiarVista({ mostrar: 'todos' })}
+                                    aria-label={`Quitar filtro ${ETIQUETA_MOSTRAR[vista.mostrar]}`}>
+                                    {ETIQUETA_MOSTRAR[vista.mostrar]} <X size={13} strokeWidth={2.4} />
+                                </button>
+                            )}
+                            {nombreCategoria && (
+                                <button type="button" className="inv-chip" onClick={() => cambiarVista({ categoria: null })}
+                                    aria-label={`Quitar filtro ${nombreCategoria}`}>
+                                    {nombreCategoria} <X size={13} strokeWidth={2.4} />
+                                </button>
+                            )}
                         </div>
                     )}
-                </div>
 
-                <div className="inv-acciones">
-                    <Link href="/inventory/purchase" className="inv-accion">
-                        <span className="inv-circulo"><ShoppingBag size={22} strokeWidth={1.6} /></span>
-                        Comprar
-                    </Link>
-                    <Link href="/inventory/conteo" className="inv-accion">
-                        <span className="inv-circulo"><ClipboardCheck size={22} strokeWidth={1.6} /></span>
-                        Contar
-                    </Link>
-                    <button type="button" className="inv-accion" onClick={() => setAdjustOpen(true)}>
-                        <span className="inv-circulo"><SlidersHorizontal size={22} strokeWidth={1.6} /></span>
-                        Ajustar
-                    </button>
-                </div>
-            </div>
-
-            <hr className="inv-hr" />
-
-            {/* ── Compra sugerida ── */}
-            {!overview ? (
-                <Skeleton height="36px" className="rounded-xl" />
-            ) : reorder.length === 0 ? (
-                <p className="inv-ok">
-                    <Check size={18} strokeWidth={2} style={{ color: 'var(--toul-accent)', flexShrink: 0 }} />
-                    No te falta nada
-                </p>
-            ) : (
-                <button type="button" className="inv-sug" onClick={abrirSugerida}>
-                    <span className="inv-pila" aria-hidden>
-                        {reorder.slice(0, 3).map(item => (
-                            <span key={`${item.kind}-${item.id}`}><Thumb src={item.image} name={item.title} size={32} radius={10} /></span>
-                        ))}
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                        <span className="inv-sug-titulo">Compra sugerida</span>
-                        <span className="inv-sug-linea">
-                            {reorder.length} {reorder.length === 1 ? 'producto' : 'productos'}
-                            {totalSugerido > 0 ? ` · ${formatCOP(Math.round(totalSugerido))}` : ''}
-                        </span>
-                    </span>
-                    <ChevronRight size={18} strokeWidth={1.8} style={{ color: 'var(--toul-text-dim)', flexShrink: 0 }} />
-                </button>
-            )}
-
-            <hr className="inv-hr" />
-
-            {/* ── Tus productos ── */}
-            <section>
-                <h2 className="inv-sub">Tus productos</h2>
-                <div className="inv-tools">
-                    <div className="inv-buscar">
-                        <Search size={17} strokeWidth={1.8} />
-                        <input type="search" placeholder="¿Lo tienes? Búscalo aquí" value={vista.busqueda}
-                            enterKeyHint="search" autoComplete="off" aria-label="Buscar producto"
-                            onChange={event => buscar(event.target.value)} />
-                    </div>
-                    <button type="button" className="inv-ib" aria-label="Ordenar" data-on={vista.orden !== 'nombre'}
-                        onClick={() => setHoja('ordenar')}>
-                        <ArrowUpDown size={19} strokeWidth={1.8} />
-                    </button>
-                    <button type="button" className="inv-ib" aria-label="Filtrar" data-on={conFiltro}
-                        onClick={() => setHoja('filtrar')}>
-                        <ListFilter size={19} strokeWidth={2} />
-                    </button>
-                </div>
-
-                {/* Con un filtro puesto se ve cuál es, para que nadie crea que se le perdieron productos */}
-                {conFiltro && (
-                    <div className="inv-chips">
-                        {vista.mostrar !== 'todos' && (
-                            <button type="button" className="inv-chip" onClick={() => cambiarVista({ mostrar: 'todos' })}
-                                aria-label={`Quitar filtro ${ETIQUETA_MOSTRAR[vista.mostrar]}`}>
-                                {ETIQUETA_MOSTRAR[vista.mostrar]} <X size={13} strokeWidth={2.4} />
-                            </button>
-                        )}
-                        {nombreCategoria && (
-                            <button type="button" className="inv-chip" onClick={() => cambiarVista({ categoria: null })}
-                                aria-label={`Quitar filtro ${nombreCategoria}`}>
-                                {nombreCategoria} <X size={13} strokeWidth={2.4} />
-                            </button>
-                        )}
-                    </div>
-                )}
-
-                {isLoading || !resultado || !lista ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
-                        {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height="50px" className="rounded-2xl" />)}
-                    </div>
-                ) : lista.productos.length === 0 ? (
-                    <p className="inv-vacio">Todavía no tienes productos.</p>
-                ) : cuantosEnLista(resultado) === 0 ? (
-                    <p className="inv-vacio">{vista.busqueda.trim() ? 'No encontramos nada con eso.' : 'No hay productos con este filtro.'}</p>
-                ) : (
-                    <>
-                        <div key={ronda} className={`inv-lista ivr-lista${animar ? ' an' : ''}`}>
-                            {resultado.agrupada
-                                ? resultado.productos.slice(0, limite).map((producto, i) => producto.conPresentaciones ? (
-                                    <div key={producto.id}>
-                                        <InventoryRow onClick={() => alternar(producto.id)} image={producto.imagen} name={producto.nombre}
-                                            presentaciones={producto.unidades.length} stock={producto.stock} estado={producto.estado}
-                                            abierto={abiertos.has(producto.id)} delay={i} />
-                                        {abiertos.has(producto.id) && (
-                                            <div className="ivr-hijos">
-                                                {producto.unidades.map(u => (
-                                                    <InventoryRow key={u.key} href={u.href} name={u.presentacion ?? u.nombre}
-                                                        stock={u.stock} estado={u.estado} hijo />
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <InventoryRow key={producto.id} href={producto.unidades[0].href} image={producto.imagen}
-                                        name={producto.nombre} stock={producto.stock} estado={producto.estado} delay={i} />
-                                ))
-                                : resultado.unidades.slice(0, limite).map((u, i) => (
-                                    <InventoryRow key={u.key} href={u.href} image={u.imagen} name={u.nombre}
-                                        stock={u.stock} estado={u.estado} delay={i} />
-                                ))}
+                    {isLoading || !resultado || !lista ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+                            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height="50px" className="rounded-2xl" />)}
                         </div>
-                        {cuantosEnLista(resultado) > limite && (
-                            <button type="button" className="inv-mas" onClick={() => { setAnimar(false); setLimite(l => l + POR_PAGINA) }}>
-                                Ver más productos
-                            </button>
-                        )}
-                    </>
-                )}
-            </section>
+                    ) : lista.productos.length === 0 ? (
+                        <p className="inv-vacio">Todavía no tienes productos.</p>
+                    ) : cuantosEnLista(resultado) === 0 ? (
+                        <p className="inv-vacio">{vista.busqueda.trim() ? 'No encontramos nada con eso.' : 'No hay productos con este filtro.'}</p>
+                    ) : (
+                        <div className="inv-tabla">
+                            <div className="inv-th" aria-hidden>
+                                <span>Producto</span><span>Unidades</span><span>Costo c/u</span><span>Plata en el producto</span>
+                            </div>
+                            <div key={ronda} className={`inv-lista ivr-lista${animar ? ' an' : ''}`}>
+                                {resultado.agrupada
+                                    ? resultado.productos.slice(0, limite).map((producto, i) => producto.conPresentaciones ? (
+                                        <div key={producto.id}>
+                                            <InventoryRow onClick={() => alternar(producto.id)} image={producto.imagen} name={producto.nombre}
+                                                presentaciones={producto.unidades.length} stock={producto.stock} estado={producto.estado}
+                                                abierto={abiertos.has(producto.id)} delay={i}
+                                                costo={textoCosto(producto.costoMin, producto.costoMax, formatCOP)} plata={formatCOP(producto.plata)} />
+                                            {abiertos.has(producto.id) && (
+                                                <div className="ivr-hijos">
+                                                    {producto.unidades.map(u => (
+                                                        <InventoryRow key={u.key} href={u.href} name={u.presentacion ?? u.nombre}
+                                                            stock={u.stock} estado={u.estado} hijo
+                                                            costo={formatCOP(u.costo)} plata={formatCOP(u.plata)} />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <InventoryRow key={producto.id} href={producto.unidades[0].href} image={producto.imagen}
+                                            name={producto.nombre} stock={producto.stock} estado={producto.estado} delay={i}
+                                            costo={formatCOP(producto.unidades[0].costo)} plata={formatCOP(producto.plata)} />
+                                    ))
+                                    : resultado.unidades.slice(0, limite).map((u, i) => (
+                                        <InventoryRow key={u.key} href={u.href} image={u.imagen} name={u.nombre}
+                                            stock={u.stock} estado={u.estado} delay={i}
+                                            costo={formatCOP(u.costo)} plata={formatCOP(u.plata)} />
+                                    ))}
+                            </div>
+                            {cuantosEnLista(resultado) > limite && (
+                                <button type="button" className="inv-mas" onClick={() => { setAnimar(false); setLimite(l => l + POR_PAGINA) }}>
+                                    Ver más productos
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </section>
+            </div>
 
             {storeId && (
                 <StockAdjustSheet open={adjustOpen} storeId={storeId} onClose={cerrarAjuste} onDone={refresh} />

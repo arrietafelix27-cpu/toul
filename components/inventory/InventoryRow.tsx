@@ -26,6 +26,7 @@ export const ROW_CSS = `
     transition: opacity 150ms ease, background-color 160ms ease; }
 .ivr:active { opacity: 0.6; }
 .ivr:focus-visible { outline: 2px solid var(--toul-accent); outline-offset: -2px; }
+.ivr-prod { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
 .ivr-nombre { flex: 1; min-width: 0; }
 .ivr-titulo { display: block; font-size: 15px; font-weight: 500; letter-spacing: -0.01em;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -34,6 +35,9 @@ export const ROW_CSS = `
     font-size: 17px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .ivr-caret { color: var(--toul-text-dim); transition: transform 250ms cubic-bezier(0.23, 1, 0.32, 1); }
 .ivr-caret[data-open="true"] { transform: rotate(180deg); }
+/* "Costo c/u" y "Plata en el producto": solo en la tabla de PC (la pantalla las muestra) */
+.ivr-dato { display: none; text-align: right; white-space: nowrap; font-size: 14.5px; font-variant-numeric: tabular-nums;
+    color: color-mix(in srgb, var(--toul-text) 78%, transparent); }
 
 /* Las presentaciones de un producto abierto, colgadas de una línea */
 .ivr-hijos { margin: 0 0 4px 21px; padding-left: 21px; border-left: 1px solid var(--toul-divider);
@@ -56,7 +60,7 @@ export const ROW_CSS = `
 `
 
 export function InventoryRow({
-    href, onClick, image, name, presentaciones, stock, estado, abierto, delay = 0, hijo = false,
+    href, onClick, image, name, presentaciones, stock, estado, abierto, delay = 0, hijo = false, costo, plata,
 }: {
     href?: string
     onClick?: () => void
@@ -70,19 +74,27 @@ export function InventoryRow({
     delay?: number
     /** Una presentación dentro de un producto abierto: sin foto */
     hijo?: boolean
+    /** Tabla de PC: "Costo c/u" ya escrito ("$60.000" o "$60.000 – $85.000") */
+    costo?: string
+    /** Tabla de PC: "Plata en el producto" ya escrita */
+    plata?: string
 }) {
     const conPresentaciones = presentaciones !== undefined
     const dentro = (
         <>
-            {!hijo && <Thumb src={image} name={name} size={42} radius={12} />}
-            <span className="ivr-nombre">
-                <span className="ivr-titulo">{name}</span>
-                {conPresentaciones && <span className="ivr-sub">{presentaciones} presentaciones</span>}
+            <span className="ivr-prod">
+                {!hijo && <Thumb src={image} name={name} size={42} radius={12} />}
+                <span className="ivr-nombre">
+                    <span className="ivr-titulo">{name}</span>
+                    {conPresentaciones && <span className="ivr-sub">{presentaciones} presentaciones</span>}
+                </span>
             </span>
             <span className="ivr-num" style={{ color: colorDeEstado(estado) }}>
                 {Math.round(stock)}
                 {conPresentaciones && <ChevronDown size={16} strokeWidth={2} className="ivr-caret" data-open={abierto} aria-hidden />}
             </span>
+            {costo !== undefined && <span className="ivr-dato">{costo}</span>}
+            {plata !== undefined && <span className="ivr-dato">{plata}</span>}
         </>
     )
     const estilo = { animationDelay: `${Math.min(delay, 10) * 30}ms` }

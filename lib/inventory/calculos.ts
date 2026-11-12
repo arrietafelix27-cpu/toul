@@ -368,6 +368,8 @@ export interface UnidadDeStock {
     reference: string | null
     image_url: string | null
     stock: number
+    /** El costo promedio de cada una (cpp), el mismo de "Te cuesta" */
+    cost?: number | null
     sold_30d: number
     estado: EstadoStock
 }
@@ -398,6 +400,10 @@ export interface UnidadEnLista {
     vendidas30: number
     estado: EstadoStock
     href: string
+    /** "Costo c/u": el costo promedio */
+    costo: number
+    /** "Plata en el producto": lo que hay por lo que costó (lo negativo no cuenta) */
+    plata: number
 }
 
 export interface ProductoEnLista {
@@ -411,6 +417,11 @@ export interface ProductoEnLista {
     stock: number
     vendidas30: number
     estado: EstadoStock
+    /** El costo más bajo y el más alto de sus presentaciones (iguales si no tiene) */
+    costoMin: number
+    costoMax: number
+    /** La plata de todas sus presentaciones */
+    plata: number
 }
 
 export type Orden = 'nombre' | 'menos' | 'mas' | 'vendidos'
@@ -456,7 +467,10 @@ export function armarLista(unidades: UnidadDeStock[], fichas: FichaDeProducto[])
             vendidas30: Number(u.sold_30d) || 0,
             estado: u.estado,
             href: enlaceDeStock(u.kind, u.id),
+            costo: Number(u.cost) || 0,
+            plata: plataEnProducto([{ stock: u.stock, cpp: u.cost ?? null }]),
         }))
+        const costos = filas.map(u => u.costo)
         lista.push({
             id: productId,
             nombre: suyas[0].product_name,
@@ -468,9 +482,18 @@ export function armarLista(unidades: UnidadDeStock[], fichas: FichaDeProducto[])
             stock: stockDeProducto(conPresentaciones ? filas : [], filas[0].stock),
             vendidas30: filas.reduce((sum, u) => sum + u.vendidas30, 0),
             estado: estadoDelProducto(filas.map(u => u.estado)) ?? 'bien',
+            costoMin: Math.min(...costos),
+            costoMax: Math.max(...costos),
+            plata: plataEnProducto(ordenadas.map(u => ({ stock: u.stock, cpp: u.cost ?? null }))),
         })
     }
     return lista
+}
+
+/** "Costo c/u" de un producto: "$60.000" o, si sus presentaciones cuestan
+ *  distinto, "$60.000 – $85.000" */
+export function textoCosto(minimo: number, maximo: number, dinero: Dinero): string {
+    return Math.round(minimo) === Math.round(maximo) ? dinero(minimo) : `${dinero(minimo)} – ${dinero(maximo)}`
 }
 
 /** Lo que está en "Quietos" (toul_inventory_overview), con la llave de la lista */

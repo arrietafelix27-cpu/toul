@@ -1,6 +1,6 @@
 # TOUL — Estado actual del proyecto
 
-*Última actualización: 11 de noviembre de 2026 (TOUL para redes: punto físico en pausa y sin "Plata mía")*
+*Última actualización: 12 de noviembre de 2026 (Inventario en PC a dos columnas y la plata sin espacio en toda la app)*
 
 ---
 
@@ -388,6 +388,16 @@ Modals base rediseñados:
 ⚠️ **Acción requerida antes de publicar:** ejecutar `supabase/rpc/process_purchase.sql` en el SQL Editor de Supabase. Sin eso, las compras fallan con la versión nueva del código.
 
 `npm run build` pasa sin errores.
+
+### 12 de noviembre de 2026 — Inventario en PC a dos columnas y la plata sin espacio ✅ publicado
+
+Con el prototipo de Félix (vista "PC" de `diseno/inventario/inventario.html`). Sin cambios en la base de datos; ningún número cambia.
+
+- **Inventario en PC (desde 1240 px de ancho)** (`app/(app)/inventory/page.tsx`): dos columnas, máximo ~1100 px. Izquierda (340 px): título, "Tienes en mercancía" con A costo / A precio de venta, Comprar / Contar / Ajustar en una fila y la **Compra sugerida abierta** (`PanelCompraSugerida` en `HojasInventario.tsx`): total arriba, los primeros 5 con casilla, foto y "× N", "Ver los N" si hay más (abre la hoja de siempre), "Ir a nueva compra · N" solo con los marcados; sin faltantes, "No te falta nada". Las casillas son las mismas de la hoja (el estado vive en la página), con las mismas cantidades y total. La columna izquierda se queda fija al bajar solo si la pantalla mide 800 px de alto o más. Derecha: "Tus productos" con buscar, Ordenar y Filtrar, y una tabla Producto · Unidades · Costo c/u · Plata en el producto (números a la derecha, mismos colores de unidades). Con presentaciones: "N presentaciones", el rango de costos ("$50.000 – $70.000") y la plata total; al abrir, las presentaciones van en filas con sangría
+- **Celular y pantallas medianas, sin cambios**: medido contra la foto de antes a 375 y 1024 px, 48 de 48 elementos en el mismo sitio
+- **Cuentas** (`lib/inventory/calculos.ts`): cada fila trae `costo` (el costo promedio, el mismo "Te cuesta" del detalle) y `plata` (`plataEnProducto`, el mismo "Plata en este producto"); `textoCosto` arma "$X" o "$X – $Y". `toul_estado_stock` ya traía el costo. Prueba nueva en `calculos.test.ts`
+- **La plata sin espacio en toda la app** (`lib/utils.ts`): `formatCOP` da "$120.000" (antes "$ 120.000") y `formatPrecio` usa lo mismo. Cambia en todas las pantallas con plata y en los recordatorios de cobro por WhatsApp (clientes, proveedores, pendientes). El comprobante de WhatsApp ya salía sin espacio y queda igual. Catálogo público: los precios quedan un carácter más cortos; probado con tarjetas de ejemplo a 375 y 320 px, sin textos cortados
+- Pruebas: cálculos 96/96 en 4 zonas horarias, base de datos OK, tipos, lint y `npm run build` sin errores
 
 ### 11 de noviembre de 2026 — Inventario Parte 2: rediseño ✅ publicado y desplegado (Félix corrió `deploy_minimo_exacto.sql` el 11 de noviembre)
 

@@ -14,12 +14,12 @@ import {
     minimoAutomatico, pagoDeCompra, paraReponer, presentacionesPorProducto, productosParaElegir, ritmoSemanal,
     saldoPendiente, soloCantidad, stockDeProducto, stockPorPresentacion, textoContar, textoQuieto, totalDeCompra, unidadesDeCompra, valorQuieto,
     vendidasEn30, yaContado, type Alerta, type Quieto, type ResumenInventario,
-    armarLista, coincideUnidad, cuantosEnLista, cuantosPorMostrar, llavesQuietas, ordenarPor, verLista,
+    armarLista, coincideUnidad, cuantosEnLista, cuantosPorMostrar, llavesQuietas, ordenarPor, textoCosto, verLista,
     type UnidadDeStock, type VistaDeLista,
     DIAS_QUIETO, diasSinVenderse, plataEnProducto, resumenDelDetalle, textoTeDura, type UnidadDelDetalle,
 } from './calculos.ts'
 
-// Igual que formatCOP: "$ 120.000" (es-CO)
+// El formato de Colombia ("$ 120.000"); los textos esperados se arman con este mismo
 const dinero = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 
 const alerta = (parcial: Partial<Alerta>): Alerta => ({
@@ -490,6 +490,45 @@ test('Tus productos: ordenar, filtrar y buscar', () => {
     const antes = lista.map(p => p.id).join()
     ordenarPor(lista, 'mas')
     assert.equal(lista.map(p => p.id).join(), antes)
+})
+
+test('Tus productos en PC: "Costo c/u" y "Plata en el producto", con la cuenta del detalle', () => {
+    const lista = armarLista([
+        unidad({ kind: 'presentacion', id: 'c200', product_id: 'carne', variant_id: 'c200', product_name: 'carneguey', variant_name: '200ml', stock: 5, cost: 85_000 }),
+        unidad({ kind: 'presentacion', id: 'c100', product_id: 'carne', variant_id: 'c100', product_name: 'carneguey', variant_name: '100ml', stock: 0, cost: 60_000 }),
+        unidad({ id: 'xxx', product_id: 'xxx', product_name: 'xxx', stock: 2, cost: 100_000 }),
+        unidad({ id: 'debe', product_id: 'debe', product_name: 'Debe', stock: -3, cost: 10_000 }),
+        unidad({ id: 'sin', product_id: 'sin', product_name: 'Sin costo', stock: 4, cost: null }),
+        unidad({ kind: 'presentacion', id: 'i1', product_id: 'igual', variant_id: 'i1', product_name: 'Igual', variant_name: 'S', stock: 1, cost: 20_000.4 }),
+        unidad({ kind: 'presentacion', id: 'i2', product_id: 'igual', variant_id: 'i2', product_name: 'Igual', variant_name: 'M', stock: 1, cost: 20_000 }),
+    ], [])
+    const p = (id: string) => lista.find(x => x.id === id)!
+
+    // Cada presentación con su costo y su plata
+    assert.deepEqual(p('carne').unidades.map(u => [u.presentacion, u.costo, u.plata]),
+        [['100ml', 60_000, 0], ['200ml', 85_000, 425_000]])
+    // El producto: el rango de costos y la plata de todas sus presentaciones
+    assert.equal(p('carne').costoMin, 60_000)
+    assert.equal(p('carne').costoMax, 85_000)
+    assert.equal(p('carne').plata, 425_000)
+    assert.equal(textoCosto(p('carne').costoMin, p('carne').costoMax, dinero), `${dinero(60_000)} – ${dinero(85_000)}`)
+    // La misma cuenta de "Plata en este producto" en el detalle
+    assert.equal(p('carne').plata, plataEnProducto([{ stock: 5, cpp: 85_000 }, { stock: 0, cpp: 60_000 }]))
+    // Sin presentaciones: un solo costo
+    assert.equal(textoCosto(p('xxx').costoMin, p('xxx').costoMax, dinero), dinero(100_000))
+    assert.equal(p('xxx').plata, 200_000)
+    assert.equal(p('xxx').unidades[0].plata, 200_000)
+    // Lo que está en negativo no es plata, igual que en "Tienes en mercancía"
+    assert.equal(p('debe').plata, 0)
+    assert.equal(p('debe').unidades[0].plata, 0)
+    assert.equal(p('debe').unidades[0].costo, 10_000)
+    // Sin costo conocido: cero, como en el detalle
+    assert.equal(p('sin').unidades[0].costo, 0)
+    assert.equal(p('sin').plata, 0)
+    // Si al redondear cuestan lo mismo, un solo costo y no "$20.000 – $20.000"
+    assert.equal(textoCosto(p('igual').costoMin, p('igual').costoMax, dinero), dinero(20_000))
+    // Sin costos en la lista (las pruebas de antes): nada se rompe
+    assert.deepEqual([bodega()[0].costoMin, bodega()[0].plata], [0, 0])
 })
 
 test('Detalle: la línea de estado y "Comprar N" suman lo mismo que Compra sugerida', () => {

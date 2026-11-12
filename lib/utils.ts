@@ -7,18 +7,23 @@
  *
  * Cuando el dato no llegó —una consulta que falló, un campo que la base
  * todavía no devuelve— antes salía "$ NaN" en pantalla. Ahora sale una
- * raya: decir "no sé" es honesto, decir "$ 0" sería mentir.
+ * raya: decir "no sé" es honesto, decir "$0" sería mentir.
  * Un null sí vale cero: así lo guarda la base cuando no hay plata.
+ *
+ * Sin espacio después del signo, en toda la app: "$2.497.600", no
+ * "$ 2.497.600" (el formato de Colombia mete un espacio que no se parte)
  */
+const PESOS = new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+})
+
 export function formatCOP(amount: number | null | undefined): string {
     const valor = Number(amount)
     if (!Number.isFinite(valor)) return '—'
-    return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(Math.round(valor))
+    return PESOS.format(Math.round(valor)).replace(/\s/g, '')
 }
 
 /** Format percentage change */
@@ -33,9 +38,10 @@ export function getPeriodLabel(period: 'today' | 'week' | 'month' | 'total' | 'c
     return map[period]
 }
 
-/** "$200.000": el Inicio lo muestra sin el espacio que deja el formato de Colombia */
+/** "$200.000": hoy es lo mismo que formatCOP (ya no deja espacio); se queda
+ *  porque Inicio, Reportes y Movimientos lo usan */
 export function formatPrecio(amount: number | null | undefined): string {
-    return formatCOP(amount).replace(/\s/g, '')
+    return formatCOP(amount)
 }
 
 /** Desde y hasta de cada periodo, en hora de Colombia: vive en lib/periodos */
