@@ -169,9 +169,12 @@ export function lineasDelPedido(items: ParaReponer[]): { productId: string; vari
 
 /* ── El mínimo y el estado ──────────────────────────────────── */
 
-/** Lo que se vende en tus días de respaldo, y nunca menos de 1 */
+/** Lo que se vende en tus días de respaldo, y nunca menos de 1.
+ *  Multiplica antes de dividir, igual que la base (toul_estado_stock):
+ *  dividir primero deja restos como 31,000000000000004 y el mínimo
+ *  saldría con 1 de más. */
 export function minimoAutomatico(vendidas30: number, respaldo: number): number {
-    return Math.max(Math.ceil((vendidas30 / 30) * respaldo), 1)
+    return Math.max(Math.ceil((vendidas30 * respaldo) / 30), 1)
 }
 
 export type EstadoStock = 'agotado' | 'pocas' | 'bien'
@@ -351,6 +354,260 @@ export function presentacionesPorProducto<T extends { product_id: string }>(pres
     return mapa
 }
 
+/* ── "Tus productos": la lista con la regla única ────────────── */
+
+/** Una fila de toul_estado_stock: cada presentación y cada producto sin
+ *  presentaciones, con su estado ya decidido por la base */
+export interface UnidadDeStock {
+    kind: Clase
+    id: string
+    product_id: string
+    variant_id: string | null
+    product_name: string
+    variant_name: string | null
+    reference: string | null
+    image_url: string | null
+    stock: number
+    sold_30d: number
+    estado: EstadoStock
+}
+
+/** Lo que la lista necesita del producto y la regla no trae */
+export interface FichaDeProducto {
+    id: string
+    images: string[] | null
+    image_url: string | null
+    category_id: string | null
+}
+
+export interface UnidadEnLista {
+    /** `${kind}-${id}`, la misma llave de Quietos */
+    key: string
+    id: string
+    kind: Clase
+    productId: string
+    producto: string
+    /** Solo la presentación ("100ml"), para dentro del producto abierto */
+    presentacion: string | null
+    /** "carneguey · 100ml" */
+    nombre: string
+    referencia: string | null
+    imagen: string | null
+    categoria: string | null
+    stock: number
+    vendidas30: number
+    estado: EstadoStock
+    href: string
+}
+
+export interface ProductoEnLista {
+    id: string
+    nombre: string
+    referencia: string | null
+    imagen: string | null
+    categoria: string | null
+    conPresentaciones: boolean
+    unidades: UnidadEnLista[]
+    stock: number
+    vendidas30: number
+    estado: EstadoStock
+}
+
+export type Orden = 'nombre' | 'menos' | 'mas' | 'vendidos'
+export type Mostrar = 'todos' | 'por-comprar' | 'quietos' | 'con-stock' | 'sin-stock'
+
+export interface VistaDeLista {
+    orden: Orden
+    mostrar: Mostrar
+    /** El id de la categoría; null es "Todas" */
+    categoria: string | null
+    busqueda: string
+}
+
+export type ResultadoDeLista =
+    | { agrupada: true; productos: ProductoEnLista[] }
+    | { agrupada: false; unidades: UnidadEnLista[] }
+
+/** Los productos con sus presentaciones, cada uno con el estado que le da
+ *  la regla única (estadoDelProducto) y su stock de siempre (stockDeProducto) */
+export function armarLista(unidades: UnidadDeStock[], fichas: FichaDeProducto[]): ProductoEnLista[] {
+    const ficha = new Map(fichas.map(f => [f.id, f]))
+    const lista: ProductoEnLista[] = []
+    for (const [productId, suyas] of presentacionesPorProducto(unidades)) {
+        const f = ficha.get(productId)
+        const imagen = (f?.images?.[0] as string | undefined) ?? f?.image_url ?? suyas[0].image_url
+        const categoria = f?.category_id ?? null
+        const conPresentaciones = suyas[0].kind === 'presentacion'
+        const ordenadas = conPresentaciones
+            ? [...suyas].sort((a, b) => (a.variant_name ?? '').localeCompare(b.variant_name ?? '', 'es'))
+            : suyas
+        const filas: UnidadEnLista[] = ordenadas.map(u => ({
+            key: `${u.kind}-${u.id}`,
+            id: u.id,
+            kind: u.kind,
+            productId,
+            producto: u.product_name,
+            presentacion: u.variant_name,
+            nombre: nombreCompleto(u.product_name, u.variant_name),
+            referencia: u.reference,
+            imagen,
+            categoria,
+            stock: Number(u.stock) || 0,
+            vendidas30: Number(u.sold_30d) || 0,
+            estado: u.estado,
+            href: enlaceDeStock(u.kind, u.id),
+        }))
+        lista.push({
+            id: productId,
+            nombre: suyas[0].product_name,
+            referencia: suyas[0].reference,
+            imagen,
+            categoria,
+            conPresentaciones,
+            unidades: filas,
+            stock: stockDeProducto(conPresentaciones ? filas : [], filas[0].stock),
+            vendidas30: filas.reduce((sum, u) => sum + u.vendidas30, 0),
+            estado: estadoDelProducto(filas.map(u => u.estado)) ?? 'bien',
+        })
+    }
+    return lista
+}
+
+/** Lo que está en "Quietos" (toul_inventory_overview), con la llave de la lista */
+export const llavesQuietas = (quietos: { kind: Clase; id: string }[]) =>
+    new Set(quietos.map(q => `${q.kind}-${q.id}`))
+
+/** Busca por nombre, presentación o referencia ("XL", "carneguey 100") */
+export function coincideUnidad(unidad: UnidadEnLista, busqueda: string): boolean {
+    const q = busqueda.trim().toLowerCase()
+    if (!q) return true
+    return `${unidad.producto} ${unidad.presentacion ?? ''}`.toLowerCase().includes(q)
+        || unidad.nombre.toLowerCase().includes(q)
+        || (unidad.referencia ?? '').toLowerCase().includes(q)
+}
+
+export function pasaMostrar(unidad: UnidadEnLista, mostrar: Mostrar, quietos: ReadonlySet<string>): boolean {
+    switch (mostrar) {
+        case 'por-comprar': return unidad.estado !== 'bien'
+        case 'quietos': return quietos.has(unidad.key)
+        case 'con-stock': return unidad.stock > 0
+        case 'sin-stock': return unidad.stock <= 0
+        default: return true
+    }
+}
+
+/** Nombre (A–Z), menos o más unidades, o más vendidos; los empates por nombre */
+export function ordenarPor<T extends { nombre: string; stock: number; vendidas30: number }>(filas: T[], orden: Orden): T[] {
+    const az = (a: T, b: T) => a.nombre.localeCompare(b.nombre, 'es')
+    const comparar: Record<Orden, (a: T, b: T) => number> = {
+        nombre: az,
+        menos: (a, b) => a.stock - b.stock || az(a, b),
+        mas: (a, b) => b.stock - a.stock || az(a, b),
+        vendidos: (a, b) => b.vendidas30 - a.vendidas30 || az(a, b),
+    }
+    return [...filas].sort(comparar[orden])
+}
+
+/** Sin filtro ni búsqueda, los productos con sus presentaciones adentro.
+ *  Con filtro o búsqueda, cada presentación sale suelta ("carneguey · 100ml") */
+export function verLista(productos: ProductoEnLista[], vista: VistaDeLista, quietos: ReadonlySet<string>): ResultadoDeLista {
+    const enCategoria = (categoria: string | null) => vista.categoria === null || categoria === vista.categoria
+    if (vista.mostrar === 'todos' && !vista.busqueda.trim()) {
+        return { agrupada: true, productos: ordenarPor(productos.filter(p => enCategoria(p.categoria)), vista.orden) }
+    }
+    const unidades = productos.flatMap(p => p.unidades).filter(u =>
+        enCategoria(u.categoria) && pasaMostrar(u, vista.mostrar, quietos) && coincideUnidad(u, vista.busqueda))
+    return { agrupada: false, unidades: ordenarPor(unidades, vista.orden) }
+}
+
+export const cuantosEnLista = (resultado: ResultadoDeLista) =>
+    resultado.agrupada ? resultado.productos.length : resultado.unidades.length
+
+/** Cuántas cosas hay en cada opción de "Mostrar", en toda la bodega */
+export function cuantosPorMostrar(productos: ProductoEnLista[], quietos: ReadonlySet<string>): Record<Mostrar, number> {
+    const unidades = productos.flatMap(p => p.unidades)
+    const contar = (mostrar: Mostrar) => unidades.filter(u => pasaMostrar(u, mostrar, quietos)).length
+    return {
+        'todos': unidades.length,
+        'por-comprar': contar('por-comprar'),
+        'quietos': contar('quietos'),
+        'con-stock': contar('con-stock'),
+        'sin-stock': contar('sin-stock'),
+    }
+}
+
+/* ── El detalle de un producto ──────────────────────────────── */
+
+/** Desde cuántos días está quieto algo para contarlo como "Quieto":
+ *  el mismo de toul_inventory_overview (p_idle_days), que usa el filtro */
+export const DIAS_QUIETO = 60
+
+/** Días sin venderse, como los cuenta la base: desde la última venta y,
+ *  si nunca se vendió, desde que llegó la mercancía. null si no hay fecha */
+export function diasSinVenderse(ultimaVenta: string | null, llegada: string | null, ahora: number = Date.now()): number | null {
+    const desde = ultimaVenta ?? llegada
+    if (!desde) return null
+    return Math.max(Math.floor((ahora - new Date(desde).getTime()) / 86400000), 0)
+}
+
+/** "Plata en este producto": lo que hay por lo que costó, como "Tienes en
+ *  mercancía" (lo que está en negativo no cuenta). Con presentaciones, todas */
+export function plataEnProducto(unidades: { stock: number | null; cpp: number | null }[]): number {
+    return Math.round(unidades.reduce((sum, u) => sum + Math.max(Number(u.stock) || 0, 0) * (Number(u.cpp) || 0), 0))
+}
+
+/** Una cosa del detalle, con lo que dice la regla única (toul_estado_stock) */
+export interface UnidadDelDetalle {
+    productId: string
+    variantId: string | null
+    stock: number
+    minimo: number
+    estado: EstadoStock
+    diasQuieto: number | null
+}
+
+export interface ResumenDelDetalle {
+    estado: EstadoStock
+    /** La línea debajo del número grande */
+    linea: string
+    /** Cuántas comprar: lo mismo que suma Compra sugerida para esto */
+    comprar: number
+    /** Lo que se lleva a Nueva compra con "Comprar N" */
+    pedido: { productId: string; variantId: string | null; quantity: number }[]
+}
+
+/** El estado del detalle. Un producto sin presentaciones es una sola cosa;
+ *  con presentaciones se juntan como en la lista: se acabó si se acabaron
+ *  todas y quedan pocas si alguna llegó a su mínimo. Quieto, solo si todo
+ *  lo que tiene existencias lleva DIAS_QUIETO o más sin venderse */
+export function resumenDelDetalle(unidades: UnidadDelDetalle[]): ResumenDelDetalle | null {
+    const estado = estadoDelProducto(unidades.map(u => u.estado))
+    if (!estado) return null
+    const pedido = unidades
+        .filter(u => u.estado !== 'bien')
+        .map(u => ({ productId: u.productId, variantId: u.variantId, quantity: cuantoPedir(u.stock, u.minimo) }))
+    const comprar = pedido.reduce((sum, linea) => sum + linea.quantity, 0)
+
+    if (estado === 'agotado') return { estado, linea: `Se acabó · compra ${comprar}`, comprar, pedido }
+    if (estado === 'pocas') return { estado, linea: `Quedan pocas · compra ${comprar}`, comprar, pedido }
+
+    const conStock = unidades.filter(u => u.stock > 0)
+    const quietos = conStock.filter(u => u.diasQuieto !== null && u.diasQuieto >= DIAS_QUIETO)
+    const linea = conStock.length > 0 && quietos.length === conStock.length
+        ? `Lleva ${Math.min(...quietos.map(u => u.diasQuieto as number))} días sin venderse`
+        : 'Bien de existencias'
+    return { estado, linea, comprar, pedido }
+}
+
+/** "Te dura": "Ya se acabó", "unos 12 días" o "Sin ventas en 30 días" */
+export function textoTeDura(stock: number, vendidas30: number): string {
+    if (stock <= 0) return 'Ya se acabó'
+    const dias = diasQueAguanta(stock, vendidas30)
+    if (dias === null) return 'Sin ventas en 30 días'
+    if (dias === 0) return 'menos de un día'
+    return dias === 1 ? '1 día' : `unos ${dias} días`
+}
+
 /* ── Hace N días ────────────────────────────────────────────── */
 
 /** Días completos de 24 horas desde ese momento, con el reloj del equipo */
@@ -435,6 +692,24 @@ export function lineasDeUnPedido<P extends { id: string; cpp: number | null; cos
         })
     }
     return lineas
+}
+
+/** La compra que se dejó a medias, de vuelta en líneas: cantidades y costos
+ *  quedan como el dueño los escribió (aunque estén a medio escribir).
+ *  Lo que ya no se vende se salta, igual que en el pedido */
+export function lineasDeUnBorrador<P extends { id: string; cpp: number | null; cost_price?: number | null }>(
+    borrador: { productId: string; variantId: string | null; quantity: string; cost: string }[],
+    productos: P[],
+    presentaciones: { id: string; name: string; cpp: number | null }[],
+): LineaCompra<P>[] {
+    const escrito = new Map(borrador.map(l => [llaveDeLinea(l.productId, l.variantId), l]))
+    return lineasDeUnPedido(
+        borrador.map(l => ({ productId: l.productId, variantId: l.variantId, quantity: 1 })),
+        productos, presentaciones,
+    ).map(linea => {
+        const suyo = escrito.get(linea.itemKey)
+        return suyo ? { ...linea, quantity: String(suyo.quantity), cost: String(suyo.cost) } : linea
+    })
 }
 
 /** Una cantidad de compra: entera y de 1 en adelante */

@@ -389,7 +389,24 @@ Modals base rediseñados:
 
 `npm run build` pasa sin errores.
 
-### 11 de noviembre de 2026 — TOUL es para quien vende por redes ✅ publicado, ⚠️ falta correr el SQL
+### 11 de noviembre de 2026 — Inventario Parte 2: rediseño ✅ publicado y desplegado (Félix corrió `deploy_minimo_exacto.sql` el 11 de noviembre)
+
+Rediseño visual con el prototipo de Félix (`diseno/inventario/`, que no se sube a git). Solo cambia cómo se ve: los números salen de las mismas cuentas (`lib/inventory/calculos.ts`, `toul_estado_stock`). Hecho por pasos con su aprobación.
+
+- **Pantalla principal**: "Tienes en mercancía" (a costo o a precio de venta), Comprar / Contar / Ajustar, "Compra sugerida" y la lista de productos con el número en color: rojo si se acabó, amarillo de TOUL si está en su mínimo, blanco si está bien. Sin colores nuevos. "$X en bodega" ya no va en la lista
+- **Hojas** (`components/inventory/HojasInventario.tsx`): Ordenar, Filtrar y Compra sugerida. Se borraron `StockGauge` y `ReorderPanel`
+- **"Ver compras anteriores"** en Nueva compra. La flecha de Compras anteriores vuelve a donde estaba la persona: desde Nueva compra vuelve con los productos, cantidades, costos y el pago intactos (borrador en sessionStorage, `?borrador=1`); desde Movimientos vuelve a Movimientos
+- **Detalle** (producto y presentación): número grande con color, una línea de estado ("Se acabó · compra 20", "Quedan pocas · compra 17", "Lleva N días sin venderse", "Bien de existencias"), Te dura, Vendiste en 30 días, Tu mínimo (con Cambiar), Te cuesta, Lo vendes en, Plata en este producto, y los botones "Comprar N" (abre Nueva compra con lo mismo que pide Compra sugerida) y "Ajustar". Con presentaciones: el total, "Comprar N" de todas y cada presentación con su color; "Tu mínimo" y "Lo vendes en" van dentro de cada presentación. En PC, dos columnas con Movimientos a la derecha
+- **Comparación con datos reales**: Inicio, Reportes, Catálogo y Compras salen idénticos con el código de antes y el nuevo; Inventario, con los mismos números
+
+**Error encontrado y arreglado: el mínimo automático salía con 1 de más**
+- `toul_estado_stock` dividía lo vendido entre 30 antes de multiplicar; la división se redondea en el decimal 20 y a veces hacia arriba. Con 30 días de respaldo, 2, 5, 8, 11… vendidas daban mínimo 3, 6, 9, 12, y "Compra N" pedía 2 de más. Venía de antes (Parte 1). En la tienda de Félix: Mym 6 (es 5), xxx y MacBook 9 (es 8); Compra sugerida baja de $2.977.600 a $2.877.800
+- `supabase/deploy_minimo_exacto.sql`: multiplica primero (`CEIL(sold_30d * dias / 30)`); solo cambia esa línea de la función. `minimoAutomatico` en la app hace lo mismo (fallaba en casos raros, como 31 vendidas → 32)
+- Pruebas: `inventario-cuentas.test.mjs` exige 2, 5, 8 y 11 vendidas → ese mismo mínimo, y que la app saque lo mismo (con la cuenta vieja fallan 8 casos); `calculos.test.ts` revisa de 0 a 300 vendidas con 1 a 90 días de respaldo. Con la tienda de prueba completa, antes y después del SQL solo cambian el mínimo, el estado y la lista de reponer del producto afectado; reportes, cartera, turnos y auditoría quedan idénticos
+- En `run.mjs` va antes de `deploy_sin_plata_mia.sql` (no se tocan entre sí) para que `antes-y-despues.test.mjs` siga probando "Plata mía" sin cambios
+- Revisado después del SQL con los datos reales: en todos los productos "Tu mínimo" es igual a "Vendiste en 30 días" (la tienda tiene 30 días de respaldo). Compra sugerida quedó en $2.837.600: además del arreglo, a las 6:08 p. m. salió de los 30 días una venta del 12 de octubre (MacBook y Control)
+
+### 11 de noviembre de 2026 — TOUL es para quien vende por redes ✅ desplegado (Félix corrió `deploy_sin_plata_mia.sql` el 11 de noviembre: "Listo")
 
 Cambio de estrategia: TOUL es 100 % para quien vende por WhatsApp e Instagram. El punto físico queda **en pausa**.
 

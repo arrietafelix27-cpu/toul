@@ -29,7 +29,7 @@ export function DesktopPurchase({ compra }: { compra: CompraEnCurso }) {
         selectedProviderId, setSelectedProviderId, dueDate, setDueDate,
         cuenta, setCuenta,
         total, abono, pagado, abonoDemasiado, canSubmit, cantidadesBien, saving, guardar,
-        avisoCero, nombresEnCero, guardarIgual, cerrarAvisoCero,
+        avisoCero, nombresEnCero, guardarIgual, cerrarAvisoCero, guardarParaVolver,
     } = compra
 
     return (
@@ -42,12 +42,17 @@ export function DesktopPurchase({ compra }: { compra: CompraEnCurso }) {
                     style={{ background: 'var(--toul-surface)', color: 'var(--toul-text-muted)', border: '1px solid var(--toul-border)' }}>
                     <ArrowLeft size={18} />
                 </Link>
-                <div>
+                <div className="flex-1">
                     <p className="text-xs uppercase tracking-widest font-medium mb-0.5" style={{ color: 'var(--toul-text-subtle)' }}>
                         Inventario
                     </p>
                     <h1 className="text-2xl font-bold" style={{ color: 'var(--toul-text)' }}>Nueva Compra</h1>
                 </div>
+                {/* El historial vive aquí, al lado de donde se compra */}
+                <Link href="/inventory/compras?desde=compra" onClick={guardarParaVolver}
+                    style={{ alignSelf: 'flex-end', fontSize: 14, fontWeight: 600, color: 'var(--toul-accent)', textDecoration: 'none', whiteSpace: 'nowrap', padding: '6px 0' }}>
+                    Ver compras anteriores
+                </Link>
             </div>
 
             {/* 2-column layout */}

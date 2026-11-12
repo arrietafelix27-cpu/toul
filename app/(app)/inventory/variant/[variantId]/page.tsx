@@ -11,6 +11,8 @@ export default function InventoryVariantPage({ params }: { params: Promise<{ var
     const [adjustOpen, setAdjustOpen] = useState(false)
     const { detalle, error, isLoading, mutate, saveMin } = useDetallePresentacion(variantId)
     const reintentar = useCallback(() => { mutate() }, [mutate])
+    const abrirAjuste = useCallback(() => setAdjustOpen(true), [])
+    const cerrarAjuste = useCallback(() => setAdjustOpen(false), [])
 
     if (isLoading) return <StockDetailSkeleton />
     // Sin internet no es "ya no existe"
@@ -23,7 +25,10 @@ export default function InventoryVariantPage({ params }: { params: Promise<{ var
         )
     }
 
-    const { variant, product, movements, sold30d, coverageDays, stock, cost, manualMin, minStock } = detalle
+    const {
+        variant, product, movements, sold30d, coverageDays, stock, cost, price, manualMin, minStock,
+        estado, linea, comprar, pedido, teDura, plata,
+    } = detalle
 
     return (
         <>
@@ -33,23 +38,27 @@ export default function InventoryVariantPage({ params }: { params: Promise<{ var
                 reference={product.reference}
                 image={(product.images?.[0] as string | undefined) ?? product.image_url}
                 stock={stock}
-                cost={cost}
+                estado={estado}
+                linea={linea}
+                teDura={teDura}
                 sold30d={sold30d}
-                minStock={minStock}
-                manualMin={manualMin}
-                coverageDays={coverageDays}
+                minimo={{ valor: minStock, manual: manualMin, respaldo: coverageDays, onGuardar: saveMin }}
+                cost={cost}
+                price={price}
+                plata={plata}
+                comprar={comprar}
+                pedido={pedido}
+                buyHref={`/inventory/purchase?product=${product.id}&variant=${variant.id}`}
                 movements={movements}
                 backHref={`/inventory/${product.id}`}
                 catalogHref={`/products/${product.id}/presentacion/${variant.id}`}
-                buyHref={`/inventory/purchase?product=${product.id}&variant=${variant.id}`}
-                onAdjust={() => setAdjustOpen(true)}
-                onSaveMin={saveMin}
+                onAdjust={abrirAjuste}
             />
 
             <StockAdjustSheet
                 open={adjustOpen}
                 storeId={variant.store_id}
-                onClose={() => setAdjustOpen(false)}
+                onClose={cerrarAjuste}
                 onDone={mutate}
                 preselect={{ productId: product.id, variantId: variant.id }}
             />

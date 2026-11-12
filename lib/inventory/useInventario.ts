@@ -1,29 +1,25 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { formatCOP } from '@/lib/utils'
 import {
-    diasQueAguanta, filasDeFiltro, limpiarBusqueda, paraReponer, presentacionesPorProducto, textoContar,
-    type Filtro, type PresentacionEstante, type ProductoEstante, type ResumenInventario,
+    armarLista, costoDelPedido, cuantosPorMostrar, llavesQuietas, paraReponer,
+    type FichaDeProducto, type ResumenInventario, type UnidadDeStock,
 } from './calculos'
 
 /* ══════════════════════════════════════════════════════════════
    Los datos de la pantalla de Inventario.
-   Valor, mínimos y lo que falta los calcula la base; aquí solo se
-   traen, se arma la lista y se cuentan los días que aguanta.
+   Valor, mínimos, lo que falta y el estado de cada cosa los calcula
+   la base (toul_inventory_overview y toul_estado_stock, la misma
+   regla del Catálogo y de TOUL AI). Aquí solo se traen y se arman.
    ══════════════════════════════════════════════════════════════ */
 
 const supabase = createClient()
-const PAGE_SIZE = 40
-const VACIAS: PresentacionEstante[] = []
+
+export interface Categoria { id: string; name: string }
 
 export function useInventario(storeId: string | null) {
-    const [search, setSearchState] = useState('')
-    const [filtro, setFiltro] = useState<Filtro>('todo')
-    const [limit, setLimit] = useState(PAGE_SIZE)
-
     // ── Valor, mínimos y lo que falta: lo calcula la base ──
     const { data: overview, error: overviewError, mutate: refreshOverview } = useSWR(
         storeId ? ['inventory-overview', storeId] : null,
@@ -35,95 +31,54 @@ export function useInventario(storeId: string | null) {
         { revalidateOnFocus: false, dedupingInterval: 30000 },
     )
 
-    // Cuánto dura la bodega al ritmo al que sale la mercancía
-    const daysLeft = useMemo(
-        () => overview ? diasQueAguanta(overview.units, overview.soldUnits30) : null,
-        [overview],
-    )
-
-    const { data: lastCount } = useSWR(
-        storeId ? ['last-count', storeId] : null,
+    // ── Tus productos: cada cosa con su estado, la foto y la categoría ──
+    // Llega entera: para ordenar por unidades o por lo más vendido hay que
+    // tenerla toda. La pantalla la muestra de a poco
+    const { data: lista, error: listaError, isLoading, mutate: refreshLista } = useSWR(
+        storeId ? ['inventory-lista', storeId] : null,
         async () => {
-            const { data } = await supabase.from('inventory_counts')
-                .select('applied_at').eq('store_id', storeId!).eq('status', 'applied')
-                .order('applied_at', { ascending: false }).limit(1).maybeSingle()
-            return data?.applied_at as string | undefined
-        },
-        { revalidateOnFocus: false },
-    )
-
-    // ── La bodega ──
-    const { data: shelf, error: shelfError, isLoading, mutate: refreshShelf } = useSWR(
-        storeId ? ['inventory-shelf', storeId, search, limit] : null,
-        async () => {
-            let query = supabase.from('products')
-                .select('id, name, reference, image_url, images, stock, cpp')
-                .eq('store_id', storeId!).eq('is_active', true).order('name').limit(limit + 1)
-            // Busca por nombre, referencia o presentación ("XL" trae la camisa que la tiene).
-            // Se limpian las comas, paréntesis y comodines que rompen el filtro
-            const texto = limpiarBusqueda(search)
-            if (texto) {
-                const { data: conTalla, error: errorTalla } = await supabase.from('product_variants')
-                    .select('product_id').eq('store_id', storeId!).eq('is_active', true).ilike('name', `%${texto}%`).limit(200)
-                if (errorTalla) throw errorTalla
-                const ids = [...new Set((conTalla ?? []).map(v => v.product_id as string))]
-                query = query.or([
-                    `name.ilike.%${texto}%`,
-                    `reference.ilike.%${texto}%`,
-                    ...(ids.length > 0 ? [`id.in.(${ids.join(',')})`] : []),
-                ].join(','))
-            }
-
-            const [productsRes, variantsRes] = await Promise.all([
-                query,
-                supabase.from('product_variants')
-                    .select('id, product_id, name, stock, cpp')
-                    .eq('store_id', storeId!).eq('is_active', true).order('name'),
+            const [estadoRes, fichasRes, categoriasRes] = await Promise.all([
+                supabase.rpc('toul_estado_stock'),
+                supabase.from('products').select('id, images, image_url, category_id')
+                    .eq('store_id', storeId!).eq('is_active', true),
+                supabase.from('product_categories').select('id, name')
+                    .eq('store_id', storeId!).order('name'),
             ])
             // Sin internet o con un error, la lista no se muestra vacía como si no hubiera nada
-            if (productsRes.error) throw productsRes.error
-            if (variantsRes.error) throw variantsRes.error
-            const rows = (productsRes.data ?? []) as ProductoEstante[]
+            if (estadoRes.error) throw estadoRes.error
+            if (fichasRes.error) throw fichasRes.error
+            if (categoriasRes.error) throw categoriasRes.error
             return {
-                products: rows.slice(0, limit),
-                hasMore: rows.length > limit,
-                variants: (variantsRes.data ?? []) as PresentacionEstante[],
+                productos: armarLista((estadoRes.data ?? []) as UnidadDeStock[], (fichasRes.data ?? []) as FichaDeProducto[]),
+                categorias: (categoriasRes.data ?? []) as Categoria[],
             }
         },
         { revalidateOnFocus: false, dedupingInterval: 30000 },
     )
 
-    const refresh = useCallback(() => { refreshOverview(); refreshShelf() }, [refreshOverview, refreshShelf])
+    const refresh = useCallback(() => { refreshOverview(); refreshLista() }, [refreshOverview, refreshLista])
 
-    // Buscar vuelve a empezar la lista desde los primeros 40
-    const setSearch = useCallback((texto: string) => { setSearchState(texto); setLimit(PAGE_SIZE) }, [])
-    const verMas = useCallback(() => setLimit(l => l + PAGE_SIZE), [])
-
-    // ── Lo que hay que pedir ──
+    // ── Compra sugerida: lo que está en su mínimo o se acabó ──
     const reorder = useMemo(() => paraReponer(overview?.alerts ?? []), [overview])
+    const totalSugerido = useMemo(() => costoDelPedido(reorder), [reorder])
 
-    // ── La lista, según el filtro ──
-    const filtered = useMemo(() => filasDeFiltro(overview, filtro, search, formatCOP), [filtro, overview, search])
-
-    const porProducto = useMemo(() => presentacionesPorProducto(shelf?.variants ?? []), [shelf])
-    const variantsOf = useCallback((productId: string) => porProducto.get(productId) ?? VACIAS, [porProducto])
+    // ── Lo que está quieto, con la llave de la lista ──
+    const quietos = useMemo(() => llavesQuietas(overview?.dormant ?? []), [overview])
+    const conteos = useMemo(
+        () => lista && overview ? cuantosPorMostrar(lista.productos, quietos) : null,
+        [lista, overview, quietos],
+    )
 
     return {
         overview,
         overviewError,
-        daysLeft,
-        textoContar: textoContar(lastCount),
-        shelf,
-        shelfError,
+        lista,
+        listaError,
         isLoading,
         reorder,
-        filtered,
-        variantsOf,
-        search,
-        setSearch,
-        filtro,
-        setFiltro,
-        verMas,
+        totalSugerido,
+        quietos,
+        conteos,
         refresh,
     }
 }

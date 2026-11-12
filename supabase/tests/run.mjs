@@ -25,7 +25,11 @@ const MIGRATIONS = [
     'deploy_clientes.sql', 'deploy_cartera.sql', 'deploy_compras_detalle.sql', 'deploy_guardado_atomico.sql', 'deploy_deshacer.sql', 'deploy_errores.sql', 'deploy_planes.sql',
     'deploy_devoluciones.sql', 'deploy_reportes.sql', 'deploy_catalogo_stock.sql', 'deploy_caja_segura.sql', 'deploy_caja_permisos.sql',
     'deploy_movimientos.sql', 'deploy_movimientos_cuentas.sql', 'deploy_inventario_cuentas.sql',
-    'deploy_inventario_consistencia.sql', 'deploy_sin_plata_mia.sql',
+    'deploy_inventario_consistencia.sql',
+    // Va antes que "Plata mía" solo aquí, para que antes-y-despues siga
+    // probando ese cambio: no se tocan entre sí (en Supabase se corrió después)
+    'deploy_minimo_exacto.sql',
+    'deploy_sin_plata_mia.sql',
 ]
 
 // Arma todo con lo de antes del último cambio (incluida la tienda de prueba,

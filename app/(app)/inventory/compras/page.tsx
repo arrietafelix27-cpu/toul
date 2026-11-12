@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef, type MouseEvent } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowLeft, Package, Search } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
@@ -104,6 +105,21 @@ export default function ComprasPage() {
     const esMovil = useIsMobile()
     const reintentarTodo = useCallback(() => { recargarTienda(); reintentar() }, [recargarTienda, reintentar])
 
+    // La flecha vuelve a donde estaba la persona: a Nueva compra (con todo lo
+    // que llevaba) o a Movimientos. Se lee al entrar, antes de que la
+    // dirección se limpie al abrir una compra
+    const router = useRouter()
+    const desde = useRef<string | null>(null)
+    useEffect(() => { desde.current = new URLSearchParams(window.location.search).get('desde') }, [])
+    const volver = useCallback((e: MouseEvent) => {
+        const origen = desde.current === 'compra' ? '/inventory/purchase?borrador=1'
+            : desde.current === 'movimientos' ? '/movimientos' : null
+        if (!origen) return // sin origen: el enlace lleva a Inventario
+        e.preventDefault()
+        if (window.history.length > 1) router.back()
+        else router.push(origen)
+    }, [router])
+
     return (
         <div className="px-4 md:px-8 py-6 pb-24" style={{ position: 'relative' }}>
             <style>{CSS}</style>
@@ -111,7 +127,7 @@ export default function ComprasPage() {
             <div className="hc-page" style={{ position: 'relative', maxWidth: 760, margin: '0 auto' }}>
 
                 <div className="flex items-center gap-3 mb-5">
-                    <Link href="/inventory" aria-label="Volver"
+                    <Link href="/inventory" aria-label="Volver" onClick={volver}
                         style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <ArrowLeft size={17} color="rgba(255,255,255,0.7)" />
                     </Link>

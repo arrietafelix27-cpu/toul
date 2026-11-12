@@ -12,6 +12,8 @@ export default function InventoryProductPage({ params }: { params: Promise<{ id:
     const [adjustOpen, setAdjustOpen] = useState(false)
     const { detalle, error, isLoading, mutate, saveMin } = useDetalleProducto(id)
     const reintentar = useCallback(() => { mutate() }, [mutate])
+    const abrirAjuste = useCallback(() => setAdjustOpen(true), [])
+    const cerrarAjuste = useCallback(() => setAdjustOpen(false), [])
 
     if (isLoading) return <StockDetailSkeleton />
     // Sin internet no es "ya no existe"
@@ -24,7 +26,10 @@ export default function InventoryProductPage({ params }: { params: Promise<{ id:
         )
     }
 
-    const { product, variants, movements, sold30d, coverageDays, hasVariants, stock, cost, manualMin, minStock, presentations } = detalle
+    const {
+        product, variants, movements, sold30d, coverageDays, hasVariants, stock, cost, price, manualMin, minStock, presentations,
+        estado, linea, comprar, pedido, teDura, plata,
+    } = detalle
 
     return (
         <>
@@ -33,19 +38,24 @@ export default function InventoryProductPage({ params }: { params: Promise<{ id:
                 reference={product.reference}
                 image={(product.images?.[0] as string | undefined) ?? product.image_url}
                 stock={stock}
-                cost={cost}
+                estado={estado}
+                linea={linea}
+                teDura={teDura}
                 sold30d={sold30d}
-                minStock={minStock}
-                manualMin={manualMin}
-                coverageDays={coverageDays}
+                // Con presentaciones, el mínimo y el precio viven en cada una
+                minimo={hasVariants ? undefined : { valor: minStock, manual: manualMin, respaldo: coverageDays, onGuardar: saveMin }}
+                cost={cost}
+                price={hasVariants ? undefined : price}
+                plata={plata}
+                comprar={comprar}
+                pedido={pedido}
+                buyHref={`/inventory/purchase?product=${product.id}`}
                 presentations={presentations}
                 movements={movements}
                 backHref="/inventory"
                 catalogHref={`/products/${product.id}`}
-                buyHref={`/inventory/purchase?product=${product.id}`}
-                onAdjust={() => setAdjustOpen(true)}
-                onSaveMin={saveMin}
-                readOnlyStock={hasVariants}
+                // Un producto con presentaciones no se ajusta por sí mismo: cada una
+                onAdjust={hasVariants ? undefined : abrirAjuste}
                 extra={
                     <VariantManager
                         productId={product.id}
@@ -59,7 +69,7 @@ export default function InventoryProductPage({ params }: { params: Promise<{ id:
             <StockAdjustSheet
                 open={adjustOpen}
                 storeId={product.store_id}
-                onClose={() => setAdjustOpen(false)}
+                onClose={cerrarAjuste}
                 onDone={mutate}
                 preselect={{ productId: product.id }}
             />

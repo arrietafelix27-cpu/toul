@@ -1,15 +1,41 @@
 'use client'
 
 import { useEffect, type ReactNode } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion, type TargetAndTransition } from 'framer-motion'
 import { X } from 'lucide-react'
 import { EASE_OUT_EMIL } from '@/components/ui'
 
 /**
  * Sheet — hoja inferior en móvil, panel centrado en pantallas grandes.
  * Fondo con blur, entrada con curva ease-out, cierra con Escape o tocando afuera.
+ * Con `subir`, en el celular sube desde abajo como una hoja de iOS y en PC
+ * aparece con un leve zoom (las hojas de Inventario). Sin `subir`, como siempre.
  */
-export function Sheet({ open, onClose, title, subtitle, children, footer, width = 460 }: {
+const CURVA_HOJA: [number, number, number, number] = [0.32, 0.72, 0, 1]
+
+function entradaDeHoja(subir: boolean, reduce: boolean | null) {
+    if (!subir) return null
+    if (reduce) {
+        return {
+            initial: { opacity: 0 }, animate: { opacity: 1 },
+            exit: { opacity: 0, transition: { duration: 0.16 } }, transition: { duration: 0.2 },
+        }
+    }
+    const pc = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+    return pc
+        ? {
+            initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 },
+            exit: { opacity: 0, scale: 0.98, transition: { duration: 0.16, ease: EASE_OUT_EMIL } } as TargetAndTransition,
+            transition: { duration: 0.3, ease: EASE_OUT_EMIL },
+        }
+        : {
+            initial: { y: '100%' }, animate: { y: 0 },
+            exit: { y: '100%', transition: { duration: 0.28, ease: CURVA_HOJA } } as TargetAndTransition,
+            transition: { duration: 0.4, ease: CURVA_HOJA },
+        }
+}
+
+export function Sheet({ open, onClose, title, subtitle, children, footer, width = 460, subir = false }: {
     open: boolean
     onClose: () => void
     title: string
@@ -17,7 +43,10 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, width 
     children: ReactNode
     footer?: ReactNode
     width?: number
+    subir?: boolean
 }) {
+    const reduce = useReducedMotion()
+    const entrada = entradaDeHoja(subir, reduce)
     useEffect(() => {
         if (!open) return
         const prev = document.body.style.overflow
@@ -41,10 +70,10 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, width 
                     />
                     <motion.div
                         role="dialog" aria-modal="true" aria-label={title}
-                        initial={{ y: 24, opacity: 0, scale: 0.98 }}
-                        animate={{ y: 0, opacity: 1, scale: 1 }}
-                        exit={{ y: 16, opacity: 0, scale: 0.98, transition: { duration: 0.16, ease: EASE_OUT_EMIL } }}
-                        transition={{ duration: 0.24, ease: EASE_OUT_EMIL }}
+                        initial={entrada?.initial ?? { y: 24, opacity: 0, scale: 0.98 }}
+                        animate={entrada?.animate ?? { y: 0, opacity: 1, scale: 1 }}
+                        exit={entrada?.exit ?? { y: 16, opacity: 0, scale: 0.98, transition: { duration: 0.16, ease: EASE_OUT_EMIL } }}
+                        transition={entrada?.transition ?? { duration: 0.24, ease: EASE_OUT_EMIL }}
                         className="rounded-t-[28px] md:rounded-[24px]"
                         style={{
                             position: 'relative', width: '100%', maxWidth: width, maxHeight: '90dvh',

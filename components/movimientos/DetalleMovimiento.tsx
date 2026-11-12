@@ -120,7 +120,7 @@ export function DetalleMovimiento({ movimiento, onCerrar, onEditar, onBorrado, o
     const corrige = !!m && SE_CORRIGE_AQUI(m)
     const entra = !!m && m.signed > 0
     const enlace = !m ? null
-        : m.type === 'purchase' && m.reference_id ? { href: `/inventory/compras?compra=${m.reference_id}`, texto: 'Ver la compra' }
+        : m.type === 'purchase' && m.reference_id ? { href: `/inventory/compras?compra=${m.reference_id}&desde=movimientos`, texto: 'Ver la compra' }
         : m.type === 'provider_payment' && m.reference_id ? { href: `/providers/${m.reference_id}`, texto: 'Ver el proveedor' }
         : esAbono && cliente && cliente.ref === m.reference_id ? { href: `/customers/${cliente.id}`, texto: 'Ver el cliente' }
         : null

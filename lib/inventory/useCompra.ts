@@ -9,9 +9,9 @@ import { nombreMetodo, onlyDigits } from '@/lib/format/text'
 import { usePaymentMethods } from '@/lib/hooks/usePaymentMethods'
 import { cuentaParaGuardar, recordarCuenta } from '@/components/movimientos/CuentaChips'
 import type { Product, Provider } from '@/lib/types'
-import { tomarPedido } from './pedido'
+import { guardarBorrador, olvidarBorrador, tomarBorrador, tomarPedido } from './pedido'
 import {
-    cantidadValida, costoSugerido, lineasDeUnPedido, lineasEnCero, llaveDeLinea, nombreCompleto, pagoDeCompra,
+    cantidadValida, costoSugerido, lineasDeUnBorrador, lineasDeUnPedido, lineasEnCero, llaveDeLinea, nombreCompleto, pagoDeCompra,
     productosParaElegir, totalDeCompra,
     type FormaDePago, type LineaCompra, type OrdenCompra,
 } from './calculos'
@@ -90,10 +90,20 @@ export function useCompra() {
                 setVariantsByProduct(grouped)
             }
 
+            // Vuelve de "Compras anteriores": la compra sigue como la dejó
+            const params = new URLSearchParams(window.location.search)
+            const borrador = params.get('borrador') ? tomarBorrador() : null
             // Si viene un pedido armado desde Inventario, la compra
             // arranca con todo adentro: el dueño solo ajusta y confirma
-            const pedido = tomarPedido()
-            if (pedido.length > 0 && prodRes.data) {
+            const pedido = borrador ? [] : tomarPedido()
+            if (borrador && prodRes.data) {
+                setSelectedItems(lineasDeUnBorrador(borrador.lineas, prodRes.data as Product[], variantsRes.data ?? []))
+                if (borrador.paymentMethod === 'cash' || borrador.paymentMethod === 'credit') setPaymentMethod(borrador.paymentMethod)
+                setInitialPayment(borrador.initialPayment ?? '')
+                setSelectedProviderId(borrador.selectedProviderId ?? '')
+                setDueDate(borrador.dueDate ?? '')
+                if (borrador.cuenta) setCuenta(borrador.cuenta)
+            } else if (pedido.length > 0 && prodRes.data) {
                 const precargado = lineasDeUnPedido(pedido, prodRes.data as Product[], variantsRes.data ?? [])
                 if (precargado.length > 0) {
                     setSelectedItems(precargado)
@@ -103,7 +113,6 @@ export function useCompra() {
                 // "Comprar" desde el detalle de un producto: llega ya agregado.
                 // Si tiene varias presentaciones y no dice cuál, se deja abierto
                 // en la lista para que el dueño elija (no se adivina la talla).
-                const params = new URLSearchParams(window.location.search)
                 const productId = params.get('product')
                 const product = productId ? (prodRes.data as Product[]).find(p => p.id === productId) : undefined
                 if (product) {
@@ -203,6 +212,7 @@ export function useCompra() {
             if (!response.ok) throw Object.assign(new Error(result.error || 'No se pudo registrar la compra. Intenta de nuevo.'), { delServidor: true })
 
             if (pagado > 0) recordarCuenta('compra', cuenta)
+            olvidarBorrador()
             toast.success('Compra registrada')
             router.push('/inventory')
         } catch (e: unknown) {
@@ -227,6 +237,16 @@ export function useCompra() {
 
     const cerrarAvisoCero = useCallback(() => setAvisoCero(false), [])
 
+    /** "Ver compras anteriores": guarda la compra como va, para que al volver siga igual */
+    const guardarParaVolver = useCallback(() => {
+        guardarBorrador({
+            lineas: selectedItems.map(item => ({
+                productId: item.product.id, variantId: item.variantId ?? null, quantity: item.quantity, cost: item.cost,
+            })),
+            paymentMethod, initialPayment, selectedProviderId, dueDate, cuenta,
+        })
+    }, [selectedItems, paymentMethod, initialPayment, selectedProviderId, dueDate, cuenta])
+
     return {
         loading, sinDatos, reintentar,
         products,
@@ -246,6 +266,7 @@ export function useCompra() {
         puedeVerResumen, canSubmit, cantidadesBien,
         saving, guardar,
         avisoCero, nombresEnCero, guardarIgual, cerrarAvisoCero,
+        guardarParaVolver,
     }
 }
 

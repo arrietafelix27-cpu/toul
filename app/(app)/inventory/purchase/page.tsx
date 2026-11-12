@@ -7,6 +7,7 @@ import {
     ArrowLeft, Package, CreditCard, CheckCircle2, Navigation,
     Trash2, Plus, Search, Layers, ChevronRight
 } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AddedMark } from '@/components/inventory/AddedMark'
@@ -34,7 +35,7 @@ export default function NewPurchaseFlow() {
         selectedProviderId, setSelectedProviderId, dueDate, setDueDate,
         cuenta, setCuenta, nombreCuenta,
         total, abono, pagado, abonoDemasiado, faltaCuenta, puedeVerResumen, cantidadesBien,
-        saving, guardar, avisoCero, nombresEnCero, guardarIgual, cerrarAvisoCero,
+        saving, guardar, avisoCero, nombresEnCero, guardarIgual, cerrarAvisoCero, guardarParaVolver,
     } = compra
 
     // Celular: la compra va en 3 pasos
@@ -200,10 +201,19 @@ export default function NewPurchaseFlow() {
                     }}>
                     <ArrowLeft size={17} strokeWidth={2} />
                 </button>
-                <div className="flex-1">
-                    <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: '0 0 3px 0' }}>
-                        Paso {step} de 3
-                    </p>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-3" style={{ margin: '0 0 3px 0' }}>
+                        <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--toul-text-faint)', margin: 0 }}>
+                            Paso {step} de 3
+                        </p>
+                        {/* El historial vive aquí, arriba a la derecha, sin quitarle espacio al título */}
+                        {step === 1 && (
+                            <Link href="/inventory/compras?desde=compra" onClick={guardarParaVolver}
+                                style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1, color: 'var(--toul-accent)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                                Ver compras anteriores
+                            </Link>
+                        )}
+                    </div>
                     <h1 style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--toul-text)', margin: 0 }}>
                         {step === 1 ? 'Seleccionar productos' : step === 2 ? 'Pago y proveedor' : 'Resumen de compra'}
                     </h1>

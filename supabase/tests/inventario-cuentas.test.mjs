@@ -12,7 +12,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { cuantoPedir, estadoDelProducto } from '../../lib/inventory/calculos.ts'
+import { cuantoPedir, estadoDelProducto, minimoAutomatico } from '../../lib/inventory/calculos.ts'
 import { resumir } from '../../lib/reports/calculos.ts'
 
 const O = '11111111-1111-1111-1111-111111111111'
@@ -22,6 +22,7 @@ const STORE = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 const BODEGA = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
 const DEPLOY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'deploy_inventario_cuentas.sql')
 const DEPLOY3 = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'deploy_inventario_consistencia.sql')
+const DEPLOY4 = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'deploy_minimo_exacto.sql')
 let fails = 0
 const ok = (c, m, detalle = '') => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (detalle && !c ? ` (${detalle})` : '')); if (!c) fails++ }
 const igual = (que, esperado, obtenido) => ok(Number(esperado) === Number(obtenido), `${que}: ${esperado}`, `dio ${obtenido}`)
@@ -487,6 +488,32 @@ export default async function (db) {
   const detFiada = await r(O, `SELECT toul_purchase_detail($1) r`, [fiada])
   ok(detFiada.cuenta === null, 'a crédito sin abono: no dice cuenta', JSON.stringify(detFiada.cuenta))
   ok(String(detFiada.deuda?.vence).startsWith('2026-10-10'), 'el plazo se guarda en su día', String(detFiada.deuda?.vence))
+
+  // ════════════════════════════════════════════════════════════════
+  // El SQL del Paso 3 de arriba dejó la cuenta vieja del mínimo: se corre
+  // el del mínimo exacto encima (y dos veces, para ver que no daña)
+  await db.exec(fs.readFileSync(DEPLOY4, 'utf8'))
+  await db.exec(fs.readFileSync(DEPLOY4, 'utf8'))
+
+  console.log('\n— El mínimo automático, exacto')
+  const minimoCon = async (vendidas) => {
+    const p = await prod(STORE, `Vendidas ${vendidas}`, 10000, 5000, 100)
+    await vender(O, contado([linea(p, vendidas, 10000)], vendidas * 10000))
+    return (await as(O, () => q(`SELECT * FROM toul_estado_stock($1)`, [p.id])))[0]
+  }
+  await q(`UPDATE stores SET stock_coverage_days = 30 WHERE id=$1`, [STORE])
+  // 2, 5, 8 y 11 salían con 1 de más (5 vendidas daban mínimo 6)
+  for (const vendidas of [1, 2, 3, 5, 8, 10, 11]) {
+    const f = await minimoCon(vendidas)
+    igual(`${vendidas} vendidas con 30 días de respaldo: mínimo`, vendidas, f?.min_stock)
+    igual(`  y la app saca el mismo`, minimoAutomatico(vendidas, 30), f?.min_stock)
+  }
+  await q(`UPDATE stores SET stock_coverage_days = 15 WHERE id=$1`, [STORE])
+  // 31 × 15 / 30 = 15,5 → 16
+  const quince = await minimoCon(31)
+  igual('31 vendidas con 15 días de respaldo: mínimo', 16, quince?.min_stock)
+  igual('  y la app saca el mismo', minimoAutomatico(31, 15), quince?.min_stock)
+  await q(`UPDATE stores SET stock_coverage_days = 7 WHERE id=$1`, [STORE])
 
   console.log(fails === 0 ? '  TODO OK' : `  ${fails} FALLOS`)
   return { fails }
