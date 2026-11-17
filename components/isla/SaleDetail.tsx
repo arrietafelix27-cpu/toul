@@ -178,7 +178,7 @@ export function SaleDetail({ sale, onClose, isAdmin, voidPending, returnPending 
                     open={voidOpen}
                     onClose={() => setVoidOpen(false)}
                     saleId={sale.id}
-                    total={sale.total}
+                    venta={sale}
                     isAdmin={anular === 'solo'}
                     onDone={() => { setVoidOpen(false); onClose(); onChanged() }}
                 />

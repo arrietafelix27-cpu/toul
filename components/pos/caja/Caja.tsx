@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { usePOSFlow } from '@/components/pos/POSFlowProvider'
 import { useCaja } from '@/components/isla/CajaContext'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { useCobro, vibrar } from '@/lib/pos/useCobro'
 import { useListaProductos, type Entrada } from '@/lib/pos/useListaProductos'
-import { CAJA_CSS, Cuenta, EASE_HOJA, SinPresencia } from './piezas'
+import { CAJA_CSS, Cuenta, SinPresencia } from './piezas'
 import { Productos } from './Productos'
 import { Presentaciones } from './Presentaciones'
 import { Cobro } from './Cobro'
@@ -32,6 +31,7 @@ export function Caja() {
     const lista = useListaProductos(data, cart)
     const narrow = useIsMobile(900)
     const buscadorRef = useRef<HTMLInputElement>(null)
+    const listaRef = useRef<HTMLDivElement>(null)
     const [presentacion, setPresentacion] = useState<string | null>(null)
     const [hojaCobro, setHojaCobro] = useState(false)
 
@@ -39,7 +39,8 @@ export function Caja() {
 
     const agregar = useCallback((e: Entrada) => {
         // Tocar un producto con la venta lista en pantalla empieza otra
-        if (venta) nuevaVenta()
+        // (en el celular la venta registrada deja ver los productos)
+        if (venta) { nuevaVenta(); setHojaCobro(false) }
         if (e.agotado) return
         if (e.conPresentaciones) { setPresentacion(e.id); return }
         const falta = cart.missingFor(e.key)
@@ -56,6 +57,8 @@ export function Caja() {
     const empezarOtra = useCallback(() => {
         nuevaVenta()
         setHojaCobro(false)
+        // La venta nueva empieza viendo la lista desde arriba
+        listaRef.current?.scrollTo({ top: 0 })
         if (!narrow) setTimeout(() => buscadorRef.current?.focus(), 50)
     }, [nuevaVenta, narrow])
 
@@ -94,15 +97,36 @@ export function Caja() {
     }, [presentacion, venta, empezarOtra, narrow, hojaCobro, boton.accion, accionar])
 
     const cerrarPresentaciones = useCallback(() => setPresentacion(null), [])
+    const { limpiarError } = cobro
     const cerrarHoja = useCallback(() => {
         if (cobro.enviando) return
         if (venta) empezarOtra()
-        else setHojaCobro(false)
-    }, [cobro.enviando, venta, empezarOtra])
+        else { setHojaCobro(false); limpiarError() }
+    }, [cobro.enviando, venta, empezarOtra, limpiarError])
+
+    // ── Cobrar en un toque (celular) ─────────────────────────────
+    // De contado, sin descuento y con un solo método (el último que
+    // usaste): la barra cobra directo, en efectivo por el valor exacto.
+    // Cualquier otra cosa abre la hoja completa, como siempre.
+    const metodoDirecto = payment.paymentSplits.length === 1 ? payment.paymentSplits[0].methodName : null
+    const directo = !cart.isEmpty
+        && payment.saleType === 'contado'
+        && payment.discountAmount === 0
+        && !data.methodsLoading
+        && metodoDirecto !== null
+        && cobro.necesita === null
+        && boton.accion === 'cobrar'
+        && !boton.deshabilitado
+    const cobrarBarra = useCallback(() => {
+        if (directo) accionar()
+        else setHojaCobro(true)
+    }, [directo, accionar])
+    // Si el cobro directo falla, la hoja se abre con el aviso
+    const hojaAbierta = hojaCobro || !!venta || (!!cobro.error && !cobro.enviando)
 
     const productos = (
         <Productos lista={lista} data={data} cart={cart} narrow={narrow} esAdmin={ctx.role === 'admin'}
-            onAgregar={agregar} onQuitar={quitar} buscadorRef={buscadorRef} />
+            onAgregar={agregar} onQuitar={quitar} buscadorRef={buscadorRef} listaRef={listaRef} />
     )
 
     const derecha = venta
@@ -129,17 +153,32 @@ export function Caja() {
                         </p>
                         <Cuenta valor={payment.total} style={{ display: 'block', fontSize: 25, fontWeight: 750, letterSpacing: '-0.035em', lineHeight: 1.2, color: 'var(--toul-text)' }} />
                     </div>
-                    <button type="button" onClick={() => setHojaCobro(true)} disabled={cart.isEmpty} className="cj-btn cj-press"
+                    {directo && !cobro.enviando && (
+                        <button type="button" onClick={() => setHojaCobro(true)} className="cj-btn"
+                            style={{ height: 54, padding: '0 4px', flexShrink: 0, fontSize: 14.5, fontWeight: 600, background: 'none', color: 'var(--toul-text-subtle)' }}>
+                            Cambiar
+                        </button>
+                    )}
+                    <button type="button" onClick={cobrarBarra} disabled={cart.isEmpty || cobro.enviando} className="cj-btn cj-press"
                         style={{
-                            height: 54, padding: '0 26px', borderRadius: 17, flexShrink: 0, fontSize: 16.5, fontWeight: 650,
+                            height: 54, padding: directo ? '0 18px' : '0 26px', borderRadius: 17, flexShrink: 0, minWidth: 0, fontWeight: 650,
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.15,
                             background: cart.isEmpty ? 'var(--toul-pos-btn-disabled-bg)' : 'var(--toul-accent)',
                             color: cart.isEmpty ? 'var(--toul-text-dim)' : 'var(--toul-bg)',
                         }}>
-                        Cobrar
+                        {cobro.enviando
+                            ? <span style={{ fontSize: 16.5 }}>Registrando…</span>
+                            : directo
+                                ? <>
+                                    <span style={{ fontSize: 16.5 }}>Cobrar</span>
+                                    <span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.75, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{metodoDirecto}</span>
+                                </>
+                                : <span style={{ fontSize: 16.5 }}>Cobrar</span>}
                     </button>
                 </div>
 
-                <Hoja open={hojaCobro || !!venta} onClose={cerrarHoja} narrow completa cerrable={!cobro.enviando}>
+                {/* Registrada la venta, la hoja no tapa los productos: tocar uno empieza la siguiente */}
+                <Hoja open={hojaAbierta} onClose={cerrarHoja} narrow completa={!venta} atraviesa={!!venta} cerrable={!cobro.enviando}>
                     {derecha}
                 </Hoja>
                 <Presentaciones productId={presentacion} data={data} cart={cart} narrow onClose={cerrarPresentaciones} />
@@ -153,15 +192,11 @@ export function Caja() {
             <style>{CAJA_CSS}</style>
             <section aria-label="Productos" style={{ flex: 1, minWidth: 0, height: '100%' }}>{productos}</section>
             <aside aria-label="Cobro" style={{ width: 'clamp(380px, 34vw, 460px)', flexShrink: 0, height: '100%', borderLeft: '1px solid var(--toul-divider)', position: 'relative', overflow: 'hidden' }}>
-                <AnimatePresence mode="wait" initial={false}>
-                    <motion.div key={venta ? 'lista' : 'cobro'} style={{ height: '100%' }}
-                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.22, ease: EASE_HOJA }}>
-                        {/* Sin esto, cambiar Contado/Crédito antes de cobrar dejaba el
-                            cobro sin salir y "Venta registrada" nunca aparecía */}
-                        <SinPresencia>{derecha}</SinPresencia>
-                    </motion.div>
-                </AnimatePresence>
+                {/* Sin animación: "Venta registrada" aparece apenas responde el
+                    servidor (la transición sumaba 0,25 s a cada venta) */}
+                <div key={venta ? 'lista' : 'cobro'} style={{ height: '100%' }}>
+                    <SinPresencia>{derecha}</SinPresencia>
+                </div>
             </aside>
             <Presentaciones productId={presentacion} data={data} cart={cart} narrow={false} onClose={cerrarPresentaciones} />
         </div>

@@ -184,8 +184,51 @@ export default async function (db) {
     [carlos])))
   ok(anotado.store_id === STORE, 'la base le pone la tienda sola, desde el cliente')
 
+  console.log('\n— Un fiado anulado ya no cuenta en Cuentas por cobrar')
+  const antes = await cartera()
+  const rosa = await cliente('Rosa')
+  await fiar(rosa, 100000, 40, null)            // vencido hace 10 días
+  await abonar(rosa, 60000, 5)
+  const anulable = await fiar(rosa, 50000, 0, null)
+  await q(`UPDATE customers SET total_debt = 90000 WHERE id = $1`, [rosa])
+  c = await cartera()
+  ok(Number(c.fiadoMes) === Number(antes.fiadoMes) + 50000, `fiarle $50.000 hoy sube "Fiaste" (dio ${c.fiadoMes})`)
+  await as(O, () => q(`SELECT toul_void_sale($1, 'Error al registrar')`, [anulable]))
+  c = await cartera()
+  const rr = dame(c, 'Rosa')
+  ok(Number(c.fiadoMes) === Number(antes.fiadoMes), `al anularlo, "Fiaste" vuelve a lo de antes (dio ${c.fiadoMes})`)
+  ok(rr.saldo === 40000, `Rosa sigue debiendo $40.000 del fiado viejo (dio ${rr.saldo})`)
+  ok(rr.fiados === 1, `"Fiados sin pagar" no cuenta el anulado (dio ${rr.fiados})`)
+  ok(rr.diasVencido === 10, `la anulación no cuenta como abono: vence con el viejo, 10 días vencido (dio ${rr.diasVencido})`)
+  ok(Number(c.total) === Number(antes.total) + 40000, 'el total por cobrar solo suma lo que Rosa debe de verdad')
+
+  console.log('\n— Lo que devolvieron de un fiado no cuenta como fiado')
+  const antes2 = await cartera()
+  const lucia = await cliente('Lucía')
+  const f1 = await fiar(lucia, 80000, 0, null)
+  const f2 = await fiar(lucia, 30000, 0, null)
+  await q(`INSERT INTO credits(store_id,customer_id,sale_id,type,amount,notes)
+           VALUES ($1,$2,$3,'return',20000,'Devolución venta #ABC'), ($1,$2,$4,'return',30000,'Devolución venta #ABC')`,
+    [STORE, lucia, f1, f2])
+  c = await cartera()
+  const rl = dame(c, 'Lucía')
+  ok(Number(c.fiadoMes) === Number(antes2.fiadoMes) + 60000,
+    `"Fiaste" suma $60.000: $110.000 fiados menos $50.000 devueltos (dio ${Number(c.fiadoMes) - Number(antes2.fiadoMes)})`)
+  ok(rl.saldo === 60000, `Lucía debe $60.000 (dio ${rl.saldo})`)
+  ok(rl.fiados === 1, `el fiado que devolvió completo ya no cuenta como "sin pagar" (dio ${rl.fiados})`)
+
+  console.log('\n— "Fiados sin pagar" cuenta solo los que siguen abiertos')
+  const tomas = await cliente('Tomás')
+  await fiar(tomas, 70000, 20, null)
+  await fiar(tomas, 30000, 3, null)
+  await abonar(tomas, 70000, 1)
+  c = await cartera()
+  const rt = dame(c, 'Tomás')
+  ok(rt.fiados === 1, `pagó el primero completo: le queda 1 sin pagar (dio ${rt.fiados})`)
+  ok(rt.saldo === 30000 && rt.diasFiado === 3, `debe $30.000 del que fió hace 3 días (dio ${rt.saldo}, ${rt.diasFiado} días)`)
+
   console.log('\n— Cada tienda ve solo su cartera')
-  const O2 = '22222222-2222-2222-2222-222222222222'
+  const O2 ='22222222-2222-2222-2222-222222222222'
   await q(`INSERT INTO auth.users(id,email) VALUES ($1,'otro@x.com')`, [O2])
   await q(`INSERT INTO stores(owner_id,name) VALUES ($1,'Otra tienda')`, [O2])
   const ajena = await as(O2, async () => (await one(`SELECT toul_receivables() r`)).r)

@@ -55,31 +55,40 @@ export function VentaLista({ cobro, narrow, onNueva, onVerVentas }: {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             <style>{CSS}</style>
-            <div className="cj-scroll-y" style={{ flex: 1, minHeight: 0, padding: narrow ? '8px 20px 20px' : '36px 24px 20px' }}>
-                {/* ── El chulo, que se dibuja ───────────────────── */}
-                <div style={{ position: 'relative', width: 84, height: 84, margin: '0 auto' }}>
-                    <span aria-hidden className="cj-pulso" style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--toul-accent-glow)' }} />
-                    <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden style={{ position: 'relative' }}>
-                        <circle cx="42" cy="42" r="40" fill="var(--toul-accent-dim)" />
-                        <motion.path d="M27 43 L38 54 L58 32" fill="none" stroke="var(--toul-accent)" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round"
-                            initial={{ pathLength: reducir ? 1 : 0 }} animate={{ pathLength: 1 }}
-                            transition={{ duration: 0.55, ease: EASE_HOJA, delay: 0.08 }} />
-                    </svg>
+            <div className="cj-scroll-y" style={{ flex: 1, minHeight: 0, padding: narrow ? '2px 20px 8px' : '36px 24px 20px' }}>
+                {/* ── El chulo, que se dibuja ─────────────────────
+                    En el celular va en una fila, a la izquierda: la hoja queda
+                    baja y deja ver los productos para empezar la siguiente */}
+                <div style={narrow ? { display: 'flex', alignItems: 'center', gap: 14 } : undefined}>
+                    <div style={{ position: 'relative', width: narrow ? 46 : 84, height: narrow ? 46 : 84, margin: narrow ? 0 : '0 auto', flexShrink: 0 }}>
+                        <span aria-hidden className="cj-pulso" style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--toul-accent-glow)' }} />
+                        <svg width={narrow ? 46 : 84} height={narrow ? 46 : 84} viewBox="0 0 84 84" aria-hidden style={{ position: 'relative' }}>
+                            <circle cx="42" cy="42" r="40" fill="var(--toul-accent-dim)" />
+                            <motion.path d="M27 43 L38 54 L58 32" fill="none" stroke="var(--toul-accent)" strokeWidth={narrow ? 6 : 4.5} strokeLinecap="round" strokeLinejoin="round"
+                                initial={{ pathLength: reducir ? 1 : 0 }} animate={{ pathLength: 1 }}
+                                transition={{ duration: 0.55, ease: EASE_HOJA, delay: 0.08 }} />
+                        </svg>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                        <h2 style={{ fontSize: narrow ? 14 : 15, fontWeight: 500, color: 'var(--toul-text-muted)', margin: narrow ? 0 : '14px 0 0', textAlign: narrow ? 'left' : 'center' }}>
+                            {venta.isCredit ? 'Venta fiada registrada' : 'Venta registrada'}
+                        </h2>
+                        <p style={{ margin: narrow ? '1px 0 0' : '4px 0 0', textAlign: narrow ? 'left' : 'center' }}>
+                            <AnimatedNumber value={venta.total} formatter={formatCOP} cuenta duration={0.5}
+                                style={{ fontSize: narrow ? 26 : 34, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }} />
+                        </p>
+                    </div>
                 </div>
+                {(!narrow || venta.offline) && (
+                    <p style={{ fontSize: 13, textAlign: narrow ? 'left' : 'center', margin: narrow ? '8px 0 0' : '4px 0 0', color: venta.offline ? 'var(--toul-warning)' : 'var(--toul-text-subtle)' }}>
+                        {venta.offline ? 'Guardada sin internet · se envía sola cuando vuelva' : 'Inventario y caja actualizados'}
+                    </p>
+                )}
 
-                <h2 style={{ fontSize: 15, fontWeight: 500, color: 'var(--toul-text-muted)', margin: '14px 0 0', textAlign: 'center' }}>
-                    {venta.isCredit ? 'Venta fiada registrada' : 'Venta registrada'}
-                </h2>
-                <p style={{ margin: '4px 0 0', textAlign: 'center' }}>
-                    <AnimatedNumber value={venta.total} formatter={formatCOP} cuenta duration={0.5}
-                        style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--toul-text)', fontVariantNumeric: 'tabular-nums' }} />
-                </p>
-                <p style={{ fontSize: 13, textAlign: 'center', margin: '4px 0 0', color: venta.offline ? 'var(--toul-warning)' : 'var(--toul-text-subtle)' }}>
-                    {venta.offline ? 'Guardada sin internet · se envía sola cuando vuelva' : 'Inventario y caja actualizados'}
-                </p>
-
-                {/* ── Resumen ────────────────────────────────────── */}
-                <div style={{ marginTop: 24 }}>
+                {/* ── Resumen ──────────────────────────────────────
+                    En el celular sin la lista de productos: los acabas de tocar */}
+                <div style={{ marginTop: narrow ? 8 : 24 }}>
                     {venta.isCredit ? (<>
                         <Fila label="Cliente" valor={venta.customerName || 'Sin nombre'} />
                         <Fila label="Abono recibido" valor={venta.abono > 0 ? `${formatCOP(venta.abono)}${pagos.length === 1 ? ` · ${nombreMetodo(pagos[0].methodName)}` : ''}` : 'Sin abono'} />
@@ -95,7 +104,7 @@ export function VentaLista({ cobro, narrow, onNueva, onVerVentas }: {
                         <Fila label="Vuelto" valor={formatCOP(venta.change)} fuerte />
                     </>)}
                     {venta.discount > 0 && <Fila label="Descuento" valor={`−${formatCOP(venta.discount)}`} />}
-                    <div style={{ padding: '11px 0' }}>
+                    {!narrow && <div style={{ padding: '11px 0' }}>
                         {productos.map((i, n) => (
                             <div key={n} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '3px 0', fontSize: 13.5 }}>
                                 <span style={{ color: 'var(--toul-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
@@ -105,7 +114,7 @@ export function VentaLista({ cobro, narrow, onNueva, onVerVentas }: {
                             </div>
                         ))}
                         {masProductos > 0 && <p style={{ fontSize: 13, color: 'var(--toul-text-subtle)', margin: '3px 0 0' }}>y {masProductos} más</p>}
-                    </div>
+                    </div>}
                 </div>
             </div>
 
@@ -126,9 +135,14 @@ export function VentaLista({ cobro, narrow, onNueva, onVerVentas }: {
                     Nueva venta
                     {!narrow && <kbd style={{ fontFamily: 'inherit', fontSize: 12, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'color-mix(in srgb, var(--toul-bg) 14%, transparent)' }}>Enter</kbd>}
                 </button>
-                <div style={{ display: 'flex', justifyContent: 'center', minHeight: 36, alignItems: 'center' }}>
-                    <button type="button" onClick={onVerVentas} className="cj-btn cj-link">{isPro && session ? 'Ver ventas del turno' : 'Ver ventas de hoy'}</button>
-                </div>
+                {/* En el celular "Ventas" ya está arriba: en su lugar, cómo seguir sin otro toque */}
+                {narrow ? (
+                    <p style={{ fontSize: 13, color: 'var(--toul-text-subtle)', textAlign: 'center', margin: '2px 0 4px' }}>O toca un producto para empezar otra</p>
+                ) : (
+                    <div style={{ display: 'flex', justifyContent: 'center', minHeight: 36, alignItems: 'center' }}>
+                        <button type="button" onClick={onVerVentas} className="cj-btn cj-link">{isPro && session ? 'Ver ventas del turno' : 'Ver ventas de hoy'}</button>
+                    </div>
+                )}
             </div>
             {conDeshacer && <TeEquivocaste key={venta.clientSaleId} cobro={cobro} narrow={narrow} />}
         </div>

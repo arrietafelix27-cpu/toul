@@ -6,11 +6,12 @@ import { X } from 'lucide-react'
 import { EASE_HOJA, SinPresencia } from './piezas'
 
 /**
- * Hoja de la caja. Sube con la curva de iOS (0,32 · 0,72 · 0 · 1) en 0,4 s
- * sobre un fondo desenfocado. En el celular se cierra arrastrándola hacia
+ * Hoja de la caja. Sube con la curva de iOS (0,32 · 0,72 · 0 · 1) en 0,25 s
+ * sobre un fondo apenas desenfocado (se abre decenas de veces al día: más
+ * lento se sentía pesado). En el celular se cierra arrastrándola hacia
  * abajo desde la manija; en PC queda centrada. Escape y tocar afuera la cierran.
  */
-export function Hoja({ open, onClose, titulo, subtitulo, children, pie, completa = false, ancho = 480, narrow, cerrable = true }: {
+export function Hoja({ open, onClose, titulo, subtitulo, children, pie, completa = false, ancho = 480, narrow, cerrable = true, atraviesa = false }: {
     open: boolean
     onClose: () => void
     titulo?: string
@@ -23,6 +24,8 @@ export function Hoja({ open, onClose, titulo, subtitulo, children, pie, completa
     narrow: boolean
     /** Sin la X (por ejemplo, mientras se registra la venta) */
     cerrable?: boolean
+    /** Sin fondo: lo de atrás se sigue pudiendo tocar (la venta registrada en el celular) */
+    atraviesa?: boolean
 }) {
     const arrastre = useDragControls()
     const reducir = useReducedMotion()
@@ -44,17 +47,20 @@ export function Hoja({ open, onClose, titulo, subtitulo, children, pie, completa
                 <div style={{
                     position: 'fixed', inset: 0, zIndex: 90, display: 'flex', justifyContent: 'center',
                     alignItems: abajo ? 'flex-end' : 'center', padding: abajo ? 0 : 24,
+                    pointerEvents: atraviesa ? 'none' : undefined,
                 }}>
+                    {!atraviesa && (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2, ease: EASE_HOJA }}
+                            onClick={onClose}
+                            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                        />
+                    )}
                     <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3, ease: EASE_HOJA }}
-                        onClick={onClose}
-                        style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
-                    />
-                    <motion.div
-                        role="dialog" aria-modal="true" aria-label={titulo}
+                        role="dialog" aria-modal={!atraviesa} aria-label={titulo}
                         initial={entrada} animate={visible} exit={entrada}
-                        transition={{ duration: 0.4, ease: EASE_HOJA }}
+                        transition={{ duration: 0.25, ease: EASE_HOJA }}
                         drag={abajo && !reducir ? 'y' : false} dragListener={false} dragControls={arrastre}
                         dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0, bottom: 1 }} dragSnapToOrigin
                         onDragEnd={(_, info) => { if (info.offset.y > 110 || info.velocity.y > 600) onClose() }}
@@ -64,8 +70,11 @@ export function Hoja({ open, onClose, titulo, subtitulo, children, pie, completa
                             maxHeight: abajo ? 'calc(100dvh - env(safe-area-inset-top, 0px) - 8px)' : 'min(760px, calc(100dvh - 48px))',
                             display: 'flex', flexDirection: 'column', overflow: 'hidden',
                             borderRadius: abajo ? '26px 26px 0 0' : 24,
-                            background: 'var(--toul-surface-overlay)', border: '1px solid var(--toul-border)',
+                            // El color de siempre sobre el fondo de la app: queda opaca aunque no haya fondo oscuro detrás
+                            background: 'linear-gradient(var(--toul-surface-overlay), var(--toul-surface-overlay)), var(--toul-bg)',
+                            border: '1px solid var(--toul-border)',
                             boxShadow: '0 -20px 60px rgba(0,0,0,0.5)',
+                            pointerEvents: 'auto',
                         }}>
                         {/* La manija y el título: desde aquí se arrastra para cerrar */}
                         <div onPointerDown={e => { if (abajo) arrastre.start(e) }}

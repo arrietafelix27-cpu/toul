@@ -1,20 +1,22 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type RefObject } from 'react'
 import { Search, UserPlus } from 'lucide-react'
 import type { Customer } from '@/lib/types'
 import type { POSDataState } from '@/lib/pos/usePOSData'
 import type { POSPaymentState } from '@/lib/pos/usePOSPayment'
-import { buscarClientes, clienteConTelefono, pareceTelefono } from '@/lib/pos/clientes'
+import { buscarClientes, clienteConTelefono, normalizar, pareceTelefono } from '@/lib/pos/clientes'
 import { Iniciales } from './piezas'
 
 /** Cliente de la venta: buscar por nombre o teléfono, y "+ Crear" si no está */
-export function Cliente({ data, payment, puedeCrear, esFiado }: {
+export function Cliente({ data, payment, puedeCrear, esFiado, buscarRef }: {
     data: POSDataState
     payment: POSPaymentState
     /** El vendedor sin permiso solo puede elegir clientes que ya existen */
     puedeCrear: boolean
     esFiado: boolean
+    /** El buscador: se activa al elegir Crédito */
+    buscarRef?: RefObject<HTMLInputElement | null>
 }) {
     const [creando, setCreando] = useState(false)
     const [otroDato, setOtroDato] = useState('')
@@ -25,19 +27,26 @@ export function Cliente({ data, payment, puedeCrear, esFiado }: {
 
     const q = payment.customerSearch
     const elegido = payment.selectedCustomer
+    // Mientras llegan los clientes no se ofrece crear: podría estar repetido
+    const cargando = data.customersLoading
     const resultados = useMemo(() => buscarClientes(data.customers, q, 6), [data.customers, q])
 
     // Si lo que se escribió es un teléfono, se pide el nombre; si es un nombre, el teléfono
     const porTelefono = pareceTelefono(q)
     const nombre = porTelefono ? otroDato.trim() : q.trim()
     const telefono = porTelefono ? q.trim() : otroDato.trim()
-    const repetido = clienteConTelefono(data.customers, telefono) ?? existente
+    // Mismo nombre sin importar mayúsculas, espacios ni tildes: es la misma persona
+    const mismoNombre = useMemo(() => {
+        const n = normalizar(nombre)
+        return n ? data.customers.find(c => normalizar(c.name) === n) : undefined
+    }, [data.customers, nombre])
+    const repetido = clienteConTelefono(data.customers, telefono) ?? existente ?? mismoNombre
 
     const limpiar = () => { setCreando(false); setOtroDato(''); setError(null); setExistente(null) }
     const elegir = (c: Customer) => { payment.setSelectedCustomer(c); payment.setCustomerSearch(''); limpiar() }
 
     const crear = async () => {
-        if (!nombre || guardando || repetido) return
+        if (!nombre || guardando || repetido || cargando) return
         setGuardando(true)
         setError(null)
         try {
@@ -71,13 +80,14 @@ export function Cliente({ data, payment, puedeCrear, esFiado }: {
         )
     }
 
-    const sinResultados = !!q.trim() && resultados.length === 0
+    const sinResultados = !!q.trim() && resultados.length === 0 && !cargando
 
     return (
         <div>
             <div style={{ position: 'relative' }}>
                 <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)', pointerEvents: 'none' }} />
                 <input
+                    ref={buscarRef}
                     type="text" autoComplete="off" spellCheck={false} enterKeyHint="search" data-enter="propio"
                     aria-label="Buscar cliente por nombre o teléfono"
                     placeholder="Nombre o teléfono"
@@ -87,7 +97,7 @@ export function Cliente({ data, payment, puedeCrear, esFiado }: {
                         if (e.key !== 'Enter') return
                         e.preventDefault()
                         if (resultados[0]) elegir(resultados[0])
-                        else if (puedeCrear && q.trim()) setCreando(true)
+                        else if (puedeCrear && q.trim() && !mismoNombre && !cargando) setCreando(true)
                     }}
                     className="cj-campo" style={{ paddingLeft: 40 }}
                 />
@@ -106,7 +116,12 @@ export function Cliente({ data, payment, puedeCrear, esFiado }: {
                 </div>
             )}
 
-            {q.trim() && puedeCrear && !creando && (
+            {/* Si ya existe con ese nombre, se elige de la lista: no se ofrece crearlo otra vez */}
+            {q.trim() && cargando && resultados.length === 0 && (
+                <p style={{ fontSize: 13, color: 'var(--toul-text-subtle)', margin: '8px 2px 0' }}>Cargando clientes…</p>
+            )}
+
+            {q.trim() && puedeCrear && !creando && !cargando && !(mismoNombre && !porTelefono) && (
                 <button type="button" onClick={() => setCreando(true)} className="cj-btn cj-link" style={{ marginTop: 10, color: sinResultados ? 'var(--toul-text)' : undefined }}>
                     <UserPlus size={15} /> Crear {porTelefono ? 'cliente con este número' : `"${q.trim()}"`}
                 </button>

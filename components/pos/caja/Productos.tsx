@@ -37,7 +37,7 @@ export interface ListaProductos {
     vacio: boolean
 }
 
-export function Productos({ lista, data, cart, narrow, onAgregar, onQuitar, buscadorRef, esAdmin }: {
+export function Productos({ lista, data, cart, narrow, onAgregar, onQuitar, buscadorRef, listaRef, esAdmin }: {
     lista: ListaProductos
     data: POSDataState
     cart: POSCartState
@@ -45,6 +45,8 @@ export function Productos({ lista, data, cart, narrow, onAgregar, onQuitar, busc
     onAgregar: (e: Entrada) => void
     onQuitar: (key: string) => void
     buscadorRef: RefObject<HTMLInputElement | null>
+    /** La parte que se desplaza: vuelve arriba en cada venta nueva */
+    listaRef: RefObject<HTMLDivElement | null>
     esAdmin: boolean
 }) {
     const { busqueda, setBusqueda, categoria, setCategoria, categorias, entradas, titulo } = lista
@@ -118,7 +120,7 @@ export function Productos({ lista, data, cart, narrow, onAgregar, onQuitar, busc
             )}
 
             {/* ── Productos ────────────────────────────────────── */}
-            <div className="cj-scroll-y" style={{ flex: 1, minHeight: 0, padding: `14px ${pad}px ${narrow ? 24 : 32}px` }}>
+            <div ref={listaRef} className="cj-scroll-y" style={{ flex: 1, minHeight: 0, padding: `14px ${pad}px ${narrow ? 24 : 32}px` }}>
                 {data.failed && <AvisoCarga que={data.failed} onRetry={data.retry} />}
                 {data.failed === 'products' ? null : data.isLoading ? <Esqueleto narrow={narrow} /> : lista.vacio ? (
                     <Vacio titulo="Todavía no hay productos" texto={esAdmin ? 'Agrégalos en Productos, en el panel del administrador.' : 'Pídele al administrador que los agregue.'} />

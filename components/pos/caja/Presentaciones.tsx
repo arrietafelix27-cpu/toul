@@ -50,7 +50,9 @@ export function Presentaciones({ productId, data, cart, narrow, onClose }: {
                             {n > 0 ? (
                                 <Cantidad n={n} onMenos={() => cart.decrementItem(key)} onMas={agregar} puedeMas={puede} grande etiqueta={v.name} />
                             ) : (
-                                <button type="button" onClick={agregar} disabled={!puede} className="cj-btn cj-press cj-chip" aria-label={`Agregar ${v.name}`}>
+                                // Elegir una presentación cierra la hoja: casi siempre se lleva una sola.
+                                // El + y el − de una que ya está en la venta no la cierran
+                                <button type="button" onClick={() => { if (puede) { agregar(); onClose() } }} disabled={!puede} className="cj-btn cj-press cj-chip" aria-label={`Agregar ${v.name}`}>
                                     Agregar
                                 </button>
                             )}

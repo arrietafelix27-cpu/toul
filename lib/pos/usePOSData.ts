@@ -35,6 +35,16 @@ const jsonFetcher = async ([url, storeId]: [string, string]) => {
     }
 }
 
+/** La última respuesta buena guardada en este equipo (para abrir sin esperar) */
+function copiaGuardada(storeId: string, url: string) {
+    try {
+        const raw = localStorage.getItem(`${CACHE_PREFIX}${storeId}:${url}`)
+        return raw ? JSON.parse(raw) : undefined
+    } catch {
+        return undefined
+    }
+}
+
 // ─── Types ────────────────────────────────────────────────────
 export interface POSVariant {
     id: string
@@ -83,7 +93,11 @@ export interface POSDataState {
     stock: Cuenta
     /** "Sauvage" o "Bleu · 50ml": para decir qué le falta a un combo */
     unitName: (unidad: string) => string
+    /** Solo los productos: la caja se muestra apenas llegan */
     isLoading: boolean
+    /** Métodos de pago y clientes pueden llegar después que los productos */
+    methodsLoading: boolean
+    customersLoading: boolean
     /** Qué no cargó (ni hay copia guardada): los productos, o métodos de pago y clientes */
     failed: 'products' | 'other' | null
     /** Vuelve a pedir lo que no cargó */
@@ -109,23 +123,32 @@ export function usePOSData(enabled: boolean): POSDataState {
     const storeId = sesion?.storeId ?? null
     const listo = enabled && !!storeId
 
+    // La caja abre con lo último guardado en este equipo y se actualiza por
+    // detrás. Si un precio cambió en ese momento, el servidor rechaza la
+    // venta y pide volver a cobrar: nunca se cobra un precio viejo
+    const copias = useMemo(() => listo && storeId ? {
+        prod: copiaGuardada(storeId, '/api/pos-data'),
+        meth: copiaGuardada(storeId, '/api/payment-methods'),
+        cust: copiaGuardada(storeId, '/api/customers'),
+    } : null, [listo, storeId])
+
     // Los precios se refrescan cada 2 minutos: así casi nunca se cobra uno viejo
     const { data: prodData, error: prodErr, mutate: mutateProd } = useSWR(
         listo ? ['/api/pos-data', storeId] : null,
         jsonFetcher,
-        { revalidateOnFocus: false, dedupingInterval: 30_000, refreshInterval: 120_000 }
+        { revalidateOnFocus: false, dedupingInterval: 30_000, refreshInterval: 120_000, fallbackData: copias?.prod }
     )
 
     const { data: methData, error: methErr, mutate: mutateMeth } = useSWR(
         listo ? ['/api/payment-methods', storeId] : null,
         jsonFetcher,
-        { revalidateOnFocus: false, dedupingInterval: 60_000 }
+        { revalidateOnFocus: false, dedupingInterval: 60_000, fallbackData: copias?.meth }
     )
 
     const { data: custData, error: custErr, mutate: mutateCust } = useSWR(
         listo ? ['/api/customers', storeId] : null,
         jsonFetcher,
-        { revalidateOnFocus: false, dedupingInterval: 30_000 }
+        { revalidateOnFocus: false, dedupingInterval: 30_000, fallbackData: copias?.cust }
     )
 
     // ── Ventas guardadas sin internet: su stock ya salió ─────────
@@ -241,7 +264,10 @@ export function usePOSData(enabled: boolean): POSDataState {
     const failed = prodErr && !prodData ? 'products'
         : (methErr && !methData) || (custErr && !custData) ? 'other'
         : null
-    const isLoading = enabled && !failed && (!prodData || !methData || !custData)
+    // Los productos no esperan a los métodos ni a los clientes
+    const isLoading = enabled && failed !== 'products' && !prodData
+    const methodsLoading = enabled && !methData && !methErr
+    const customersLoading = enabled && !custData && !custErr
 
     const retry = useCallback(() => {
         void mutateProd()
@@ -254,6 +280,6 @@ export function usePOSData(enabled: boolean): POSDataState {
 
     return useMemo(() => ({
         products, variantsByProduct, combos, methods, customers, categories, sold, stock, unitName,
-        isLoading, failed, retry, refreshProducts, refreshCustomers,
-    }), [products, variantsByProduct, combos, methods, customers, categories, sold, stock, unitName, isLoading, failed, retry, refreshProducts, refreshCustomers])
+        isLoading, methodsLoading, customersLoading, failed, retry, refreshProducts, refreshCustomers,
+    }), [products, variantsByProduct, combos, methods, customers, categories, sold, stock, unitName, isLoading, methodsLoading, customersLoading, failed, retry, refreshProducts, refreshCustomers])
 }

@@ -129,7 +129,8 @@ const botonesDe = (v: unknown): BotonesComprobante => v === 'whatsapp' || v === 
 export default function CajaLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const { data: ctx, isLoading } = useSessionContext()
-    const { data: session, isLoading: sessionLoading, mutate: refreshSession } = useOpenCashSession(ctx?.storeId)
+    // Con el punto físico en pausa no hay turnos: ni se piden ni se esperan
+    const { data: session, isLoading: sessionLoading, mutate: refreshSession } = useOpenCashSession(PUNTO_FISICO ? ctx?.storeId : null)
     // Apagada hasta saber qué equipo es (ver abajo)
     const [autoPrint, setAutoPrint] = useState(false)
     // Los datos del negocio llegan del servidor; mientras tanto (o sin

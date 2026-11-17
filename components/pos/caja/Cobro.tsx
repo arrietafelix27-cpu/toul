@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Plus, X, Banknote, Wallet, Landmark, CreditCard, ShoppingBag, AlertTriangle, Check, ShieldCheck } from 'lucide-react'
 import { usePOSFlow } from '@/components/pos/POSFlowProvider'
@@ -41,6 +41,15 @@ export function Cobro({ cobro, narrow }: { cobro: CobroState; narrow: boolean })
     const esFiado = payment.saleType === 'credito'
     const online = offline.online
     const sinFiar = !esAdmin && permisos.fiar === 'no'
+
+    // Al fiar sin cliente se activa el buscador (en el celular abre el teclado:
+    // por eso va en el mismo toque y no después)
+    const buscarClienteRef = useRef<HTMLInputElement>(null)
+    const { setSaleType, selectedCustomer } = payment
+    const elegirTipo = useCallback((tipo: 'contado' | 'credito') => {
+        setSaleType(tipo)
+        if (tipo === 'credito' && !selectedCustomer) buscarClienteRef.current?.focus()
+    }, [setSaleType, selectedCustomer])
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -96,7 +105,7 @@ export function Cobro({ cobro, narrow }: { cobro: CobroState; narrow: boolean })
                 {!cart.isEmpty && (<>
                     {/* ── Contado o crédito ─────────────────────────── */}
                     <section style={{ marginTop: 24 }}>
-                        <Segmentado id="tipo" valor={payment.saleType} onChange={payment.setSaleType}
+                        <Segmentado id="tipo" valor={payment.saleType} onChange={elegirTipo}
                             opciones={[
                                 { valor: 'contado', label: 'Contado' },
                                 { valor: 'credito', label: 'Crédito', deshabilitado: (!online && !esFiado) || (sinFiar && !esFiado) },
@@ -110,7 +119,7 @@ export function Cobro({ cobro, narrow }: { cobro: CobroState; narrow: boolean })
                             {esFiado ? 'obligatorio' : 'opcional'}
                         </span>
                     }>
-                        <Cliente data={data} payment={payment} esFiado={esFiado}
+                        <Cliente data={data} payment={payment} esFiado={esFiado} buscarRef={buscarClienteRef}
                             puedeCrear={esAdmin || permisos.crear_clientes === 'solo'} />
                     </Seccion>
 
@@ -254,6 +263,15 @@ function Metodos() {
     const [dividirAbierto, setDividirAbierto] = useState(false)
     const dividir = dividirAbierto || payment.selectedMethodIds.length > 1
     const esFiado = payment.saleType === 'credito'
+
+    // Mientras llegan, nunca "no hay métodos": eso sería falso
+    if (data.methods.length === 0 && data.methodsLoading) {
+        return (
+            <Seccion titulo="¿Cómo te pagaron?">
+                <p style={{ fontSize: 14, color: 'var(--toul-text-subtle)', margin: 0 }}>Cargando métodos de pago…</p>
+            </Seccion>
+        )
+    }
 
     if (data.methods.length === 0) {
         return (

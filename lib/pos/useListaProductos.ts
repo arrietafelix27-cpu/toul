@@ -10,7 +10,9 @@ import { unidadesDeLinea } from './stock'
    Lo que se ve en "Vender": productos y combos juntos, por
    categoría, con lo que más se vende primero y lo agotado al final.
    Agregar al carrito no cambia el orden: así nadie pierde de vista
-   lo que está tocando.
+   lo que está tocando. Vender tampoco: "Más vendidos" se fija al
+   entrar a la caja y no se reacomoda hasta la próxima vez que entres
+   (un producto que se agota se queda en su sitio).
    ══════════════════════════════════════════════════════════════ */
 
 export type Orden = 'vendidos' | 'az' | 'stock' | 'precio-menor' | 'precio-mayor'
@@ -107,6 +109,14 @@ export function useListaProductos(data: POSDataState, cart: POSCartState) {
         return [...productos, ...combos]
     }, [data.products, data.variantsByProduct, data.combos, data.stock, data.sold])
 
+    // El puesto de cada uno en "Más vendidos", fijado con lo primero que llega
+    const [puestos, setPuestos] = useState<Map<string, number> | null>(null)
+    if (puestos === null && base.length > 0) {
+        const fijo = [...base].sort((a, b) =>
+            Number(a.agotado) - Number(b.agotado) || b.vendidos - a.vendidos || a.nombre.localeCompare(b.nombre, 'es'))
+        setPuestos(new Map(fijo.map((e, i) => [e.key, i])))
+    }
+
     // Solo las categorías que tienen algo a la venta. La foto es la del más vendido
     const categorias = useMemo<CategoriaCaja[]>(() => {
         const out: CategoriaCaja[] = []
@@ -144,8 +154,18 @@ export function useListaProductos(data: POSDataState, cart: POSCartState) {
             'precio-mayor': (a: typeof lista[number], b: typeof lista[number]) => b.precioMax - a.precioMax || porNombre(a, b),
         }[orden]
         // Lo agotado siempre al final
-        return [...lista].sort((a, b) => Number(a.agotado) - Number(b.agotado) || comparar(a, b))
-    }, [base, categoriaActiva, q, orden])
+        const normal = (a: typeof lista[number], b: typeof lista[number]) => Number(a.agotado) - Number(b.agotado) || comparar(a, b)
+        if (orden !== 'vendidos' || !puestos) return [...lista].sort(normal)
+        // "Más vendidos" con el puesto fijo; lo creado con la caja abierta va al final
+        return [...lista].sort((a, b) => {
+            const pa = puestos.get(a.key)
+            const pb = puestos.get(b.key)
+            if (pa !== undefined && pb !== undefined) return pa - pb
+            if (pa !== undefined) return -1
+            if (pb !== undefined) return 1
+            return normal(a, b)
+        })
+    }, [base, categoriaActiva, q, orden, puestos])
 
     const entradas = useMemo<Entrada[]>(() => ordenadas.map(e => {
         let enCarrito = 0

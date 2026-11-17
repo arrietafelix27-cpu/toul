@@ -29,6 +29,7 @@ const MIGRATIONS = [
     // Va antes que "Plata mía" solo aquí, para que antes-y-despues siga
     // probando ese cambio: no se tocan entre sí (en Supabase se corrió después)
     'deploy_minimo_exacto.sql',
+    'deploy_fiaste_anuladas.sql',
     'deploy_sin_plata_mia.sql',
 ]
 

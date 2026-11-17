@@ -164,7 +164,7 @@ export function VentaAbierta({ venta, storeId, onCerrar, onCambio }: {
                     open={anular}
                     onClose={cerrarAnular}
                     saleId={venta.id}
-                    total={venta.total}
+                    venta={venta}
                     isAdmin
                     onDone={anulada}
                 />
