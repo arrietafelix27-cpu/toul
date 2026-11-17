@@ -41,25 +41,29 @@ export function Hoja({ open, onClose, titulo, subtitulo, children, pie, completa
     const entrada = reducir ? { opacity: 0 } : abajo ? { y: '100%' } : { opacity: 0, y: 24, scale: 0.97 }
     const visible = reducir ? { opacity: 1 } : abajo ? { y: 0 } : { opacity: 1, y: 0, scale: 1 }
 
+    // Mientras se cierra, la hoja deja pasar los toques: un producto tocado
+    // justo cuando baja la tarjeta siempre se agrega
+    const salida = { ...entrada, pointerEvents: 'none' as const }
+
     return (
         <AnimatePresence>
             {open && (
                 <div style={{
                     position: 'fixed', inset: 0, zIndex: 90, display: 'flex', justifyContent: 'center',
                     alignItems: abajo ? 'flex-end' : 'center', padding: abajo ? 0 : 24,
-                    pointerEvents: atraviesa ? 'none' : undefined,
+                    pointerEvents: 'none',
                 }}>
                     {!atraviesa && (
                         <motion.div
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }}
                             transition={{ duration: 0.2, ease: EASE_HOJA }}
                             onClick={onClose}
-                            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', pointerEvents: 'auto' }}
                         />
                     )}
                     <motion.div
                         role="dialog" aria-modal={!atraviesa} aria-label={titulo}
-                        initial={entrada} animate={visible} exit={entrada}
+                        initial={entrada} animate={visible} exit={salida}
                         transition={{ duration: 0.25, ease: EASE_HOJA }}
                         drag={abajo && !reducir ? 'y' : false} dragListener={false} dragControls={arrastre}
                         dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0, bottom: 1 }} dragSnapToOrigin
