@@ -113,9 +113,8 @@ export interface POSDataState {
 interface EnCamino { salioEn: number; venta: PendingSale }
 
 /**
- * SWR-based data hook for POS.
- * Fetches products, payment methods, and customers in parallel.
- * Keeps data fresh but avoids re-fetching while the POS is open.
+ * Datos de la caja: productos, métodos de pago y clientes en un solo pedido.
+ * Se mantienen frescos sin volver a pedirlos a cada rato.
  */
 export function usePOSData(enabled: boolean): POSDataState {
     // La tienda de quien vende: la memoria y la copia sin internet van a su nombre
@@ -125,13 +124,16 @@ export function usePOSData(enabled: boolean): POSDataState {
 
     // La caja abre con lo último guardado en este equipo y se actualiza por
     // detrás. Si un precio cambió en ese momento, el servidor rechaza la
-    // venta y pide volver a cobrar: nunca se cobra un precio viejo
+    // venta y pide volver a cobrar: nunca se cobra un precio viejo.
+    // Las copias viejas de métodos y clientes (de cuando eran pedidos
+    // aparte) sirven mientras llega la primera respuesta completa
     const copias = useMemo(() => listo && storeId ? {
         prod: copiaGuardada(storeId, '/api/pos-data'),
         meth: copiaGuardada(storeId, '/api/payment-methods'),
         cust: copiaGuardada(storeId, '/api/customers'),
     } : null, [listo, storeId])
 
+    // Un solo pedido trae productos, métodos de pago y clientes.
     // Los precios se refrescan cada 2 minutos: así casi nunca se cobra uno viejo
     const { data: prodData, error: prodErr, mutate: mutateProd } = useSWR(
         listo ? ['/api/pos-data', storeId] : null,
@@ -139,16 +141,23 @@ export function usePOSData(enabled: boolean): POSDataState {
         { revalidateOnFocus: false, dedupingInterval: 30_000, refreshInterval: 120_000, fallbackData: copias?.prod }
     )
 
+    // Solo si no vinieron con los productos: una tienda nueva (sin métodos,
+    // la ruta de métodos le crea los de siempre) o una copia guardada vieja
+    const metodosJuntos: PaymentMethodConfig[] | null = Array.isArray(prodData?.methods) && prodData.methods.length > 0 ? prodData.methods : null
+    const clientesJuntos: Customer[] | null = Array.isArray(prodData?.customers) ? prodData.customers : null
+    const pedirMetodos = listo && !!prodData && !metodosJuntos
+    const pedirClientes = listo && !!prodData && !clientesJuntos
+
     const { data: methData, error: methErr, mutate: mutateMeth } = useSWR(
-        listo ? ['/api/payment-methods', storeId] : null,
+        pedirMetodos ? ['/api/payment-methods', storeId] : null,
         jsonFetcher,
-        { revalidateOnFocus: false, dedupingInterval: 60_000, fallbackData: copias?.meth }
+        { revalidateOnFocus: false, dedupingInterval: 60_000 }
     )
 
     const { data: custData, error: custErr, mutate: mutateCust } = useSWR(
-        listo ? ['/api/customers', storeId] : null,
+        pedirClientes ? ['/api/customers', storeId] : null,
         jsonFetcher,
-        { revalidateOnFocus: false, dedupingInterval: 30_000, fallbackData: copias?.cust }
+        { revalidateOnFocus: false, dedupingInterval: 30_000 }
     )
 
     // ── Ventas guardadas sin internet: su stock ya salió ─────────
@@ -246,8 +255,10 @@ export function usePOSData(enabled: boolean): POSDataState {
     // Dedupe payment methods defensively: API may return duplicates if seedDefaultMethods
     // race-conditioned on first store load (two parallel requests both inserted defaults).
     // Dedupe by lowercased name (handles different IDs with same name from race).
+    const metodosLista: PaymentMethodConfig[] | undefined = metodosJuntos ?? methData?.methods ?? copias?.meth?.methods
+    const clientesLista: Customer[] | undefined = clientesJuntos ?? custData?.customers ?? copias?.cust?.customers
     const methods: PaymentMethodConfig[] = useMemo(() => {
-        const arr: PaymentMethodConfig[] = methData?.methods ?? []
+        const arr: PaymentMethodConfig[] = metodosLista ?? []
         const seen = new Set<string>()
         const out: PaymentMethodConfig[] = []
         for (const m of arr) {
@@ -257,17 +268,19 @@ export function usePOSData(enabled: boolean): POSDataState {
             out.push(m)
         }
         return out
-    }, [methData?.methods])
-    const customers: Customer[] = custData?.customers ?? []
+    }, [metodosLista])
+    const customers: Customer[] = useMemo(() => clientesLista ?? [], [clientesLista])
 
     // Sin respuesta y sin copia guardada: la caja muestra "Reintentar"
+    const sinMetodos = !metodosLista && (!!methErr || (!!prodErr && !prodData))
+    const sinClientes = !clientesLista && (!!custErr || (!!prodErr && !prodData))
     const failed = prodErr && !prodData ? 'products'
-        : (methErr && !methData) || (custErr && !custData) ? 'other'
+        : sinMetodos || sinClientes ? 'other'
         : null
     // Los productos no esperan a los métodos ni a los clientes
     const isLoading = enabled && failed !== 'products' && !prodData
-    const methodsLoading = enabled && !methData && !methErr
-    const customersLoading = enabled && !custData && !custErr
+    const methodsLoading = enabled && !metodosLista && !sinMetodos
+    const customersLoading = enabled && !clientesLista && !sinClientes
 
     const retry = useCallback(() => {
         void mutateProd()
@@ -276,7 +289,11 @@ export function usePOSData(enabled: boolean): POSDataState {
     }, [mutateProd, mutateMeth, mutateCust])
 
     const refreshProducts = useCallback(() => { void mutateProd() }, [mutateProd])
-    const refreshCustomers = useCallback(() => { void mutateCust() }, [mutateCust])
+    // Los clientes vienen con los productos: se trae todo otra vez (un pedido)
+    const refreshCustomers = useCallback(() => {
+        void mutateProd()
+        if (pedirClientes) void mutateCust()
+    }, [mutateProd, mutateCust, pedirClientes])
 
     return useMemo(() => ({
         products, variantsByProduct, combos, methods, customers, categories, sold, stock, unitName,

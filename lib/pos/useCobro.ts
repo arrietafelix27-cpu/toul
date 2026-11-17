@@ -102,6 +102,15 @@ export interface CobroState {
 
 const SIN_REVISION: Revision = { fiado: false, descuento: false, bloqueo: null }
 
+// Lo que cambia con una venta: el stock y los clientes de la caja (vienen
+// juntos), las ventas de hoy y el turno. Antes se recargaba todo lo que
+// estuviera abierto (5 o 6 pedidos después de cada venta)
+const CAMBIAN_CON_VENTA = new Set(['/api/pos-data', 'caja-ventas', 'turno-vivo', 'turno-summary'])
+const cambiaConVenta = (key: unknown) => {
+    const nombre = Array.isArray(key) ? key[0] : key
+    return typeof nombre === 'string' && CAMBIAN_CON_VENTA.has(nombre)
+}
+
 export function useCobro(): CobroState {
     const { data, cart, payment } = usePOSFlow()
     const { ctx, session, autoPrint, isPro, permisos, tienda, offline } = useCaja()
@@ -268,7 +277,7 @@ export function useCobro(): CobroState {
             if (autoPrint && isPro) tirillaAutomatica(saleId, hecha.receipt)
             cart.clearCart()
             payment.resetPayment()
-            globalMutate(() => true)
+            globalMutate(cambiaConVenta)
         }
 
         // Guardar en el computador para enviarla cuando vuelva el internet
@@ -368,13 +377,12 @@ export function useCobro(): CobroState {
             }
             cart.restoreCart(venta.cartMap)
             setVenta(null)
-            data.refreshProducts()
-            globalMutate(() => true)
+            globalMutate(cambiaConVenta)
             toast.success('Venta deshecha. Los productos volvieron a la venta.')
         } finally {
             setDeshaciendo(false)
         }
-    }, [venta, esAdmin, deshaciendo, storeId, cart, data, globalMutate, cancelarTirilla])
+    }, [venta, esAdmin, deshaciendo, storeId, cart, globalMutate, cancelarTirilla])
 
     const imprimir = useCallback(async () => {
         if (!venta) return
