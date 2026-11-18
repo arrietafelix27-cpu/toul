@@ -1,0 +1,563 @@
+/* ══════════════════════════════════════════════════════════════
+   Nueva venta — piezas compartidas (celular y PC)
+   Valores copiados de diseno/pos/prototipos/pos-celular.html.
+   Ningún color suelto: todo sale de los tokens de globals.css,
+   mezclados con color-mix para las transparencias del prototipo.
+   El movimiento es solo transform y opacity (y grid-template-rows
+   en lo que se despliega).
+   ══════════════════════════════════════════════════════════════ */
+
+.pos {
+    /* Superficies blancas del prototipo (.04 – .25) */
+    --p-s4: color-mix(in srgb, var(--toul-text) 4%, transparent);
+    --p-s5: color-mix(in srgb, var(--toul-text) 5%, transparent);
+    --p-s6: color-mix(in srgb, var(--toul-text) 6%, transparent);
+    --p-s7: color-mix(in srgb, var(--toul-text) 7%, transparent);
+    --p-s8: color-mix(in srgb, var(--toul-text) 8%, transparent);
+    --p-s10: color-mix(in srgb, var(--toul-text) 10%, transparent);
+    --p-s12: color-mix(in srgb, var(--toul-text) 12%, transparent);
+    --p-s14: color-mix(in srgb, var(--toul-text) 14%, transparent);
+    --p-s18: color-mix(in srgb, var(--toul-text) 18%, transparent);
+    --p-s25: color-mix(in srgb, var(--toul-text) 25%, transparent);
+    --p-t30: color-mix(in srgb, var(--toul-text) 30%, transparent);
+    --p-t35: color-mix(in srgb, var(--toul-text) 35%, transparent);
+    --p-t60: color-mix(in srgb, var(--toul-text) 60%, transparent);
+    --p-t65: color-mix(in srgb, var(--toul-text) 65%, transparent);
+    --p-t75: color-mix(in srgb, var(--toul-text) 75%, transparent);
+    --p-t80: color-mix(in srgb, var(--toul-text) 80%, transparent);
+    --p-t85: color-mix(in srgb, var(--toul-text) 85%, transparent);
+    /* Verde */
+    --p-g8: color-mix(in srgb, var(--toul-accent) 8%, transparent);
+    --p-g10: color-mix(in srgb, var(--toul-accent) 10%, transparent);
+    --p-g12: color-mix(in srgb, var(--toul-accent) 12%, transparent);
+    --p-g22: color-mix(in srgb, var(--toul-accent) 22%, transparent);
+    --p-g30: color-mix(in srgb, var(--toul-accent) 30%, transparent);
+    --p-g32: color-mix(in srgb, var(--toul-accent) 32%, transparent);
+    --p-g35: color-mix(in srgb, var(--toul-accent) 35%, transparent);
+    --p-g38: color-mix(in srgb, var(--toul-accent) 38%, transparent);
+    --p-g45: color-mix(in srgb, var(--toul-accent) 45%, transparent);
+    --p-g50: color-mix(in srgb, var(--toul-accent) 50%, transparent);
+    --p-g55: color-mix(in srgb, var(--toul-accent) 55%, transparent);
+    --p-g60: color-mix(in srgb, var(--toul-accent) 60%, transparent);
+    /* Ámbar (el de hoy, igual que Inventario) */
+    --p-a6: color-mix(in srgb, var(--toul-warning) 6%, transparent);
+    --p-a10: color-mix(in srgb, var(--toul-warning) 10%, transparent);
+    --p-a12: color-mix(in srgb, var(--toul-warning) 12%, transparent);
+    --p-a20: color-mix(in srgb, var(--toul-warning) 20%, transparent);
+    --p-a-texto: color-mix(in srgb, var(--toul-warning) 62%, var(--toul-text));
+    /* Rojo */
+    --p-r14: color-mix(in srgb, var(--toul-error) 14%, transparent);
+    --p-r30: color-mix(in srgb, var(--toul-error) 30%, transparent);
+    /* Vidrio, paneles y sombras */
+    --p-vidrio: color-mix(in srgb, var(--toul-surface-overlay) 84%, transparent);
+    --p-menu: color-mix(in srgb, var(--toul-surface-overlay) 96%, transparent);
+    --p-panel: color-mix(in srgb, var(--toul-surface-overlay) 67%, var(--toul-bg));
+    --p-sombra: color-mix(in srgb, var(--toul-bg) 60%, transparent);
+    --p-sombra-5: color-mix(in srgb, var(--toul-bg) 50%, transparent);
+    --p-velo: color-mix(in srgb, var(--toul-bg) 55%, transparent);
+    --p-velo-menu: color-mix(in srgb, var(--toul-bg) 35%, transparent);
+    --p-hueco: color-mix(in srgb, var(--toul-bg) 35%, transparent);
+    /* Curvas del prototipo */
+    --p-sale: var(--toul-ease-emil);              /* cubic-bezier(.23,1,.32,1) */
+    --p-capa: var(--toul-ease-drawer);            /* cubic-bezier(.32,.72,0,1) */
+    --p-rebote: cubic-bezier(.34, 1.56, .64, 1);
+    --p-pildora: cubic-bezier(.34, 1.3, .64, 1);
+    --p-va-viene: cubic-bezier(.65, 0, .35, 1);
+}
+
+/* La raíz de la caja. clip (no hidden): con hidden el navegador igual
+   desplaza el contenedor al enfocar un campo, y asoma el cobro que
+   espera escondido a la derecha */
+.raiz { position: relative; overflow: clip; isolation: isolate; }
+
+/* ── Toda la caja: sin destello al tocar, sin seleccionar botones ── */
+.pos button {
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+.pos button:disabled { cursor: default; }
+.pos input { font-family: inherit; }
+.pos button:focus-visible, .pos input:focus-visible { outline: 2px solid var(--p-g60); outline-offset: 2px; }
+
+/* ── Respuesta al tocar (todo botón la tiene) ──────────────────── */
+.press { transition: transform 160ms var(--p-sale), background-color 200ms, opacity 200ms; }
+.press:active { transform: scale(.94); }
+
+/* ── Botones ───────────────────────────────────────────────────── */
+.principal {
+    height: 54px; padding: 0 20px; border: none; border-radius: 18px;
+    background: var(--toul-accent); color: var(--toul-on-accent);
+    font-size: 16px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 8px 22px var(--p-g35);
+    transition: transform 160ms var(--p-sale), opacity 200ms;
+}
+.principal:active { transform: scale(.95); }
+.principal svg { transition: transform 260ms var(--p-sale); }
+.principal:active svg { transform: translateX(4px); }
+.principal:disabled { opacity: .45; box-shadow: none; }
+.principal:disabled:active { transform: none; }
+.ancho { width: 100%; height: 56px; flex-shrink: 0; }
+
+.secundario {
+    height: 54px; padding: 0 18px; border: none; border-radius: 18px;
+    background: var(--p-s7); box-shadow: inset 0 0 0 1px var(--p-s8);
+    color: var(--toul-text); font-size: 16px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: transform 160ms var(--p-sale), background-color 200ms;
+}
+.secundario:active { transform: scale(.96); }
+
+.fantasma {
+    height: 32px; padding: 0 12px; border: none; border-radius: 10px;
+    background: var(--p-s7); color: var(--p-t75); font-size: 14px;
+    transition: transform 160ms var(--p-sale), background-color 200ms;
+}
+.fantasma:active { transform: scale(.92); }
+
+.icono {
+    position: relative; width: 50px; height: 50px; flex-shrink: 0; border-radius: 16px; border: none;
+    background: var(--p-s6); box-shadow: inset 0 0 0 1px var(--p-s5); color: var(--p-t80);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 160ms var(--p-sale), background-color 220ms, color 220ms, box-shadow 220ms;
+}
+.icono:active { transform: scale(.9); }
+.icono[data-on="1"] { background: var(--p-g12); box-shadow: inset 0 0 0 1px var(--p-g45); color: var(--toul-accent); }
+.punto {
+    position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--toul-accent); box-shadow: 0 0 0 2px var(--toul-bg);
+    animation: ck 320ms var(--p-rebote) both;
+}
+
+.redondo {
+    width: 42px; height: 42px; border-radius: 50%; border: none; flex-shrink: 0;
+    background: var(--p-s8); color: var(--p-t85);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 160ms var(--p-sale), background-color 200ms;
+}
+.redondo:active { transform: scale(.9); }
+
+.cerrar {
+    width: 34px; height: 34px; border-radius: 50%; border: none; flex-shrink: 0;
+    background: var(--p-s8); color: var(--p-t80);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 160ms var(--p-sale);
+}
+.cerrar:active { transform: scale(.86); }
+
+/* ── Chips ─────────────────────────────────────────────────────── */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chipsCentro { justify-content: center; }
+.chip {
+    height: 40px; padding: 0 16px; border-radius: 99px; border: none; white-space: nowrap;
+    background: var(--p-s6); color: var(--p-t75); font-size: 15px;
+    transition: background-color 220ms, color 220ms, transform 160ms var(--p-sale);
+}
+.chip:active { transform: scale(.94); }
+.chip[data-on="1"] { background: var(--toul-text); color: var(--toul-bg); font-weight: 600; }
+.chip:disabled { opacity: .35; }
+.chip:disabled:active { transform: none; }
+
+/* ── Segmentado (Contado | A crédito) ──────────────────────────── */
+.seg { position: relative; display: grid; grid-auto-columns: 1fr; grid-auto-flow: column; padding: 4px; border-radius: 16px; background: var(--p-s6); }
+.segPildora {
+    position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n));
+    border-radius: 12px; background: var(--toul-text);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--toul-text) 14%, transparent);
+    transform: translateX(calc(var(--i) * 100%));
+    transition: transform 380ms var(--p-pildora);
+}
+.segBoton {
+    position: relative; z-index: 1; height: 44px; border: none; background: transparent;
+    color: var(--p-t60); font-size: 15px; font-weight: 500;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: color 260ms, transform 160ms var(--p-sale);
+}
+.segBoton:active { transform: scale(.95); }
+.segBoton[data-on="1"] { color: var(--toul-bg); font-weight: 700; }
+.segBoton[data-bloq="1"] { color: var(--p-t30); }
+
+/* Mini ($ | %) */
+.mini2 { display: inline-flex; height: 36px; padding: 3px; border-radius: 12px; background: var(--p-s7); position: relative; }
+.mini2Pildora {
+    position: absolute; top: 3px; bottom: 3px; left: 3px; width: 40px; border-radius: 9px; background: var(--toul-text);
+    transform: translateX(calc(var(--i) * 40px));
+    transition: transform 320ms var(--p-pildora);
+}
+.mini2Boton {
+    position: relative; z-index: 1; width: 40px; border: none; background: transparent;
+    color: var(--p-t60); font-size: 16px; font-weight: 700;
+    transition: color 220ms, transform 160ms var(--p-sale);
+}
+.mini2Boton:active { transform: scale(.85); }
+.mini2Boton[data-on="1"] { color: var(--toul-bg); }
+
+/* ── Paso: + que se vuelve [− N +] ─────────────────────────────── */
+.agregar {
+    width: 42px; height: 42px; border-radius: 50%; border: none; flex-shrink: 0;
+    background: var(--p-s8); color: var(--toul-text);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 180ms var(--p-sale), background-color 200ms;
+}
+.agregar:active { transform: scale(.86); background: var(--p-g30); }
+.paso {
+    display: flex; align-items: center; height: 42px; padding: 0 4px; border-radius: 99px; flex-shrink: 0;
+    background: var(--p-g12); box-shadow: inset 0 0 0 1px var(--p-g38);
+    transform-origin: 100% 50%;
+    animation: crece 420ms var(--p-rebote) both;
+}
+@keyframes crece { from { transform: scaleX(.36); opacity: .4 } to { transform: none; opacity: 1 } }
+.pasoBoton {
+    width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent;
+    color: var(--toul-accent-claro);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 160ms var(--p-sale), background-color 160ms;
+}
+.pasoBoton:active { transform: scale(.8); background: var(--p-g22); }
+.pasoBorrar { color: var(--toul-error); background: var(--p-r14); }
+.pasoBorrar:active { background: var(--p-r30); }
+.pasoBorrar svg { animation: menea 420ms var(--p-rebote); }
+@keyframes menea { 0% { transform: scale(.4) rotate(-20deg) } 60% { transform: scale(1.1) rotate(6deg) } 100% { transform: none } }
+.cantidad {
+    width: 40px; height: 34px; border: none; outline: none; background: transparent; text-align: center;
+    color: var(--toul-text); font-size: 17px; font-weight: 700; border-radius: 10px;
+    caret-color: var(--toul-accent); font-variant-numeric: tabular-nums;
+    transition: background-color 200ms, box-shadow 200ms;
+}
+.cantidad:focus { background: var(--p-hueco); box-shadow: 0 0 0 1px var(--p-g60); }
+.pasoA { animation: saltoA 300ms var(--p-rebote); }
+.pasoB { animation: saltoB 300ms var(--p-rebote); }
+@keyframes saltoA { 40% { transform: scale(1.28) } }
+@keyframes saltoB { 40% { transform: scale(1.28) } }
+
+/* Paso chico (detalle editable del cobro) */
+.pasoMini { display: flex; align-items: center; height: 32px; padding: 0 2px; border-radius: 99px; background: var(--p-s6); flex-shrink: 0; }
+.pasoMiniBoton {
+    width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; color: var(--toul-text);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 160ms var(--p-sale), background-color 160ms;
+}
+.pasoMiniBoton:active { transform: scale(.8); background: var(--p-s12); }
+.pasoMiniBorrar { color: var(--toul-error); }
+.pasoMiniN { min-width: 22px; text-align: center; font-weight: 700; display: inline-block; font-variant-numeric: tabular-nums; }
+
+/* ── Filas del cobro (Cliente, Dividir pago, Descuento…) ───────── */
+.grupo { margin-top: 18px; }
+.fila {
+    width: 100%; height: 60px; padding: 0 6px 0 2px; border: none; border-top: 1px solid var(--toul-border);
+    background: transparent; color: var(--toul-text);
+    display: flex; align-items: center; gap: 14px; text-align: left; font-size: 16px; border-radius: 0;
+    transition: background-color 200ms, transform 160ms var(--p-sale);
+}
+.grupo > .fila:first-child { border-top: none; }
+.fila:active { transform: scale(.985); background: color-mix(in srgb, var(--toul-text) 3%, transparent); }
+.filaIcono {
+    width: 36px; height: 36px; border-radius: 12px; flex-shrink: 0;
+    background: var(--p-s7); color: var(--p-t80);
+    display: flex; align-items: center; justify-content: center;
+}
+.filaTitulo { flex: 1; min-width: 0; }
+.filaValor { font-size: 16px; font-weight: 600; color: var(--toul-text); max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
+.filaValor[data-tono="apagado"] { font-weight: 400; color: var(--toul-text-tertiary); }
+.filaValor[data-tono="pide"] { font-weight: 500; color: var(--toul-accent); }
+.filaValor[data-tono="verde"] { color: var(--toul-accent); }
+.filaValor[data-tono="ambar"] { color: var(--toul-warning); }
+.filaChevron { color: var(--p-t30); flex-shrink: 0; }
+.entraA { animation: entraA 360ms var(--p-rebote); }
+.entraB { animation: entraB 360ms var(--p-rebote); }
+@keyframes entraA { 0% { opacity: 0; transform: translateX(8px) } 100% { opacity: 1; transform: none } }
+@keyframes entraB { 0% { opacity: 0; transform: translateX(8px) } 100% { opacity: 1; transform: none } }
+
+/* ── Montos ────────────────────────────────────────────────────── */
+/* Recibido / segundo método: alineado a la derecha */
+.montoCampo {
+    display: flex; align-items: baseline; justify-content: flex-end; gap: 2px; min-width: 0; flex: 1;
+    padding: 4px 10px; border-radius: 14px;
+    transition: background-color 220ms, box-shadow 220ms;
+}
+.montoCampo:focus-within { background: var(--p-s5); box-shadow: inset 0 0 0 1.5px var(--p-g50); }
+.montoSigno { font-size: 22px; font-weight: 700; color: var(--toul-text-subtle); }
+.montoCampo input {
+    width: 100%; min-width: 0; border: none; outline: none; background: transparent; text-align: right;
+    color: var(--toul-text); font-size: 26px; font-weight: 700; caret-color: var(--toul-accent);
+    font-variant-numeric: tabular-nums;
+}
+.montoCampo input::placeholder { color: var(--p-t35); }
+.montoCampoChico input { font-size: 20px; }
+.montoCampoChico .montoSigno { font-size: 18px; }
+
+/* El número grande de las hojas (abono, descuento) */
+.montoGrande {
+    display: flex; align-items: baseline; justify-content: center; gap: 4px;
+    margin: 6px auto; padding: 6px 16px; border-radius: 20px;
+    transition: background-color 220ms;
+}
+.montoGrande:focus-within { background: var(--p-s4); }
+.montoGrande .montoSigno { font-size: 30px; color: var(--toul-text-tertiary); }
+.montoGrande input {
+    min-width: 1ch; max-width: 300px; border: none; outline: none; background: transparent; text-align: center;
+    color: var(--toul-text); font-size: 48px; font-weight: 700; letter-spacing: -2px; caret-color: var(--toul-accent);
+    font-variant-numeric: tabular-nums;
+}
+.montoGrande input::placeholder { color: var(--toul-text-faint); }
+
+/* Cifras que rebotan al cambiar */
+.reboteTotalA { display: inline-block; animation: totalA 380ms var(--p-rebote); }
+.reboteTotalB { display: inline-block; animation: totalB 380ms var(--p-rebote); }
+@keyframes totalA { 40% { transform: scale(1.05) } }
+@keyframes totalB { 40% { transform: scale(1.05) } }
+.reboteBarraA { animation: barraA 340ms var(--p-rebote); }
+.reboteBarraB { animation: barraB 340ms var(--p-rebote); }
+@keyframes barraA { 40% { transform: scale(1.06) } }
+@keyframes barraB { 40% { transform: scale(1.06) } }
+
+/* ── Campos de texto ───────────────────────────────────────────── */
+.campo {
+    display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 8px 0 16px; border-radius: 16px;
+    background: var(--p-s6); box-shadow: inset 0 0 0 1px var(--p-s5);
+    transition: box-shadow 220ms;
+}
+.campo:focus-within { box-shadow: inset 0 0 0 1.5px var(--p-g55); }
+.campo input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--toul-text); font-size: 16px; }
+.campo input::placeholder { color: var(--toul-text-tertiary); }
+.campoLupa { color: var(--toul-text-subtle); flex-shrink: 0; }
+.campoEtiqueta { width: 80px; flex-shrink: 0; font-size: 15px; color: var(--toul-text-secondary); }
+.borrar {
+    width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; border: none; margin-right: 6px;
+    background: var(--p-s14); color: var(--p-t85);
+    display: flex; align-items: center; justify-content: center;
+    animation: ck 280ms var(--p-rebote) both;
+    transition: transform 160ms var(--p-sale);
+}
+.borrar:active { transform: scale(.8); }
+
+/* ── Notas en ámbar y "Sin conexión" ───────────────────────────── */
+.nota {
+    display: flex; gap: 8px; align-items: center; margin-top: 10px; padding: 10px 12px; border-radius: 14px;
+    background: var(--p-a10); color: var(--p-a-texto); font-size: 14px; line-height: 1.4;
+    animation: asoma 380ms var(--p-sale) both;
+}
+.notaTexto { flex: 1; min-width: 0; }
+.notaBoton {
+    height: 32px; padding: 0 12px; border: none; border-radius: 10px; flex-shrink: 0;
+    background: var(--p-a20); color: var(--p-a-texto); font-size: 13px; font-weight: 600; white-space: nowrap;
+    transition: transform 160ms var(--p-sale);
+}
+.notaBoton:active { transform: scale(.92); }
+.notaGuardada {
+    display: flex; gap: 8px; align-items: flex-start; width: 100%; margin-top: 16px; padding: 12px 14px; border-radius: 16px;
+    background: var(--p-a10); color: var(--p-a-texto); font-size: 13px; line-height: 1.45;
+    animation: asoma 380ms var(--p-sale) both;
+}
+.notaGuardada i { flex-shrink: 0; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: var(--toul-warning); }
+.sinConexion {
+    display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 99px;
+    background: var(--p-a12); color: var(--p-a-texto); font-size: 12px; font-weight: 500; white-space: nowrap;
+    animation: asoma 360ms var(--p-sale) both;
+}
+.sinConexion i { width: 7px; height: 7px; border-radius: 50%; background: var(--toul-warning); animation: titila 1.6s ease-in-out infinite; }
+@keyframes titila { 50% { opacity: .35 } }
+
+/* ── Aviso (el toast de la caja) ───────────────────────────────── */
+.aviso {
+    position: fixed; left: 50%; bottom: calc(30px + env(safe-area-inset-bottom, 0px)); z-index: 130;
+    width: max-content; max-width: calc(100% - 32px);
+    padding: 10px 16px; border-radius: 99px;
+    background: var(--p-menu); box-shadow: inset 0 0 0 1px var(--p-s10), 0 12px 30px var(--p-sombra-5);
+    color: var(--toul-text); font-size: 13px; text-align: center;
+    display: flex; gap: 6px; align-items: center;
+    pointer-events: none;
+    animation: aviso 2.2s ease both;
+}
+.aviso svg { flex-shrink: 0; color: var(--toul-accent); }
+@keyframes aviso {
+    0% { opacity: 0; transform: translate(-50%, 10px) }
+    12% { opacity: 1; transform: translate(-50%, 0) }
+    80% { opacity: 1; transform: translate(-50%, 0) }
+    100% { opacity: 0; transform: translate(-50%, 0) }
+}
+
+/* ── Menú que sale de Filtrar / Ordenar ────────────────────────── */
+.menuVelo {
+    position: fixed; inset: 0; z-index: 110; background: var(--p-velo-menu); opacity: 0; pointer-events: none;
+    transition: opacity 240ms;
+}
+.menuVelo[data-on="1"] { opacity: 1; pointer-events: auto; }
+.menu {
+    position: fixed; z-index: 111; width: 236px; padding: 6px; border-radius: 20px;
+    background: var(--p-menu); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 24px 50px var(--p-sombra), inset 0 0 0 1px var(--p-s8);
+    transform-origin: var(--origen, 90% 0%);
+    opacity: 0; transform: scale(.86) translateY(-6px); pointer-events: none;
+    transition: opacity 200ms ease, transform 300ms var(--p-pildora);
+}
+.menu[data-on="1"] { opacity: 1; transform: none; pointer-events: auto; }
+.menuTitulo { padding: 8px 12px 6px; font-size: 12px; color: var(--toul-text-subtle); }
+.opcion {
+    width: 100%; height: 44px; padding: 0 12px; border: none; border-radius: 14px; background: transparent;
+    color: var(--toul-text); font-size: 15px; text-align: left;
+    display: flex; align-items: center; justify-content: space-between;
+    transition: background-color 180ms, transform 160ms var(--p-sale);
+}
+.opcion:active { transform: scale(.97); background: var(--p-s8); }
+.opcion[data-on="1"] { background: var(--p-s6); }
+.check {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+    background: var(--toul-accent); color: var(--toul-on-accent);
+    display: flex; align-items: center; justify-content: center;
+    animation: ck 360ms var(--p-rebote) both;
+}
+@keyframes ck { from { transform: scale(0) } to { transform: none } }
+
+/* ── Hoja: abajo en el celular, al centro en PC ────────────────── */
+.hoja { position: fixed; inset: 0; z-index: 120; pointer-events: none; }
+.hoja[data-on="1"] { pointer-events: auto; }
+.hojaVelo { position: absolute; inset: 0; background: var(--p-velo); opacity: 0; transition: opacity 320ms ease; }
+.hoja[data-on="1"] .hojaVelo { opacity: 1; }
+.hojaPanel {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: flex; flex-direction: column; max-height: 88%;
+    padding: 10px 20px calc(26px + env(safe-area-inset-bottom, 0px));
+    border-radius: 30px 30px 0 0; background: var(--p-panel);
+    box-shadow: 0 -20px 60px var(--p-sombra-5), inset 0 1px 0 var(--p-s6);
+    transform: translateY(105%);
+    transition: transform 500ms var(--p-capa);
+    overscroll-behavior: contain;
+}
+.hojaAlta { height: 86%; }
+.hoja[data-on="1"] .hojaPanel { transform: none; }
+.hojaPanel[data-arrastre="1"] { transition: none; }
+.manija { width: 40px; height: 5px; border-radius: 3px; background: var(--p-s18); margin: 0 auto 12px; flex-shrink: 0; }
+.hojaAgarre { touch-action: none; flex-shrink: 0; }
+.hojaCabeza { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; font-size: 20px; font-weight: 700; flex-shrink: 0; }
+.hojaCuerpo {
+    display: flex; flex-direction: column; min-height: 0; overflow-y: auto; scrollbar-width: none;
+    overscroll-behavior: contain;
+    animation: sube 420ms var(--p-sale) 80ms both;
+}
+.hojaCuerpo::-webkit-scrollbar { display: none; }
+.hojaLlena { flex: 1; overflow: hidden; }
+.hojaEtiqueta { margin: 20px 0 10px; font-size: 15px; color: var(--toul-text-secondary); }
+
+@media (min-width: 1024px) {
+    .hoja { display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .hojaPanel {
+        position: relative; left: auto; right: auto; bottom: auto;
+        width: 480px; max-width: 100%; max-height: min(720px, 100%);
+        padding: 20px 24px 24px; border-radius: 30px;
+        box-shadow: 0 30px 80px var(--p-sombra), inset 0 1px 0 var(--p-s6);
+        opacity: 0; transform: translateY(16px) scale(.96);
+        transition: transform 420ms var(--p-capa), opacity 220ms ease;
+    }
+    .hojaAlta { height: min(720px, 86vh); }
+    .hoja[data-on="1"] .hojaPanel { opacity: 1; transform: none; }
+    .manija { display: none; }
+}
+
+/* ── Capas de la caja (productos → cobro → venta registrada) ──── */
+.capa {
+    position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--toul-bg);
+    transition: transform 440ms var(--p-capa), opacity 300ms ease;
+}
+.capa[data-estado="empujada"] { transform: translateX(-24%) scale(.98); opacity: .35; pointer-events: none; }
+.capaLateral { transform: translateX(100%); box-shadow: -20px 0 60px var(--p-sombra); }
+.capaLateral[data-estado="dentro"] { transform: none; }
+.capaLateral[data-estado="ida"] { transform: scale(.94); opacity: 0; pointer-events: none; }
+.capaLateral[data-estado="fuera"] { pointer-events: none; }
+.capaEncima { opacity: 0; pointer-events: none; transform: scale(1.04); transition: opacity 260ms ease, transform 420ms var(--p-sale); }
+.capaEncima[data-estado="dentro"] { opacity: 1; pointer-events: auto; transform: none; }
+
+/* ── Lo que se despliega (presentaciones, detalle del cobro) ───── */
+.despliega { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 420ms var(--p-sale); }
+.despliega[data-on="1"] { grid-template-rows: 1fr; }
+.despliegaDentro { overflow: hidden; min-height: 0; }
+.escalon { opacity: 0; transform: translateY(-6px); transition: opacity 220ms ease, transform 320ms var(--p-sale); }
+.despliega[data-on="1"] .escalon { opacity: 1; transform: none; transition-delay: calc(var(--j, 0) * 50ms + 80ms); }
+.chevron { transition: transform 380ms var(--p-pildora); }
+.chevron[data-on="1"] { transform: rotate(180deg); }
+
+/* ── Entradas sueltas ──────────────────────────────────────────── */
+.asoma { animation: asoma 380ms var(--p-sale) both; }
+@keyframes asoma { from { opacity: 0; transform: translateY(-8px) } to { opacity: 1; transform: none } }
+.sube { animation: sube 420ms var(--p-sale) both; }
+@keyframes sube { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+
+/* ── Botón de confirmar: se encoge a un círculo y estalla ─────── */
+.confirmar {
+    position: relative; width: 100%; height: 58px; border: none; padding: 0; background: transparent;
+    color: var(--toul-on-accent); font-size: 17px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 160ms var(--p-sale);
+}
+.confirmar:active { transform: scale(.97); }
+.confirmar[data-fase="ld"]:active, .confirmar[data-fase="bs"]:active, .confirmar:disabled:active { transform: none; }
+.confirmarFondo {
+    position: absolute; inset: 0; border-radius: 20px; background: var(--toul-accent);
+    box-shadow: 0 10px 26px var(--p-g32);
+    transform: scaleX(1); opacity: 1;
+    transition: transform 420ms var(--p-va-viene), opacity 220ms ease 200ms, background-color 300ms, box-shadow 300ms;
+}
+.confirmar:disabled .confirmarFondo { background: var(--p-s8); box-shadow: none; }
+.confirmar:disabled { color: var(--toul-text-secondary); }
+.confirmar[data-fase="ld"] .confirmarFondo,
+.confirmar[data-fase="bs"] .confirmarFondo { transform: scaleX(var(--k, .2)); opacity: 0; }
+.confirmarCirculo {
+    position: absolute; left: 50%; top: 0; width: 58px; height: 58px; margin-left: -29px; border-radius: 50%;
+    background: var(--toul-accent); box-shadow: 0 10px 26px var(--p-g32);
+    opacity: 0; transform: scale(.7);
+    transition: opacity 200ms ease, transform 420ms var(--p-va-viene);
+}
+.confirmar[data-fase="ld"] .confirmarCirculo { opacity: 1; transform: none; transition-delay: 220ms, 0ms; }
+.confirmar[data-fase="bs"] .confirmarCirculo { opacity: 1; transform: none; animation: estalla 360ms var(--p-sale) forwards; }
+@keyframes estalla { 50% { transform: scale(1.18) } 100% { transform: scale(.2); opacity: 0 } }
+.confirmarTexto { position: relative; transition: opacity 160ms; }
+.confirmar[data-fase="ld"] .confirmarTexto, .confirmar[data-fase="bs"] .confirmarTexto { opacity: 0; }
+.puntos { position: absolute; display: flex; gap: 5px; opacity: 0; transition: opacity 160ms; }
+.confirmar[data-fase="ld"] .puntos { opacity: 1; transition-delay: 300ms; }
+.puntos i { width: 6px; height: 6px; border-radius: 50%; background: var(--toul-on-accent); animation: puntito 900ms ease-in-out infinite; }
+.puntos i:nth-child(2) { animation-delay: 120ms; }
+.puntos i:nth-child(3) { animation-delay: 240ms; }
+@keyframes puntito { 0%, 100% { transform: translateY(0); opacity: .5 } 40% { transform: translateY(-5px); opacity: 1 } }
+.chispa { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 2px; background: var(--c); opacity: 0; pointer-events: none; }
+.confirmar[data-fase="bs"] .chispa { animation: chispa 520ms cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes chispa {
+    0% { opacity: 1; transform: rotate(var(--a)) translateY(0) }
+    100% { opacity: 0; transform: rotate(var(--a)) translateY(-60px) scale(.4) }
+}
+
+/* ── Mouse: el hover solo donde hay mouse de verdad ────────────── */
+@media (hover: hover) and (pointer: fine) {
+    .chip:not([data-on="1"]):not(:disabled):hover { background: var(--p-s8); }
+    .opcion:not([data-on="1"]):hover { background: var(--p-s5); }
+    .fila:hover { background: color-mix(in srgb, var(--toul-text) 3%, transparent); }
+    .secundario:hover { background: var(--p-s10); }
+    .icono:not([data-on="1"]):hover, .redondo:hover, .cerrar:hover { background: var(--p-s12); }
+}
+
+/* ── Menos movimiento: todo al instante ────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    .pos *, .pos *::before, .pos *::after,
+    .aviso, .menu, .menuVelo, .hoja *, .capa {
+        animation-duration: 1ms !important;
+        animation-delay: 0ms !important;
+        transition-duration: 1ms !important;
+        transition-delay: 0ms !important;
+    }
+    /* El aviso se queda sus 2,2 s para poder leerlo, pero sin moverse */
+    .aviso { animation-name: avisoQuieto; animation-duration: 2.2s !important; }
+}
+@keyframes avisoQuieto {
+    0% { opacity: 0; transform: translate(-50%, 0) }
+    12%, 80% { opacity: 1; transform: translate(-50%, 0) }
+    100% { opacity: 0; transform: translate(-50%, 0) }
+}
+
+/* El buscador trae su propia X: se esconde la del navegador */
+.campo input[type="search"] { -webkit-appearance: none; appearance: none; }
+.campo input[type="search"]::-webkit-search-cancel-button,
+.campo input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; display: none; }

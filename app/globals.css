@@ -27,6 +27,11 @@
   --toul-text-dim: rgba(255, 255, 255, 0.38);
   --toul-text-faint: rgba(255, 255, 255, 0.25);
   --toul-text-ghost: rgba(255, 255, 255, 0.2);
+  /* Nueva venta (diseno/pos/SPEC.md §2): texto secundario .55 y apagado .4 */
+  --toul-text-secondary: rgba(255, 255, 255, 0.55);
+  --toul-text-tertiary: rgba(255, 255, 255, 0.4);
+  /* Texto sobre el verde (botón Cobrar, Confirmar, el check) */
+  --toul-on-accent: #06210c;
 
   /* ─── Accent (Apple System Green) ─── */
   --toul-primary: #32d74b;
