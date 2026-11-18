@@ -4,6 +4,8 @@ import type { ReactNode } from 'react'
 import s from './pos.module.css'
 import { cx, useRebote } from './movimiento'
 import { IcoAbajo } from './Iconos'
+import { Paso } from './Paso'
+import { formatCOP } from '@/lib/utils'
 
 /**
  * Lo que se abre en su sitio (presentaciones, detalle del cobro).
@@ -50,4 +52,48 @@ export function Rebota({ valor, children, tipo = 'total', className, style }: {
     const a = tipo === 'barra' ? s.reboteBarraA : s.reboteTotalA
     const b = tipo === 'barra' ? s.reboteBarraB : s.reboteTotalB
     return <span className={cx(r === 0 && a, r === 1 && b, className)} style={style}>{children}</span>
+}
+
+/**
+ * Qué decir del stock, como el prototipo:
+ * - 0 → "Agotado" (rojo)
+ * - en su propio mínimo o por debajo → "Quedan N" (ámbar)
+ * - por encima del mínimo → nada
+ */
+export function avisoStock(stock: number, minimo: number): { texto: string; tono: 'agotado' | 'quedan' } | null {
+    const n = Math.max(0, Math.round(stock))
+    if (n === 0) return { texto: 'Agotado', tono: 'agotado' }
+    if (n <= Math.round(minimo)) return { texto: `Quedan ${n}`, tono: 'quedan' }
+    return null
+}
+
+/**
+ * Un renglón de presentación dentro del desplegable:
+ * nombre, "$100.000 · Quedan 2" y la cantidad a la derecha.
+ * Agotada y sin nada en la venta: se ve apagada y sin "+".
+ */
+export function FilaPresentacion({ indice, nombre, precio, stock, minimo, cantidad, onCambiar }: {
+    indice: number
+    nombre: string
+    precio: number
+    stock: number
+    minimo: number
+    cantidad: number
+    onCambiar: (n: number) => void
+}) {
+    const aviso = avisoStock(stock, minimo)
+    const agotada = aviso?.tono === 'agotado'
+    const sinNada = Math.round(cantidad) <= 0
+    return (
+        <Escalon indice={indice} className={cx(s.presentacion, agotada && sinNada && s.presentacionApagada)}>
+            <div className={s.presentacionTexto}>
+                <div className={s.presentacionNombre}>{nombre}</div>
+                <div className={s.presentacionPrecio}>
+                    {formatCOP(Math.round(precio))}
+                    {aviso && <span data-tono={aviso.tono}> · {aviso.texto}</span>}
+                </div>
+            </div>
+            {!(agotada && sinNada) && <Paso cantidad={cantidad} onCambiar={onCambiar} nombre={nombre} />}
+        </Escalon>
+    )
 }

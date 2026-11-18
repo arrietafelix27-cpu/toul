@@ -26,6 +26,10 @@ export const IcoAbajo = (p: P) => <Svg grosor={2.4} size={14} {...p}><path d="m6
 export const IcoFlecha = (p: P) => <Svg grosor={2.4} size={18} {...p}><path d="M5 12h14M13 6l6 6-6 6" /></Svg>
 export const IcoCandado = (p: P) => <Svg grosor={2.4} size={12} {...p}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></Svg>
 export const IcoCliente = (p: P) => <Svg grosor={1.9} size={18} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></Svg>
+/** Filtrar: tres líneas que se acortan */
+export const IcoFiltrar = (p: P) => <Svg grosor={2} size={19} {...p}><path d="M4 6h16M7 12h10M10 18h4" /></Svg>
+/** Ordenar: una flecha baja y otra sube */
+export const IcoOrdenar = (p: P) => <Svg grosor={2} size={19} {...p}><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4" /></Svg>
 export const IcoDividir = (p: P) => <Svg grosor={1.9} size={18} {...p}><path d="M12 21v-7l-6-6M12 14l6-6M4 4h5v5M20 4h-5v5" /></Svg>
 export const IcoDescuento = (p: P) => <Svg grosor={1.9} size={18} {...p}><path d="M19 5 5 19" /><circle cx="7" cy="7" r="2.5" /><circle cx="17" cy="17" r="2.5" /></Svg>
 export const IcoCalendario = (p: P) => <Svg grosor={1.9} size={18} {...p}><rect x="3.5" y="5" width="17" height="15.5" rx="3" /><path d="M3.5 10h17M8 3v4M16 3v4" /></Svg>

@@ -478,6 +478,16 @@
 .despliegaDentro { overflow: hidden; min-height: 0; }
 .escalon { opacity: 0; transform: translateY(-6px); transition: opacity 220ms ease, transform 320ms var(--p-sale); }
 .despliega[data-on="1"] .escalon { opacity: 1; transform: none; transition-delay: calc(var(--j, 0) * 50ms + 80ms); }
+
+/* Renglón de presentación: nombre, precio · stock y la cantidad */
+.presentacion { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.presentacionTexto { flex: 1; min-width: 0; }
+.presentacionNombre { font-size: 15px; font-weight: 500; color: var(--toul-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.presentacionPrecio { margin-top: 2px; font-size: 14px; color: var(--toul-text-secondary); white-space: nowrap; }
+.presentacionPrecio [data-tono="agotado"] { color: var(--toul-error); }
+.presentacionPrecio [data-tono="quedan"] { color: var(--toul-warning); }
+/* Agotada: apagada, pero entra escalonada igual que las demás */
+.despliega[data-on="1"] .presentacionApagada { opacity: .45; }
 .chevron { transition: transform 380ms var(--p-pildora); }
 .chevron[data-on="1"] { transform: rotate(180deg); }
 
