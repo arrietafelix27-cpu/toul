@@ -45,7 +45,6 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [coverageDays, setCoverageDays] = useState(7)
-    const [creditDays, setCreditDays] = useState(30)
     const [plan, setPlan] = useState<string>('basico')
 
     useEffect(() => { loadData() }, [])
@@ -58,7 +57,6 @@ export default function SettingsPage() {
         if (store) {
             setStoreId(store.id); setStoreName(store.name); setCategory(store.category)
             setCoverageDays(store.stock_coverage_days ?? 7)
-            setCreditDays(store.credit_default_days ?? 30)
             setPlan(store.plan ?? 'basico')
         }
         setLoading(false)
@@ -70,7 +68,6 @@ export default function SettingsPage() {
         const { error } = await supabase.from('stores').update({
             name: storeName.trim(), category,
             stock_coverage_days: coverageDays,
-            credit_default_days: creditDays,
             updated_at: new Date().toISOString(),
         }).eq('id', storeId)
         if (error) toast.error(explainError(error, 'No se pudieron guardar los datos del negocio.'))
@@ -145,33 +142,6 @@ export default function SettingsPage() {
                         </div>
                         <p className="text-xs mt-1.5" style={{ color: 'var(--toul-text-dim)', lineHeight: 1.5 }}>
                             Te avisamos cuando lo que queda no alcance para ese tiempo.
-                        </p>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--toul-text-muted)' }}>
-                            Un fiado sin plazo se vence a los
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                            {[8, 15, 30, 60].map(days => {
-                                const active = creditDays === days
-                                return (
-                                    <button key={days} type="button" onClick={() => setCreditDays(days)}
-                                        style={{
-                                            height: 38, padding: '0 14px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
-                                            fontSize: 13.5, fontWeight: active ? 600 : 500,
-                                            background: active ? 'var(--toul-accent-dim)' : 'var(--toul-surface-2)',
-                                            border: `1px solid ${active ? 'var(--toul-border-focused)' : 'var(--toul-border)'}`,
-                                            color: active ? 'var(--toul-accent)' : 'var(--toul-text-muted)',
-                                            transition: 'background-color 160ms cubic-bezier(0.23,1,0.32,1), border-color 160ms cubic-bezier(0.23,1,0.32,1), color 160ms cubic-bezier(0.23,1,0.32,1)',
-                                        }}>
-                                        {days === 8 ? 'ocho días' : days === 15 ? 'quince días' : days === 30 ? 'un mes' : 'dos meses'}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                        <p className="text-xs mt-1.5" style={{ color: 'var(--toul-text-dim)', lineHeight: 1.5 }}>
-                            Solo para los fiados que no tienen fecha propia.
                         </p>
                     </div>
 
