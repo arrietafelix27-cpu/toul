@@ -12,6 +12,11 @@
    de la gota, debajo vuelve Inicio y cada lóbulo se recoge en el "+"
    con sus propios tiempos (--k, --w), con el filtro líquido puesto.
    Con "reducir movimiento" es solo un fundido.
+
+   En PC no hay gota: la caja crece desde "Nueva venta" (0,92 → 1 y de
+   transparente a visible, 350 ms) y al cerrar vuelve hacia el botón
+   (280 ms). Usa la transición de vista del navegador: Inicio queda como
+   foto debajo mientras la caja crece encima, sin ningún salto.
    ══════════════════════════════════════════════════════════════ */
 import s from './pos.module.css'
 
@@ -41,7 +46,7 @@ const PC: Molde = {
 }
 
 /** Duración de la gota (--d del prototipo) */
-export const DURACION_GOTA = 640
+export const DURACION_GOTA = 540
 /** Si la otra página tarda (primera carga del día), la gota no se queda pegada */
 const MAXIMO_ESPERA = 900
 /** La caja entra encima de la gota en 180 ms, desde el 55 % de --d (como el prototipo) */
@@ -57,6 +62,12 @@ const SALE = 120
 const ESPEJO = DURACION_GOTA * ENTRA_DESDE + ENTRA
 /** La curva de la apertura, al revés (espejo de cubic-bezier(.23,1,.32,1)) */
 const CURVA_ESPEJO = 'cubic-bezier(.68, 0, .77, 0)'
+
+/** PC: el zoom desde "Nueva venta" */
+const ZOOM_ENTRA = 350
+const ZOOM_SALE = 280
+const ZOOM_ESCALA = 0.92
+const ZOOM_CURVA = 'cubic-bezier(.23, 1, .32, 1)'
 
 type Gota = { raiz: HTMLDivElement; lobos: HTMLDivElement[]; tams: number[]; cx: number; cy: number; molde: Molde }
 
@@ -171,6 +182,7 @@ export async function abrirCaja(boton: HTMLElement, navegar: () => void, pc = fa
     ultimoOrigen = { rect, pc }
     try {
         if (quieto()) { await fundido(navegar, 'caja'); return }
+        if (pc) { await zoom(rect, navegar, 'caja'); return }
 
         const g = crear(rect, pc)
         document.body.appendChild(g.raiz)
@@ -273,6 +285,7 @@ export async function cerrarCaja(navegar: () => void) {
         if (quieto()) { await fundido(navegar, 'inicio'); return }
 
         const desde = ultimoOrigen ?? origenSupuesto()
+        if (desde.pc) { await zoom(desde.rect, navegar, 'inicio'); return }
         const g = crear(desde.rect, desde.pc)
         // La gota nace ya extendida, DEBAJO de la caja (no se ve todavía)
         g.raiz.dataset.fijo = '1'
@@ -303,6 +316,61 @@ export async function cerrarCaja(navegar: () => void) {
         g.raiz.remove()
     } finally {
         activa = false
+    }
+}
+
+type ConTransicion = Document & {
+    startViewTransition?: (cb: () => Promise<void>) => { ready: Promise<void>; finished: Promise<void> }
+}
+
+/**
+ * PC: la caja crece desde el botón (o vuelve hacia él al cerrar).
+ * Con la transición de vista, la página que se va queda como foto y la
+ * que llega se anima encima (o al revés al cerrar: la caja se encoge
+ * encima de Inicio). Sin ella, se anima la caja directamente.
+ */
+async function zoom(rect: DOMRect, navegar: () => void, cual: 'caja' | 'inicio') {
+    const entra = cual === 'caja'
+    const origen = `${rect.left + rect.width / 2}px ${rect.top + rect.height / 2}px`
+    const chica = { transform: `scale(${ZOOM_ESCALA})`, opacity: 0, transformOrigin: origen }
+    const grande = { transform: 'scale(1)', opacity: 1, transformOrigin: origen }
+    const marcos = entra ? [chica, grande] : [grande, chica]
+    const opciones: KeyframeAnimationOptions = { duration: entra ? ZOOM_ENTRA : ZOOM_SALE, easing: ZOOM_CURVA, fill: 'both' }
+    const doc = document as ConTransicion
+
+    if (!doc.startViewTransition) {
+        const raizCaja = () => document.querySelector<HTMLElement>('[data-caja-raiz]')
+        if (entra) {
+            const listo = esperar('caja')
+            navegar()
+            await listo
+            await raizCaja()?.animate(marcos, opciones).finished.catch(() => {})
+        } else {
+            await raizCaja()?.animate(marcos, opciones).finished.catch(() => {})
+            navegar()
+        }
+        return
+    }
+
+    // Sin el fundido que trae el navegador ni su mezcla de colores: solo el zoom.
+    // Al cerrar, la caja (la foto que se va) queda encima de Inicio
+    const estilo = document.createElement('style')
+    estilo.textContent = `::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}`
+        + (entra ? '' : `::view-transition-old(root){z-index:1}`)
+    document.head.appendChild(estilo)
+    try {
+        const t = doc.startViewTransition(async () => {
+            const listo = esperar(cual)
+            navegar()
+            await listo
+        })
+        await t.ready
+        document.documentElement.animate(marcos, { ...opciones, pseudoElement: entra ? '::view-transition-new(root)' : '::view-transition-old(root)' })
+        await t.finished
+    } catch {
+        // Otra navegación la interrumpió: la página nueva ya está
+    } finally {
+        estilo.remove()
     }
 }
 
