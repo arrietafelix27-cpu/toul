@@ -138,3 +138,12 @@ Two columns: products (search 560px max with `/` hint, filter, sort, categories,
 - [ ] Undo restores stock, debt and cart exactly.
 - [ ] Duplicate client name/phone cannot be created.
 - [ ] Offline: credit locked, sale saved, success note shown, sync works.
+
+## 13. Pendiente para cuando vuelva el punto físico
+
+La caja nueva ya no tiene el menú de perfil (solo vende). Cuando se prenda
+otra vez PUNTO_FISICO, estas tres cosas necesitan un sitio nuevo:
+
+- **Abrir turno** (y Cerrar turno, que hoy vive en /caja/cierre).
+- **Tirilla automática** (prender o apagar la impresión al vender).
+- **Cerrar sesión** (el vendedor no tiene a dónde salir sin el menú).

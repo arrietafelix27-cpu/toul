@@ -1,7 +1,7 @@
 // npm run test:calculos
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cabeUnaMas, demandaDeCarrito, demandaDeVentasGuardadas, loQueFalta, stockRestante, unidadesDeLinea, type ComboConComponentes } from './stock.ts'
+import { cabeUnaMas, cuantasCaben, demandaDeCarrito, demandaDeVentasGuardadas, loQueFalta, stockRestante, unidadesDeLinea, type ComboConComponentes } from './stock.ts'
 
 // Dúo: un Sauvage suelto + un Bleu de 50ml
 const combos: ComboConComponentes[] = [
@@ -57,3 +57,22 @@ test('Las ventas guardadas sin internet descuentan su stock en el equipo', () =>
 test('El stock que queda nunca es negativo', () => {
     assert.deepEqual(stockRestante({ 'p:a': 1 }, { 'p:a': 5, 'p:b': 2 }), { 'p:a': 0, 'p:b': 0 })
 })
+
+test('Escribir la cantidad: nunca más de lo que hay, contando las otras líneas', () => {
+    // Sauvage tiene 3; el combo dúo lleva 1 Sauvage y 1 Bleu 50
+    assert.equal(cuantasCaben('sauvage', {}, combos, stock), 3)
+    assert.equal(cuantasCaben('sauvage', { sauvage: 1 }, combos, stock), 3)
+    assert.equal(cuantasCaben('sauvage', { 'combo:duo': 1 }, combos, stock), 2)
+    assert.equal(cuantasCaben('combo:doble', {}, combos, { 'p:sauvage': 5 }), 2)
+    assert.equal(cuantasCaben('eros', {}, combos, stock), 0)
+    assert.equal(cuantasCaben('combo:vacio', {}, combos, {}), null)
+    // Lo que da coincide con agregar de a uno
+    for (const llave of ['sauvage', 'bleu:b100', 'combo:duo']) {
+        let carrito: Record<string, number> = { 'combo:duo': 1 }
+        if (llave === 'combo:duo') carrito = { sauvage: 1 }
+        let n = carrito[llave] ?? 0
+        while (cabeUnaMas(llave, { ...carrito, [llave]: n }, combos, stock)) n++
+        assert.equal(cuantasCaben(llave, carrito, combos, stock), n)
+    }
+})
+

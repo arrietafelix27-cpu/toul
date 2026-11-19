@@ -10,6 +10,11 @@ const DIAS_MAS_VENDIDOS = 30
  *
  * El stock es el mismo que muestra Inventario (toul_estado_stock lee estas
  * mismas columnas, que la base mantiene al día con cada movimiento).
+ *
+ * El mínimo de cada producto y presentación sale de esa misma regla
+ * (toul_estado_stock): el que puso el dueño o el automático. Con él la
+ * caja dice "Quedan N" igual que Inventario. Si falla, la caja abre igual
+ * y solo deja de avisar "Quedan N" (Agotado sigue).
  */
 export async function GET() {
     const supabase = await createClient()
@@ -21,12 +26,12 @@ export async function GET() {
     const store = { id: context.storeId }
     const desde = new Date(Date.now() - DIAS_MAS_VENDIDOS * 24 * 60 * 60 * 1000).toISOString()
 
-    const [productsRes, variantsRes, combosRes, categoriesRes, soldRes, methodsRes, customersRes] = await Promise.all([
-        supabase.from('products').select('id, name, sale_price, cpp, stock, image_url, images, reference, category_id').eq('store_id', store.id).eq('is_active', true).order('name'),
+    const [productsRes, variantsRes, combosRes, categoriesRes, soldRes, methodsRes, customersRes, estadoRes] = await Promise.all([
+        supabase.from('products').select('id, name, sale_price, cpp, stock, image_url, images, reference, category_id, created_at').eq('store_id', store.id).eq('is_active', true).order('name'),
         supabase.from('product_variants').select('id, product_id, name, sale_price, cpp, stock').eq('store_id', store.id).eq('is_active', true),
         supabase.from('combos')
             // Con el stock de lo que lleva: la caja apaga el combo al que le falta algo
-            .select(`id, name, sale_price, image_url, category_id,
+            .select(`id, name, sale_price, image_url, category_id, created_at,
                 combo_items(product_id, variant_id, quantity,
                     products!product_id(id, name, cpp, stock),
                     product_variants!variant_id(id, product_id, name, cpp, stock)
@@ -41,6 +46,7 @@ export async function GET() {
         supabase.from('sale_items').select('*, sales!inner(created_at)').eq('store_id', store.id).gte('sales.created_at', desde).limit(5000),
         supabase.from('payment_methods').select('*').eq('store_id', store.id).eq('is_active', true).order('sort_order'),
         supabase.from('customers').select('*').eq('store_id', store.id).order('name'),
+        supabase.rpc('toul_estado_stock'),
     ])
 
     // Sin productos no hay caja: mejor un error (la caja usa la copia guardada)
@@ -61,12 +67,23 @@ export async function GET() {
         if (key) sold[key] = (sold[key] || 0) + (Number(row.quantity) || 0)
     }
 
+    // El mínimo por producto (sin presentaciones) y por presentación
+    let minimos: Record<string, number> | null = null
+    if (!estadoRes.error && Array.isArray(estadoRes.data)) {
+        minimos = {}
+        for (const fila of estadoRes.data as { kind?: string; product_id?: string; variant_id?: string | null; min_stock?: number | null }[]) {
+            const id = fila.kind === 'presentacion' ? fila.variant_id : fila.product_id
+            if (id && fila.min_stock != null) minimos[id] = Math.round(Number(fila.min_stock) || 0)
+        }
+    }
+
     return NextResponse.json({
         products: productsRes.data || [],
         variants,
         combos: combosRes.data || [],
         categories: categoriesRes.error ? [] : categoriesRes.data || [],
         sold,
+        minimos,
         // null = no cargaron: la caja usa la copia guardada o los pide aparte
         methods: methodsRes.error ? null : methodsRes.data || [],
         customers: customersRes.error ? null : customersRes.data || [],

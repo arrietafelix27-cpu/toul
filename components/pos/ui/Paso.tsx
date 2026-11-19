@@ -57,7 +57,7 @@ export function Paso({ cantidad, onCambiar, nombre, deshabilitado }: {
                     onCambiar(v)
                 }}
                 onBlur={() => setBorrador(null)}
-                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }}
             />
             <button type="button" className={s.pasoBoton} disabled={deshabilitado}
                 aria-label="Agregar uno" onClick={() => onCambiar(n + 1)}>

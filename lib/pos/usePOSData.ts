@@ -66,6 +66,7 @@ export interface POSComboItem {
 export interface POSCombo {
     id: string
     name: string
+    created_at?: string
     sale_price: number
     image_url: string | null
     category_id?: string | null
@@ -89,6 +90,9 @@ export interface POSDataState {
     categories: POSCategory[]
     /** Unidades vendidas en los últimos 30 días ('producto' o 'combo:id') */
     sold: Record<string, number>
+    /** El mínimo de cada producto (sin presentaciones) y de cada presentación, por id,
+     *  con la misma regla de Inventario. null: no llegó (no se avisa "Quedan N") */
+    minimos: Record<string, number> | null
     /** Lo que queda de cada unidad de inventario ('p:<producto>', 'v:<presentación>') */
     stock: Cuenta
     /** "Sauvage" o "Bleu · 50ml": para decir qué le falta a un combo */
@@ -196,6 +200,7 @@ export function usePOSData(enabled: boolean): POSDataState {
     const combos = useMemo<POSCombo[]>(() => (prodData?.combos ?? []) as unknown as POSCombo[], [prodData])
     const categories = useMemo<POSCategory[]>(() => prodData?.categories ?? [], [prodData])
     const sold = useMemo<Record<string, number>>(() => prodData?.sold ?? {}, [prodData])
+    const minimos = useMemo<Record<string, number> | null>(() => prodData?.minimos ?? null, [prodData])
 
     const stock = useMemo<Cuenta>(() => {
         const base: Cuenta = {}
@@ -296,7 +301,7 @@ export function usePOSData(enabled: boolean): POSDataState {
     }, [mutateProd, mutateCust, pedirClientes])
 
     return useMemo(() => ({
-        products, variantsByProduct, combos, methods, customers, categories, sold, stock, unitName,
+        products, variantsByProduct, combos, methods, customers, categories, sold, minimos, stock, unitName,
         isLoading, methodsLoading, customersLoading, failed, retry, refreshProducts, refreshCustomers,
-    }), [products, variantsByProduct, combos, methods, customers, categories, sold, stock, unitName, isLoading, methodsLoading, customersLoading, failed, retry, refreshProducts, refreshCustomers])
+    }), [products, variantsByProduct, combos, methods, customers, categories, sold, minimos, stock, unitName, isLoading, methodsLoading, customersLoading, failed, retry, refreshProducts, refreshCustomers])
 }

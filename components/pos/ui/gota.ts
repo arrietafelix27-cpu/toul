@@ -77,6 +77,8 @@ let avisoCaja: (() => void) | null = null
 let avisoInicio: (() => void) | null = null
 /** Hora en que empezó la gota, mientras la caja tiene que entrar encima de ella */
 let entrada: number | null = null
+/** Hora en que empezó el zoom del PC, mientras la caja está entrando */
+let entradaZoom: number | null = null
 /** Quien espera a que la gota se quite (la caja, para dejar su capa de encima) */
 const alQuitarse = new Set<() => void>()
 
@@ -250,6 +252,26 @@ export function soltarCapaDeGota(el: HTMLElement) {
     el.style.position = ''
 }
 
+/**
+ * Al abrir la caja: cuántos ms faltan para que entren los productos en
+ * cascada y el panel "Venta" (PC). Con la gota, los renglones entran al
+ * 60 % de --d (como el prototipo); con el zoom del PC, el panel a los
+ * 180 ms y las tarjetas a los 220 ms. Entrando directo (recargar): ya.
+ */
+export function retrasoCascada(): { filas: number; panel: number } {
+    if (typeof performance === 'undefined') return { filas: 0, panel: 0 }
+    const ahora = performance.now()
+    if (entrada != null) {
+        const pasado = ahora - entrada
+        return { filas: Math.max(0, Math.round(DURACION_GOTA * 0.6 - pasado)), panel: Math.max(0, Math.round(DURACION_GOTA * ENTRA_DESDE - pasado)) }
+    }
+    if (entradaZoom != null) {
+        const pasado = ahora - entradaZoom
+        return { filas: Math.max(0, Math.round(220 - pasado)), panel: Math.max(0, Math.round(180 - pasado)) }
+    }
+    return { filas: 0, panel: 0 }
+}
+
 /** Lo que mide la zona segura de abajo (la barra del iPhone) */
 function seguroAbajo() {
     const sonda = document.createElement('div')
@@ -337,6 +359,7 @@ async function zoom(rect: DOMRect, navegar: () => void, cual: 'caja' | 'inicio')
     const marcos = entra ? [chica, grande] : [grande, chica]
     const opciones: KeyframeAnimationOptions = { duration: entra ? ZOOM_ENTRA : ZOOM_SALE, easing: ZOOM_CURVA, fill: 'both' }
     const doc = document as ConTransicion
+    if (entra) entradaZoom = performance.now()
 
     if (!doc.startViewTransition) {
         const raizCaja = () => document.querySelector<HTMLElement>('[data-caja-raiz]')
@@ -349,6 +372,7 @@ async function zoom(rect: DOMRect, navegar: () => void, cual: 'caja' | 'inicio')
             await raizCaja()?.animate(marcos, opciones).finished.catch(() => {})
             navegar()
         }
+        entradaZoom = null
         return
     }
 
@@ -371,6 +395,7 @@ async function zoom(rect: DOMRect, navegar: () => void, cual: 'caja' | 'inicio')
         // Otra navegación la interrumpió: la página nueva ya está
     } finally {
         estilo.remove()
+        entradaZoom = null
     }
 }
 

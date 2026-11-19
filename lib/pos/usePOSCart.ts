@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import type { Product, CartItem } from '@/lib/types'
 import type { POSVariant, POSCombo } from './usePOSData'
-import { cabeUnaMas, loQueFalta, type Cuenta, type Unidad } from './stock'
+import { cabeUnaMas, cuantasCaben, loQueFalta, type Cuenta, type Unidad } from './stock'
 
 const STORAGE_KEY = 'toul_pos_cart'
 // El carrito vive en localStorage (no sessionStorage): si se cierra el navegador
@@ -53,6 +53,8 @@ export interface POSCartState {
     /** Lo que no alcanza para una más de esta línea (null si alcanza) */
     missingFor: (itemKey: string) => Unidad | null
     decrementItem: (productId: string) => void
+    /** Deja N de esa línea (escrita a mano). Nunca más de lo que hay: devuelve la que quedó */
+    setItemQuantity: (itemKey: string, cantidad: number) => number
     removeItem: (productId: string) => void
     clearCart: () => void
     /** Vuelve a poner un carrito completo (al deshacer una venta) */
@@ -91,6 +93,20 @@ export function usePOSCart(products: Product[], variantsByProduct: Record<string
             return next
         })
     }, [])
+
+    const setItemQuantity = useCallback((itemKey: string, cantidad: number) => {
+        const tope = cuantasCaben(itemKey, cartMap, combos, stock)
+        const pedida = Math.max(0, Math.floor(Number(cantidad) || 0))
+        const queda = tope === null ? pedida : Math.min(pedida, tope)
+        setCartMap(prev => {
+            if ((prev[itemKey] || 0) === queda) return prev
+            const next = { ...prev }
+            if (queda > 0) next[itemKey] = queda
+            else delete next[itemKey]
+            return next
+        })
+        return queda
+    }, [cartMap, combos, stock])
 
     const removeItem = useCallback((productId: string) => {
         setCartMap(prev => {
@@ -168,8 +184,9 @@ export function usePOSCart(products: Product[], variantsByProduct: Record<string
         canAdd,
         missingFor,
         decrementItem,
+        setItemQuantity,
         removeItem,
         clearCart,
         restoreCart,
-    }), [cartMap, cartItems, subtotal, totalUnits, isEmpty, addItem, addCombo, canAdd, missingFor, decrementItem, removeItem, clearCart, restoreCart])
+    }), [cartMap, cartItems, subtotal, totalUnits, isEmpty, addItem, addCombo, canAdd, missingFor, decrementItem, setItemQuantity, removeItem, clearCart, restoreCart])
 }

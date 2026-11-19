@@ -109,3 +109,19 @@ export function loQueFalta(llave: string, carrito: Record<string, number>, combo
 export function cabeUnaMas(llave: string, carrito: Record<string, number>, combos: ComboConComponentes[], stock: Cuenta): boolean {
     return loQueFalta(llave, carrito, combos, stock) === null
 }
+
+/** Cuántas de esta línea caben en el carrito como máximo, contando lo que
+ *  ya llevan las demás líneas (un combo y su perfume suelto comparten
+ *  stock). Una línea que no saca nada del inventario no tiene tope (null). */
+export function cuantasCaben(llave: string, carrito: Record<string, number>, combos: ComboConComponentes[], stock: Cuenta): number | null {
+    const otras = { ...carrito }
+    delete otras[llave]
+    const usado = demandaDeCarrito(otras, combos)
+    let tope: number | null = null
+    for (const [u, n] of Object.entries(unidadesDeLinea(llave, combos))) {
+        if (n <= 0) continue
+        const caben = Math.max(0, Math.floor(((stock[u] ?? 0) - (usado[u] ?? 0)) / n))
+        tope = tope === null ? caben : Math.min(tope, caben)
+    }
+    return tope
+}

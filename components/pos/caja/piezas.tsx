@@ -1,10 +1,16 @@
 'use client'
 
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { animate, motion, PresenceContext, useReducedMotion } from 'framer-motion'
 import { Minus, Plus, Trash2, Package, Layers } from 'lucide-react'
 import { formatCOP } from '@/lib/utils'
 import { onlyDigits, withThousands } from '@/lib/format/text'
+import type { OfflineState } from '@/lib/isla/useOffline'
+import { cerrarCaja } from '@/components/pos/ui/gota'
+import { IcoCerrar } from '@/components/pos/ui/Iconos'
+import ui from '@/components/pos/ui/pos.module.css'
 
 /* ══════════════════════════════════════════════════════════════
    Piezas de la caja. El lenguaje: nada metido en cajas, sin
@@ -221,3 +227,46 @@ export function Iniciales({ nombre, tamaño = 40 }: { nombre: string; tamaño?: 
 export function precioDe(min: number, max: number) {
     return min === max ? formatCOP(min) : `${formatCOP(min)} – ${formatCOP(max)}`
 }
+
+/* ── La conexión ───────────────────────────────────────────────────
+   Solo cuando aplica: "Sin conexión" (ámbar), "Enviando N" (azul,
+   tocar reintenta) o "N no se pudieron enviar" (rojo, lleva a revisarlas). */
+export function Conexion({ offline, className }: { offline: OfflineState; className?: string }) {
+    const { online, pendingCount, failedCount, syncing, sync } = offline
+    const estado = failedCount > 0 && online ? 'fallo' : !online ? 'sin' : pendingCount > 0 || syncing ? 'enviando' : null
+    if (!estado) return null
+    if (estado === 'sin') {
+        return (
+            <span className={`${ui.sinConexion} ${className ?? ''}`} role="status"
+                title="Puedes seguir vendiendo de contado. Las ventas se envían solas cuando vuelva la conexión">
+                <i aria-hidden="true" />Sin conexión{pendingCount > 0 ? ` · ${pendingCount} ${pendingCount === 1 ? 'guardada' : 'guardadas'}` : ''}
+            </span>
+        )
+    }
+    if (estado === 'enviando') {
+        return (
+            <button type="button" className={`${ui.pildora} ${className ?? ''}`} data-tono="enviando" onClick={() => sync(true)} disabled={syncing}>
+                Enviando {pendingCount}…
+            </button>
+        )
+    }
+    return (
+        <Link href="/caja/ventas" className={`${ui.pildora} ${className ?? ''}`} data-tono="fallo">
+            {failedCount} no se {failedCount === 1 ? 'pudo' : 'pudieron'} enviar
+        </Link>
+    )
+}
+
+/* ── La X: vuelve a Inicio con la gota (o el zoom en PC) al revés ── */
+export function SalirDeCaja({ className }: { className?: string }) {
+    const router = useRouter()
+    // Inicio queda listo de antemano: la gota se recoge sin esperar
+    useEffect(() => { router.prefetch('/') }, [router])
+    return (
+        <button type="button" aria-label="Salir de la caja" title="Salir de la caja" className={`${ui.xCaja} ${className ?? ''}`}
+            onClick={() => cerrarCaja(() => router.push('/'))}>
+            <IcoCerrar size={18} grosor={2.2} />
+        </button>
+    )
+}
+
