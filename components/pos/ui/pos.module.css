@@ -571,3 +571,29 @@
 .campo input[type="search"] { -webkit-appearance: none; appearance: none; }
 .campo input[type="search"]::-webkit-search-cancel-button,
 .campo input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+
+/* ══════════════════════════════════════════════════════════════
+   La gota (diseno/pos/SPEC.md §3). Vive en <body>, fuera de .pos,
+   así que usa los tokens de TOUL directo. Ver gota.ts.
+   ══════════════════════════════════════════════════════════════ */
+.gota { position: fixed; inset: 0; z-index: 90; pointer-events: auto; opacity: 1; transition: opacity 180ms ease; }
+.gota[data-sale="1"] { opacity: 0; pointer-events: none; }
+.lobos { position: absolute; inset: 0; }
+.lobo {
+    position: absolute; width: var(--s); height: var(--s); border-radius: 50%;
+    opacity: 0; background-color: var(--toul-accent-hover); will-change: transform;
+    transform: translate(0px, 0px) scale(var(--z));
+    /* Al recogerse: se mueve parejo y se apaga al final, ya dentro del "+" */
+    transition: transform calc(var(--d) * var(--k) * .9) cubic-bezier(.55, 0, .45, 1) calc(var(--d) * var(--w) * .6),
+                opacity 60ms linear calc(var(--d) * .92);
+}
+.gota[data-on="1"] .lobo {
+    opacity: 1; transform: translate(var(--x), var(--y)) scale(1);
+    transition: transform calc(var(--d) * var(--k)) cubic-bezier(.23, 1, .32, 1) calc(var(--d) * var(--w)), opacity 40ms linear;
+}
+/* Nace ya extendida (al cerrar), sin animar */
+.gota[data-fijo="1"], .gota[data-fijo="1"] .lobo { transition: none !important; }
+
+/* Reducir movimiento: solo un fundido con el fondo */
+.gotaQuieta { position: fixed; inset: 0; z-index: 90; background: var(--toul-bg); opacity: 0; pointer-events: auto; transition: opacity 160ms ease; }
+.gotaQuieta[data-on="1"] { opacity: 1; }

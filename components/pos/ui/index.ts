@@ -19,4 +19,5 @@ export { Desplegable, Escalon, Chevron, Rebota, FilaPresentacion, avisoStock } f
 export { Hoja, EtiquetaHoja } from './Hoja'
 export { Menu, type OpcionMenu } from './Menu'
 export { Capa } from './Capa'
+export { abrirCaja, cerrarCaja, avisarCajaLista, avisarInicioListo, DURACION_GOTA } from './gota'
 export { BotonConfirmar, type EstadoConfirmar } from './BotonConfirmar'

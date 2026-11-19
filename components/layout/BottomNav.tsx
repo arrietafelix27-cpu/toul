@@ -11,6 +11,7 @@ import { useStore } from '@/lib/hooks/useData'
 import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { FullscreenToggle } from './FullscreenToggle'
 import { BotonToulAI } from './BotonToulAI'
+import { abrirCaja, avisarInicioListo } from '@/components/pos/ui/gota'
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 
@@ -249,6 +250,25 @@ export function Sidebar() {
     const { data: store } = useStore()
     // La caja se deja lista de antemano: "Nueva venta" abre de una
     useEffect(() => { router.prefetch('/caja') }, [router])
+    // Ya está el botón: si se viene de cerrar la caja, la gota se recoge en él
+    useEffect(() => { avisarInicioListo() }, [])
+    const nuevaVenta = useRef<HTMLButtonElement>(null)
+    // N abre la caja (en PC), si no se está escribiendo ni hay una ventana abierta
+    useEffect(() => {
+        const tecla = (e: KeyboardEvent) => {
+            if (e.key !== 'n' && e.key !== 'N') return
+            if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+            const t = e.target as HTMLElement | null
+            if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return
+            if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return
+            const boton = nuevaVenta.current
+            if (!boton || boton.getBoundingClientRect().width === 0) return
+            e.preventDefault()
+            abrirCaja(boton, () => router.push('/caja'), true)
+        }
+        window.addEventListener('keydown', tecla)
+        return () => window.removeEventListener('keydown', tecla)
+    }, [router])
     // Las aprobaciones son del punto físico: en pausa, ni se preguntan
     const { data: pendingApprovals = 0 } = usePendingApprovalsCount(PUNTO_FISICO)
     // Cerrar sesión pasa por el mismo lugar que en Ajustes: carga lo pendiente
@@ -279,7 +299,9 @@ export function Sidebar() {
                 {/* Acción principal */}
                 <div className="px-3 pb-3" style={{ flexShrink: 0 }}>
                     <motion.button
-                        onClick={() => router.push('/caja')}
+                        ref={nuevaVenta}
+                        data-gota-origen="pc"
+                        onClick={e => abrirCaja(e.currentTarget, () => router.push('/caja'), true)}
                         whileTap={{ scale: 0.975 }}
                         whileHover={{ y: -1 }}
                         transition={SPRING_PRESS}
@@ -347,6 +369,8 @@ export function BottomNav() {
     const router = useRouter()
     // La caja se deja lista de antemano: el botón + abre de una
     useEffect(() => { router.prefetch('/caja') }, [router])
+    // Ya está el "+": si se viene de cerrar la caja, la gota se recoge en él
+    useEffect(() => { avisarInicioListo() }, [])
     // Las aprobaciones son del punto físico: en pausa, ni se preguntan
     const { data: pendingApprovals = 0 } = usePendingApprovalsCount(PUNTO_FISICO)
 
@@ -375,7 +399,8 @@ export function BottomNav() {
                         return (
                             <div key="pos-center" className="flex items-center justify-center" style={{ width: 64 }}>
                                 <motion.button
-                                    onClick={() => router.push('/caja')}
+                                    data-gota-origen="celular"
+                                    onClick={e => abrirCaja(e.currentTarget, () => router.push('/caja'))}
                                     whileTap={{ scale: 0.94 }}
                                     transition={SPRING_PRESS}
                                     aria-label="Nueva venta"

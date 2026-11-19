@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ShoppingBag, ReceiptText, Receipt, LockKeyhole, LayoutDashboard, LogOut, Printer, X, WifiOff, CloudUpload, AlertTriangle, LockKeyholeOpen, Store } from 'lucide-react'
 import { POSProvider } from '@/components/pos/POSContext'
@@ -19,6 +19,7 @@ import { createClient } from '@/lib/supabase/client'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 import { RegistrarMovimiento } from '@/components/movimientos/RegistrarMovimiento'
 import { PUNTO_FISICO } from '@/lib/puntoFisico'
+import { avisarCajaLista, cerrarCaja } from '@/components/pos/ui/gota'
 
 const TABS = [
     { href: '/caja', label: 'Vender', short: 'Vender', icon: ShoppingBag },
@@ -89,6 +90,7 @@ button.cj-pill:active, a.cj-pill:active { transform: scale(0.96); }
 
 /** Lo único que ve un vendedor mientras el punto físico está en pausa */
 function EnPausa({ onSalir }: { onSalir: () => void }) {
+    useEffect(() => { avisarCajaLista() }, [])
     return (
         <div style={{
             minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--toul-bg)',
@@ -114,6 +116,12 @@ function EnPausa({ onSalir }: { onSalir: () => void }) {
             </motion.div>
         </div>
     )
+}
+
+/** Ya se pintó la caja: si se llegó con la gota, la gota se desvanece */
+function GotaLista() {
+    useEffect(() => { avisarCajaLista() }, [])
+    return null
 }
 
 function Spinner() {
@@ -257,6 +265,7 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     return (
         <CajaContext.Provider value={value}>
             {dialogoSalir}
+            <GotaLista />
             <POSProvider>
                 <style>{CSS}</style>
                 <div className="cj-raiz" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--toul-bg)', overflow: 'hidden' }}>
@@ -437,17 +446,21 @@ function Conexion({ offline }: { offline: OfflineState }) {
 /** Volver al panel del administrador. En PC va a la derecha; en el
  *  celular, a la izquierda, donde se busca para salir */
 function SalirDeCaja({ className }: { className: string }) {
+    const router = useRouter()
+    // Inicio queda listo de antemano: la gota se recoge sin esperar
+    useEffect(() => { router.prefetch('/') }, [router])
     return (
         <motion.div whileTap={{ scale: 0.94 }} transition={SPRING_PRESS} className={className} style={{ flexShrink: 0 }}>
-            <Link href="/" aria-label="Salir de la caja" title="Salir de la caja" className="cj-salir-btn"
+            <button type="button" aria-label="Salir de la caja" title="Salir de la caja" className="cj-salir-btn"
+                onClick={() => cerrarCaja(() => router.push('/'))}
                 style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    width: 40, height: 40, borderRadius: '50%', textDecoration: 'none',
+                    width: 40, height: 40, borderRadius: '50%', border: 'none', cursor: 'pointer', padding: 0,
                     background: 'var(--toul-surface)', color: 'var(--toul-text-muted)',
                     transition: 'background var(--toul-transition), color var(--toul-transition)',
                 }}>
                 <X size={18} strokeWidth={2.2} />
-            </Link>
+            </button>
         </motion.div>
     )
 }
