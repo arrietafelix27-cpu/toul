@@ -576,8 +576,8 @@
    La gota (diseno/pos/SPEC.md §3). Vive en <body>, fuera de .pos,
    así que usa los tokens de TOUL directo. Ver gota.ts.
    ══════════════════════════════════════════════════════════════ */
-.gota { position: fixed; inset: 0; z-index: 90; pointer-events: auto; opacity: 1; transition: opacity 180ms ease; }
-.gota[data-sale="1"] { opacity: 0; pointer-events: none; }
+/* z 90: encima de la app; la caja entra encima (z 95) y la tapa */
+.gota { position: fixed; inset: 0; z-index: 90; pointer-events: auto; }
 .lobos { position: absolute; inset: 0; }
 .lobo {
     position: absolute; width: var(--s); height: var(--s); border-radius: 50%;

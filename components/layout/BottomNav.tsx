@@ -5,7 +5,7 @@ import {
     Home, Package, Layers, ArrowLeftRight, Users, Truck, BarChart3, Store,
     Settings, Ellipsis, ChevronsUpDown, Plus, LogOut,
 } from 'lucide-react'
-import { usePendingApprovalsCount } from '@/lib/isla/useSession'
+import { usePendingApprovalsCount, precargarContextoCaja } from '@/lib/isla/useSession'
 import { PUNTO_FISICO } from '@/lib/puntoFisico'
 import { useStore } from '@/lib/hooks/useData'
 import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
@@ -249,7 +249,7 @@ export function Sidebar() {
     const router = useRouter()
     const { data: store } = useStore()
     // La caja se deja lista de antemano: "Nueva venta" abre de una
-    useEffect(() => { router.prefetch('/caja') }, [router])
+    useEffect(() => { router.prefetch('/caja'); precargarContextoCaja() }, [router])
     // Ya está el botón: si se viene de cerrar la caja, la gota se recoge en él
     useEffect(() => { avisarInicioListo() }, [])
     const nuevaVenta = useRef<HTMLButtonElement>(null)
@@ -368,7 +368,7 @@ export function BottomNav() {
     const pathname = usePathname()
     const router = useRouter()
     // La caja se deja lista de antemano: el botón + abre de una
-    useEffect(() => { router.prefetch('/caja') }, [router])
+    useEffect(() => { router.prefetch('/caja'); precargarContextoCaja() }, [router])
     // Ya está el "+": si se viene de cerrar la caja, la gota se recoge en él
     useEffect(() => { avisarInicioListo() }, [])
     // Las aprobaciones son del punto físico: en pausa, ni se preguntan

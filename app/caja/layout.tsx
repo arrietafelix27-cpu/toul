@@ -19,7 +19,7 @@ import { createClient } from '@/lib/supabase/client'
 import { EASE_OUT_EMIL, SPRING_PRESS } from '@/components/ui'
 import { RegistrarMovimiento } from '@/components/movimientos/RegistrarMovimiento'
 import { PUNTO_FISICO } from '@/lib/puntoFisico'
-import { avisarCajaLista, cerrarCaja } from '@/components/pos/ui/gota'
+import { alQuitarseGota, avisarCajaLista, cerrarCaja, entrarEncimaDeGota, retrasoEntradaCaja, soltarCapaDeGota } from '@/components/pos/ui/gota'
 
 const TABS = [
     { href: '/caja', label: 'Vender', short: 'Vender', icon: ShoppingBag },
@@ -89,10 +89,9 @@ button.cj-pill:active, a.cj-pill:active { transform: scale(0.96); }
 `
 
 /** Lo único que ve un vendedor mientras el punto físico está en pausa */
-function EnPausa({ onSalir }: { onSalir: () => void }) {
-    useEffect(() => { avisarCajaLista() }, [])
+function EnPausa({ onSalir, entrada }: { onSalir: () => void; entrada: Entrada }) {
     return (
-        <div style={{
+        <div {...entrada} style={{
             minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--toul-bg)',
             padding: '24px 24px calc(24px + env(safe-area-inset-bottom, 0px))',
         }}>
@@ -118,15 +117,41 @@ function EnPausa({ onSalir }: { onSalir: () => void }) {
     )
 }
 
-/** Ya se pintó la caja: si se llegó con la gota, la gota se desvanece */
-function GotaLista() {
-    useEffect(() => { avisarCajaLista() }, [])
-    return null
+type Entrada = { ref?: (el: HTMLDivElement | null) => void }
+
+/**
+ * Si se llegó con la gota, la raíz de la caja entra ENCIMA de ella
+ * (oscura, de 0 a 1, desde el 55 % de la gota) y la tapa: la caja nunca
+ * se ve verde. Si primero se ve la carga y luego la caja, la entrada sigue
+ * donde iba (no vuelve a empezar). Cuando la gota ya se quitó, la caja deja
+ * su capa de encima (para no tapar las hojas que se abren sobre ella).
+ */
+function useEntradaGota(): Entrada {
+    // Hora (performance.now) en que la caja empieza a aparecer
+    const [desde] = useState<number | null>(() => {
+        const r = retrasoEntradaCaja()
+        return r == null ? null : performance.now() + r
+    })
+    const raiz = useRef<HTMLDivElement | null>(null)
+    const [entrando, setEntrando] = useState(desde != null)
+    useEffect(() => {
+        // Ya hay algo pintado (la caja o su carga): la gota puede seguir
+        avisarCajaLista()
+        return alQuitarseGota(() => {
+            if (raiz.current) soltarCapaDeGota(raiz.current)
+            setEntrando(false)
+        })
+    }, [])
+    const ref = useCallback((el: HTMLDivElement | null) => {
+        raiz.current = el
+        if (el && desde != null) entrarEncimaDeGota(el, desde)
+    }, [desde])
+    return entrando ? { ref } : {}
 }
 
-function Spinner() {
+function Spinner({ entrada }: { entrada: Entrada }) {
     return (
-        <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--toul-bg)' }}>
+        <div {...entrada} style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--toul-bg)' }}>
             <div style={{ width: 26, height: 26, border: '2.5px solid var(--toul-border)', borderTopColor: 'var(--toul-accent)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
         </div>
     )
@@ -136,6 +161,7 @@ const botonesDe = (v: unknown): BotonesComprobante => v === 'whatsapp' || v === 
 
 export default function CajaLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
+    const entrada = useEntradaGota()
     const { data: ctx, isLoading } = useSessionContext()
     // Con el punto físico en pausa no hay turnos: ni se piden ni se esperan
     const { data: session, isLoading: sessionLoading, mutate: refreshSession } = useOpenCashSession(PUNTO_FISICO ? ctx?.storeId : null)
@@ -246,11 +272,11 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
         permisos, comprobante, tienda, offline, abrirTurno,
     }) : null, [ctx, turno, sessionLoading, refreshSession, autoPrint, isPro, permisos, comprobante, tienda, offline, abrirTurno])
 
-    if (isLoading || !value) return <Spinner />
+    if (isLoading || !value) return <Spinner entrada={entrada} />
 
     // Un vendedor que llegue a entrar no puede vender mientras el punto
     // físico esté en pausa
-    if (!PUNTO_FISICO && ctx!.role === 'seller') return <>{dialogoSalir}<EnPausa onSalir={logout} /></>
+    if (!PUNTO_FISICO && ctx!.role === 'seller') return <>{dialogoSalir}<EnPausa onSalir={logout} entrada={entrada} /></>
 
     const openedAt = turno ? new Date(turno.opened_at).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' }) : null
     // El turno abierto puede ser de otra persona: que se vea de quién es
@@ -265,10 +291,9 @@ export default function CajaLayout({ children }: { children: React.ReactNode }) 
     return (
         <CajaContext.Provider value={value}>
             {dialogoSalir}
-            <GotaLista />
             <POSProvider>
                 <style>{CSS}</style>
-                <div className="cj-raiz" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--toul-bg)', overflow: 'hidden' }}>
+                <div data-caja-raiz {...entrada} className="cj-raiz" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--toul-bg)', overflow: 'hidden' }}>
                     {/* ── Barra superior ───────────────────────────── */}
                     <header className="cj-head">
                         {ctx!.role === 'admin' && <SalirDeCaja className="cj-salir-movil" />}

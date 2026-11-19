@@ -1,14 +1,16 @@
 /* ══════════════════════════════════════════════════════════════
    La gota: del "+" a la caja y de vuelta (diseno/pos/SPEC.md §3).
 
-   La caja es otra página, así que la gota se dibuja encima de toda
-   la app (fuera de React) y sobrevive al cambio de página:
-   1. Crece desde el botón con los 6 lóbulos del prototipo.
-   2. Solo cuando ya tapa toda la pantalla se cambia a la caja, así
-      no se ve ningún salto debajo.
-   3. Cuando la caja ya está pintada debajo, la gota se desvanece.
-   Al cerrar es al revés: la gota tapa la caja, se vuelve a Inicio
-   y se recoge en el "+".
+   La caja es otra página, así que la gota se dibuja en <body> (fuera de
+   React) y sobrevive al cambio de página:
+   1. Crece desde el centro del botón con los 6 lóbulos del prototipo.
+   2. Cuando ya tapa toda la pantalla se cambia a la caja (así no se ve
+      ningún salto debajo).
+   3. La caja, oscura, entra ENCIMA de la gota (opacidad 0 → 1, desde
+      el 55 % de --d). La gota queda tapada debajo: la caja nunca se ve verde.
+   Al cerrar es la misma película al revés: la caja se desvanece encima
+   de la gota, debajo vuelve Inicio y cada lóbulo se recoge en el "+"
+   con sus propios tiempos (--k, --w), con el filtro líquido puesto.
    Con "reducir movimiento" es solo un fundido.
    ══════════════════════════════════════════════════════════════ */
 import s from './pos.module.css'
@@ -40,9 +42,21 @@ const PC: Molde = {
 
 /** Duración de la gota (--d del prototipo) */
 export const DURACION_GOTA = 640
-/** Si la otra página tarda (primera carga del día), la gota no se queda pegada: se desvanece igual */
+/** Si la otra página tarda (primera carga del día), la gota no se queda pegada */
 const MAXIMO_ESPERA = 900
-const FUNDIDO = 180
+/** La caja entra encima de la gota en 180 ms, desde el 55 % de --d (como el prototipo) */
+const ENTRA = 180
+const ENTRA_DESDE = 0.55
+/** La caja se desvanece encima de la gota en 120 ms al cerrar */
+const SALE = 120
+/**
+ * Momento de la apertura en que la caja ya tapa todo (55 % de --d + 180 ms).
+ * Lo que la gota hace después nunca se ve, así que el cierre es la película
+ * al revés DESDE ese punto: sin rato verde quieto antes de recogerse.
+ */
+const ESPEJO = DURACION_GOTA * ENTRA_DESDE + ENTRA
+/** La curva de la apertura, al revés (espejo de cubic-bezier(.23,1,.32,1)) */
+const CURVA_ESPEJO = 'cubic-bezier(.68, 0, .77, 0)'
 
 type Gota = { raiz: HTMLDivElement; lobos: HTMLDivElement[]; tams: number[]; cx: number; cy: number; molde: Molde }
 
@@ -50,6 +64,10 @@ let activa = false
 let ultimoOrigen: { rect: DOMRect; pc: boolean } | null = null
 let avisoCaja: (() => void) | null = null
 let avisoInicio: (() => void) | null = null
+/** Hora en que empezó la gota, mientras la caja tiene que entrar encima de ella */
+let entrada: number | null = null
+/** Quien espera a que la gota se quite (la caja, para dejar su capa de encima) */
+const alQuitarse = new Set<() => void>()
 
 const quieto = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const pausa = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
@@ -77,6 +95,7 @@ function ubicar(g: Gota, rect: DOMRect) {
         el.style.left = `${cx - t / 2}px`
         el.style.top = `${cy - t / 2}px`
     })
+
     g.tams = molde.lobos.map(([tam]) => tam * fs)
     g.cx = cx
     g.cy = cy
@@ -112,6 +131,7 @@ function crear(rect: DOMRect, pc: boolean): Gota {
     })
     raiz.appendChild(capa)
     const g: Gota = { raiz, lobos, tams: [], cx: 0, cy: 0, molde }
+    raiz.style.setProperty('--d', `${DURACION_GOTA}ms`)
     ubicar(g, rect)
     return g
 }
@@ -167,33 +187,79 @@ export async function abrirCaja(boton: HTMLElement, navegar: () => void, pc = fa
             const tope = setTimeout(r, DURACION_GOTA + 60)
             requestAnimationFrame(vigilar)
         })
+        // La caja entra encima de la gota (ver retrasoEntradaCaja)
+        entrada = t0
         const listo = esperar('caja')
         navegar()
         await listo
-        // La caja ya está pintada debajo: la gota se desvanece y la caja queda
-        await dosCuadros()
-        g.raiz.dataset.sale = '1'
-        await pausa(FUNDIDO + 40)
+        // Cuando la caja ya terminó de entrar, la gota (tapada) se quita
+        await pausa(Math.max(0, DURACION_GOTA * ENTRA_DESDE - (performance.now() - t0)) + ENTRA + 30)
+        // Primero se quita la gota y DESPUÉS la caja deja su capa de encima:
+        // al revés, la gota se vería un instante sobre la caja
         g.raiz.remove()
     } finally {
+        entrada = null
         activa = false
+        alQuitarse.forEach(f => f())
     }
 }
 
-/** Busca el "+" visible en esta pantalla (en PC, "Nueva venta" de la barra lateral) */
-function origenVisible(): { rect: DOMRect; pc: boolean } | null {
-    for (const el of document.querySelectorAll<HTMLElement>('[data-gota-origen]')) {
-        const r = el.getBoundingClientRect()
-        if (r.width > 0 && r.height > 0) return { rect: r, pc: el.dataset.gotaOrigen === 'pc' }
-    }
-    return null
+/** La caja se entera de cuándo la gota ya no está (devuelve cómo dejar de escuchar) */
+export function alQuitarseGota(f: () => void) {
+    alQuitarse.add(f)
+    return () => { alQuitarse.delete(f) }
 }
 
-/** Origen por si se entró a la caja sin pasar por el "+" (un enlace, recargar la página) */
+/**
+ * Para la raíz de la caja al montarse: si viene con la gota, cuántos ms
+ * esperar antes de entrar (para arrancar en el 55 % de --d). null = sin gota.
+ */
+export function retrasoEntradaCaja(): number | null {
+    if (entrada == null || typeof performance === 'undefined') return null
+    return Math.max(0, Math.round(DURACION_GOTA * ENTRA_DESDE - (performance.now() - entrada)))
+}
+
+/**
+ * La raíz de la caja entra ENCIMA de la gota: capa de encima (z 95) y de
+ * opacidad 0 a 1 en 180 ms, empezando en `desde` (performance.now). Si
+ * `desde` ya pasó (la carga se cambió por la caja), sigue a mitad de camino.
+ * Va directo en el elemento (no por clase) para no depender de que llegue
+ * la hoja de estilos de la página nueva.
+ */
+export function entrarEncimaDeGota(el: HTMLElement, desde: number) {
+    el.style.position = 'relative'
+    el.style.zIndex = '95'
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ENTRA, delay: desde - performance.now(), easing: 'ease', fill: 'backwards' })
+}
+
+/** Ya no hay gota: la caja deja la capa de encima (para no tapar las hojas que se abren sobre ella) */
+export function soltarCapaDeGota(el: HTMLElement) {
+    el.style.zIndex = ''
+    el.style.position = ''
+}
+
+/** Lo que mide la zona segura de abajo (la barra del iPhone) */
+function seguroAbajo() {
+    const sonda = document.createElement('div')
+    sonda.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none'
+    document.body.appendChild(sonda)
+    const h = sonda.getBoundingClientRect().height
+    sonda.remove()
+    return h
+}
+
+/**
+ * Origen si se entró a la caja sin pasar por el "+" (un enlace, recargar):
+ * donde está el botón en el menú (celular: centro de la barra de abajo;
+ * PC: "Nueva venta" de la barra lateral)
+ */
 function origenSupuesto(): { rect: DOMRect; pc: boolean } {
     const pc = window.matchMedia('(min-width: 768px)').matches
     const vw = window.innerWidth, vh = window.innerHeight
-    return pc ? { rect: new DOMRect(12, 64, 216, 40), pc } : { rect: new DOMRect(vw / 2 - 28, vh - 70, 56, 56), pc }
+    if (pc) return { rect: new DOMRect(12, 64, 216, 40), pc }
+    // El "+" mide 56 y su centro queda 41 px arriba del borde de la barra
+    const cy = vh - seguroAbajo() - 41
+    return { rect: new DOMRect(vw / 2 - 28, cy - 28, 56, 56), pc }
 }
 
 /**
@@ -208,27 +274,32 @@ export async function cerrarCaja(navegar: () => void) {
 
         const desde = ultimoOrigen ?? origenSupuesto()
         const g = crear(desde.rect, desde.pc)
-        // Nace ya extendida e invisible; aparece encima de la caja
+        // La gota nace ya extendida, DEBAJO de la caja (no se ve todavía)
         g.raiz.dataset.fijo = '1'
         g.raiz.dataset.on = '1'
-        g.raiz.dataset.sale = '1'
         document.body.appendChild(g.raiz)
+        const caja = document.querySelector<HTMLElement>('[data-caja-raiz]')
+        if (caja) { caja.style.position = 'relative'; caja.style.zIndex = '95' }
         await dosCuadros()
+        // La película al revés desde ESPEJO: cada lóbulo deshace su camino con
+        // su duración (k) y en el momento que le toca (w); el que en la apertura
+        // seguía moviéndose arranca a mitad de camino (retraso negativo)
+        const d = DURACION_GOTA
+        const pelis = g.molde.lobos.map(([, z, , , k, w], i) => {
+            const el = g.lobos[i]
+            const x = el.style.getPropertyValue('--x'), y = el.style.getPropertyValue('--y')
+            return el.animate([
+                { transform: `translate(${x}, ${y}) scale(1)`, opacity: 1, offset: 0 },
+                { opacity: 1, offset: 0.9 },
+                { transform: `translate(0px, 0px) scale(${z})`, opacity: 0, offset: 1 },
+            ], { duration: k * d, delay: ESPEJO - (w + k) * d, easing: CURVA_ESPEJO, fill: 'both' })
+        })
         g.raiz.dataset.fijo = ''
-        g.raiz.style.transition = 'opacity 120ms linear'
-        g.raiz.dataset.sale = ''
-        await pausa(130)
-
-        const listo = esperar('inicio')
+        if (caja) { caja.style.transition = `opacity ${SALE}ms linear`; caja.style.opacity = '0' }
+        await pausa(SALE + 10)
         navegar()
-        await listo
-        await dosCuadros()
-        // Se recoge hacia el "+" donde esté ahora
-        const destino = origenVisible()
-        if (destino && destino.pc === desde.pc) ubicar(g, destino.rect)
-        g.raiz.style.transition = ''
-        g.raiz.dataset.on = ''
-        await pausa(DURACION_GOTA + 40)
+        // Hasta que el último lóbulo entra al "+"
+        await Promise.race([Promise.all(pelis.map(p => p.finished)), pausa(ESPEJO + 200)]).catch(() => {})
         g.raiz.remove()
     } finally {
         activa = false

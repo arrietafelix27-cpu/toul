@@ -1,6 +1,6 @@
 'use client'
 
-import useSWR from 'swr'
+import useSWR, { preload } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { getSessionContext } from './context'
 import type { CashSession } from './types'
@@ -23,21 +23,30 @@ function recall<T>(key: string): T | null {
     }
 }
 
+const CLAVE_CONTEXTO = 'isla-session-context'
+
+async function cargarContexto() {
+    try {
+        const ctx = await getSessionContext(supabase)
+        return ctx ? remember('session-context', ctx) : ctx
+    } catch (err) {
+        const cached = recall<Awaited<ReturnType<typeof getSessionContext>>>('session-context')
+        if (cached) return cached
+        throw err
+    }
+}
+
 /** Negocio, rol y nombre del usuario actual. */
 export function useSessionContext() {
-    return useSWR('isla-session-context', async () => {
-        try {
-            const ctx = await getSessionContext(supabase)
-            return ctx ? remember('session-context', ctx) : ctx
-        } catch (err) {
-            const cached = recall<Awaited<ReturnType<typeof getSessionContext>>>('session-context')
-            if (cached) return cached
-            throw err
-        }
-    }, {
+    return useSWR(CLAVE_CONTEXTO, cargarContexto, {
         revalidateOnFocus: false,
         dedupingInterval: 300_000,
     })
+}
+
+/** Lo deja cargado antes de abrir la caja: así abre sin pantalla de carga */
+export function precargarContextoCaja() {
+    preload(CLAVE_CONTEXTO, cargarContexto).catch(() => { /* la caja lo vuelve a pedir */ })
 }
 
 /** Turno de caja abierto del negocio (null si no hay). */
