@@ -5,13 +5,14 @@ import {
     Home, Package, Layers, ArrowLeftRight, Users, Truck, BarChart3, Store,
     Settings, Ellipsis, ChevronsUpDown, Plus, LogOut,
 } from 'lucide-react'
-import { usePendingApprovalsCount, precargarContextoCaja } from '@/lib/isla/useSession'
+import { usePendingApprovalsCount, precargarContextoCaja, useSessionContext } from '@/lib/isla/useSession'
+import { precargarDatosCaja } from '@/lib/pos/usePOSData'
 import { PUNTO_FISICO } from '@/lib/puntoFisico'
 import { useStore } from '@/lib/hooks/useData'
 import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { FullscreenToggle } from './FullscreenToggle'
 import { BotonToulAI } from './BotonToulAI'
-import { abrirCaja, avisarInicioListo } from '@/components/pos/ui/gota'
+import { abrirCaja, avisarInicioListo, precalentarGota } from '@/components/pos/ui/gota'
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 
@@ -243,13 +244,58 @@ function TiendaMenu({ nombre, plan, enAjustes, cerrando, onCerrarSesion }: {
     )
 }
 
+/* ── La caja, lista de antemano ───────────────────────────────
+   La primera gota del día salía a tirones: en pleno toque se cargaba
+   el código de la caja, se leían sus datos y se armaba el filtro
+   líquido. Ahora, con Inicio ya pintado y quieto (requestIdleCallback),
+   se deja todo listo, un paso por cada rato libre:
+   1. la ruta /caja y quién vende, 2. el código de la caja,
+   3. sus datos (el mismo pedido de siempre), 4. la gota (celular).
+   Cada cosa se hace una sola vez por carga de la app. */
+let rutaLista = false
+let codigoListo = false
+const datosListos = new Set<string>()
+
+function usePrecargaCaja() {
+    const router = useRouter()
+    const { data: sesion } = useSessionContext()
+    const storeId = sesion?.storeId ?? null
+    useEffect(() => {
+        const pasos: (() => void)[] = []
+        if (!rutaLista) pasos.push(() => { rutaLista = true; router.prefetch('/caja'); precargarContextoCaja() })
+        if (!codigoListo) pasos.push(() => {
+            codigoListo = true
+            void import('@/app/caja/layout').catch(() => { codigoListo = false })
+            void import('@/app/caja/page').catch(() => { codigoListo = false })
+        })
+        if (storeId && !datosListos.has(storeId)) pasos.push(() => { datosListos.add(storeId); precargarDatosCaja(storeId) })
+        // La gota solo existe en el celular (en PC la caja crece desde "Nueva venta")
+        pasos.push(() => { if (window.matchMedia('(max-width: 767.98px)').matches) precalentarGota() })
+
+        const libre = (f: () => void): number => typeof window.requestIdleCallback === 'function'
+            ? window.requestIdleCallback(f, { timeout: 2500 })
+            : window.setTimeout(f, 250)
+        const soltar = (id: number) => typeof window.cancelIdleCallback === 'function' ? window.cancelIdleCallback(id) : window.clearTimeout(id)
+        let id = 0
+        const siguiente = () => {
+            const paso = pasos.shift()
+            if (!paso) return
+            id = libre(() => { paso(); siguiente() })
+        }
+        // Después del primer pintado (dos cuadros), no antes
+        let r2 = 0
+        const r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(siguiente) })
+        return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); if (id) soltar(id) }
+    }, [router, storeId])
+}
+
 export function Sidebar() {
     const plan = usePlan()
     const pathname = usePathname()
     const router = useRouter()
     const { data: store } = useStore()
     // La caja se deja lista de antemano: "Nueva venta" abre de una
-    useEffect(() => { router.prefetch('/caja'); precargarContextoCaja() }, [router])
+    usePrecargaCaja()
     // Ya está el botón: si se viene de cerrar la caja, la gota se recoge en él
     useEffect(() => { avisarInicioListo() }, [])
     const nuevaVenta = useRef<HTMLButtonElement>(null)
@@ -368,7 +414,7 @@ export function BottomNav() {
     const pathname = usePathname()
     const router = useRouter()
     // La caja se deja lista de antemano: el botón + abre de una
-    useEffect(() => { router.prefetch('/caja'); precargarContextoCaja() }, [router])
+    usePrecargaCaja()
     // Ya está el "+": si se viene de cerrar la caja, la gota se recoge en él
     useEffect(() => { avisarInicioListo() }, [])
     // Las aprobaciones son del punto físico: en pausa, ni se preguntan

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import useSWR from 'swr'
+import useSWR, { preload } from 'swr'
 import { useSessionContext } from '@/lib/isla/useSession'
 import { PENDING_SALES_EVENT, listPendingSales, type PendingSale } from '@/lib/isla/offline'
 import { demandaDeVentasGuardadas, stockRestante, unidadProducto, unidadVariante, type Cuenta } from './stock'
@@ -24,7 +24,11 @@ const jsonFetcher = async ([url, storeId]: [string, string]) => {
         const res = await fetch(url)
         if (!res.ok) throw new Error(String(res.status))
         const data = { ...(await res.json()), pedidoEn }
-        try { localStorage.setItem(llave, JSON.stringify(data)) } catch { /* sin espacio */ }
+        try {
+            const raw = JSON.stringify(data)
+            localStorage.setItem(llave, raw)
+            leidas.set(llave, { raw, data })
+        } catch { /* sin espacio */ }
         return data
     } catch (err) {
         try {
@@ -35,14 +39,33 @@ const jsonFetcher = async ([url, storeId]: [string, string]) => {
     }
 }
 
+/** Las copias ya leídas: abrir la caja no vuelve a leer lo que se leyó en Inicio */
+const leidas = new Map<string, { raw: string; data: unknown }>()
+
 /** La última respuesta buena guardada en este equipo (para abrir sin esperar) */
 function copiaGuardada(storeId: string, url: string) {
     try {
-        const raw = localStorage.getItem(`${CACHE_PREFIX}${storeId}:${url}`)
-        return raw ? JSON.parse(raw) : undefined
+        const llave = `${CACHE_PREFIX}${storeId}:${url}`
+        const raw = localStorage.getItem(llave)
+        if (!raw) return undefined
+        const ya = leidas.get(llave)
+        if (ya && ya.raw === raw) return ya.data
+        const data = JSON.parse(raw)
+        leidas.set(llave, { raw, data })
+        return data
     } catch {
         return undefined
     }
+}
+
+/**
+ * Con Inicio quieto: deja leída la copia guardada y pide los datos de la
+ * caja (el mismo pedido de siempre, solo lectura). Así tocar "+" no espera
+ * ni lee nada mientras corre la gota.
+ */
+export function precargarDatosCaja(storeId: string) {
+    for (const url of ['/api/pos-data', '/api/payment-methods', '/api/customers']) copiaGuardada(storeId, url)
+    preload(['/api/pos-data', storeId], jsonFetcher).catch(() => { /* la caja lo vuelve a pedir */ })
 }
 
 // ─── Types ────────────────────────────────────────────────────

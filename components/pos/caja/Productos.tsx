@@ -37,7 +37,7 @@ export type Cambiar = (key: string, cantidad: number, nombre: string) => void
 
 const inicial = (nombre: string) => nombre.trim().charAt(0).toUpperCase() || '·'
 
-export function Productos({ lista, data, narrow, onCambiar, onTocar, buscadorRef, listaRef, esAdmin, salir, conexion, inicioCascada }: {
+export function Productos({ lista, data, narrow, onCambiar, onTocar, buscadorRef, listaRef, esAdmin, salir, conexion, inicioCascada, enEspera }: {
     lista: ListaProductos
     data: POSDataState
     narrow: boolean
@@ -54,6 +54,8 @@ export function Productos({ lista, data, narrow, onCambiar, onTocar, buscadorRef
     conexion: ReactNode
     /** Hora (performance.now) en que empieza la cascada al abrir la caja */
     inicioCascada: number
+    /** Mientras corre la gota: solo el marco. La lista entra cuando la gota termina */
+    enEspera?: boolean
 }) {
     const { busqueda, setBusqueda, categoria, setCategoria, categorias, entradas, orden, setOrden, filtro, setFiltro } = lista
     const [menu, setMenu] = useState<'filtrar' | 'ordenar' | null>(null)
@@ -144,7 +146,7 @@ export function Productos({ lista, data, narrow, onCambiar, onTocar, buscadorRef
 
     // Cada vez que cambia la categoría, el filtro o el orden, la cascada vuelve a empezar
     const grupo = `${categoria}|${filtro}|${orden}`
-    const contenido = data.failed === 'products' ? null
+    const contenido = enEspera || data.failed === 'products' ? null
         : data.isLoading ? <Esqueleto narrow={narrow} />
         : lista.vacio ? (
             <Vacio titulo="Todavía no hay productos" texto={esAdmin ? 'Agrégalos en Inventario.' : 'Pídele al administrador que los agregue.'} />

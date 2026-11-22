@@ -7,7 +7,7 @@ import { useCaja } from '@/components/isla/CajaContext'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { useCobro, vibrar } from '@/lib/pos/useCobro'
 import { useListaProductos, type Entrada } from '@/lib/pos/useListaProductos'
-import { Avisos, avisar, raizPos, retrasoCascada } from '@/components/pos/ui'
+import { Avisos, alQuitarseGota, avisar, raizPos, retrasoCascada, retrasoEntradaCaja } from '@/components/pos/ui'
 import s from '@/components/pos/ui/pos.module.css'
 import { CAJA_CSS, Conexion, SalirDeCaja, SinPresencia } from './piezas'
 import { Productos } from './Productos'
@@ -46,6 +46,17 @@ export function Caja() {
     })
 
     const { venta, nuevaVenta, enviando, limpiarError, boton, accionar } = cobro
+
+    // Mientras corre la gota no se arma la lista (lo más pesado de la caja):
+    // la gota nunca espera a que se pinten los productos. Entran al terminar
+    const [enGota, setEnGota] = useState(() => retrasoEntradaCaja() != null)
+    useEffect(() => {
+        if (!enGota) return
+        const soltar = alQuitarseGota(() => setEnGota(false))
+        // Por si la gota ya se quitó antes de alcanzar a escuchar
+        if (retrasoEntradaCaja() == null) queueMicrotask(() => setEnGota(false))
+        return soltar
+    }, [enGota])
 
     // La cantidad de una línea: recorta al stock y avisa si no alcanzó
     const cambiar = useCallback((key: string, n: number, nombre: string) => {
@@ -132,7 +143,7 @@ export function Caja() {
             onCambiar={cambiar} onTocar={tocar} buscadorRef={buscadorRef} listaRef={listaRef}
             salir={ctx.role === 'admin' ? <SalirDeCaja /> : null}
             conexion={<Conexion offline={offline} />}
-            inicioCascada={entrada.filas} />
+            inicioCascada={entrada.filas} enEspera={enGota} />
     )
 
     const pago = venta

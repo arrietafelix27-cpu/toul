@@ -124,8 +124,20 @@ function tapaTodo(g: Gota) {
     return [[0, 0], [vw, 0], [0, vh], [vw, vh]].every(([x, y]) => circulos.some(c => Math.hypot(x - c.x, y - c.y) <= c.r))
 }
 
+/** La gota armada de antemano (precalentarGota): el primer toque la usa en vez de crear otra */
+let reserva: Gota | null = null
+let precalentada = false
+
 function crear(rect: DOMRect, pc: boolean): Gota {
     const molde = pc ? PC : CELULAR
+    if (reserva && reserva.molde === molde) {
+        const g = reserva
+        reserva = null
+        g.raiz.style.opacity = ''
+        g.raiz.style.pointerEvents = ''
+        ubicar(g, rect)
+        return g
+    }
     const raiz = document.createElement('div')
     raiz.className = s.gota
     raiz.setAttribute('aria-hidden', 'true')
@@ -147,6 +159,38 @@ function crear(rect: DOMRect, pc: boolean): Gota {
     raiz.style.setProperty('--d', `${DURACION_GOTA}ms`)
     ubicar(g, rect)
     return g
+}
+
+/**
+ * La primera gota del día salía a tirones: el navegador armaba el filtro
+ * líquido y las capas de los lóbulos en pleno toque. Esto la pinta una vez,
+ * invisible (opacidad 0,001, sin recibir toques), extendida y recogida, con
+ * Inicio quieto. Después la saca del documento y la guarda para el toque.
+ * Solo celular (en PC no hay gota) y nunca con "reducir movimiento".
+ */
+export function precalentarGota() {
+    if (precalentada || activa || typeof document === 'undefined' || quieto()) return
+    precalentada = true
+    const vw = window.innerWidth, vh = window.innerHeight
+    const g = crear(new DOMRect(vw / 2 - 28, vh - 90, 56, 56), false)
+    g.raiz.style.opacity = '0.001'
+    g.raiz.style.pointerEvents = 'none'
+    document.body.appendChild(g.raiz)
+    void (async () => {
+        // Si tocan "+" mientras tanto, esta se descarta: la gota de verdad no la espera
+        await dosCuadros()
+        if (activa) { g.raiz.remove(); return }
+        // Extendida de una (sin animar): filtro y capas al tamaño real
+        g.raiz.dataset.fijo = '1'
+        g.raiz.dataset.on = '1'
+        await dosCuadros()
+        if (activa) { g.raiz.remove(); return }
+        delete g.raiz.dataset.on
+        await dosCuadros()
+        delete g.raiz.dataset.fijo
+        g.raiz.remove()
+        if (!activa) reserva = g
+    })()
 }
 
 /** Espera a que la otra página avise, sin quedarse pegada si no lo hace */
