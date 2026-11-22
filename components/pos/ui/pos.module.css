@@ -1010,3 +1010,138 @@
     .calDia:not(:disabled):not([data-on="1"]):hover { background: var(--p-s6); }
     .detallePildora:hover, .calNav:not(:disabled):hover { background: var(--p-s12); }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Fase 5 — Logro, deshacer y comprobante (SPEC §7 y §8)
+   ══════════════════════════════════════════════════════════════ */
+.logro { position: relative; height: 100%; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.logroBrillo {
+    position: absolute; left: 50%; top: 150px; width: 520px; height: 520px; margin-left: -260px; border-radius: 50%;
+    background: radial-gradient(closest-side, var(--p-g22), transparent); pointer-events: none;
+    opacity: 0; animation: logroBrillo 1.6s ease-out both;
+}
+@keyframes logroBrillo { 0% { opacity: 0; transform: scale(.6) } 35% { opacity: 1 } 100% { opacity: .55; transform: none } }
+.logroScroll {
+    position: relative; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
+    display: flex; flex-direction: column; align-items: center;
+    padding: calc(70px + env(safe-area-inset-top, 0px)) 20px 0;
+}
+.logroScroll::-webkit-scrollbar { display: none; }
+.logroCirculo {
+    position: relative; flex-shrink: 0; width: 96px; height: 96px; border-radius: 50%;
+    background: var(--toul-accent); color: var(--toul-on-accent);
+    display: flex; align-items: center; justify-content: center;
+    animation: logroCirculo 620ms var(--p-rebote) 80ms both;
+}
+@keyframes logroCirculo { from { transform: scale(.2); opacity: 0 } 30% { opacity: 1 } to { transform: none; opacity: 1 } }
+.logroCirculo::before {
+    content: ""; position: absolute; inset: -10px; border-radius: 50%; box-shadow: 0 0 0 2px var(--p-g50);
+    opacity: 0; animation: logroPulso 900ms ease-out 380ms both;
+}
+@keyframes logroPulso { 0% { opacity: 1; transform: scale(.9) } 100% { opacity: 0; transform: scale(1.5) } }
+.logroCheck { stroke-dasharray: 40; stroke-dashoffset: 40; animation: logroTrazo 420ms var(--p-va-viene) 420ms forwards; }
+@keyframes logroTrazo { to { stroke-dashoffset: 0 } }
+.confeti {
+    position: absolute; left: 50%; top: 50%; width: 8px; height: 12px; margin: -6px -4px; border-radius: 3px;
+    background: var(--c); opacity: 0; pointer-events: none;
+    animation: confeti 1100ms cubic-bezier(.15, .7, .25, 1) var(--dl) both;
+}
+@keyframes confeti {
+    0% { opacity: 0; transform: rotate(var(--a)) translateY(0) rotate(0deg) }
+    10% { opacity: 1 }
+    100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--r) * -1)) rotate(260deg) }
+}
+.logroSube { animation: pin 520ms var(--p-sale) both; animation-delay: var(--dl, 0ms); }
+.logroTitulo { margin-top: 26px; font-size: 20px; font-weight: 600; color: var(--p-t80); text-align: center; }
+.logroMonto { margin-top: 2px; font-size: 46px; font-weight: 700; letter-spacing: -2px; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--toul-text); }
+.logroResumen { margin-top: 4px; font-size: 15px; line-height: 1.4; color: var(--toul-text-secondary); text-align: center; }
+.deshacer {
+    margin-top: 14px; height: 38px; padding: 0 14px 0 10px; border: none; border-radius: 99px;
+    background: var(--p-s7); color: var(--p-t85); font-size: 13px;
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    transition: transform 160ms var(--p-sale), opacity 300ms ease;
+    animation: sube 420ms var(--p-sale) 520ms both;
+}
+.deshacer:active { transform: scale(.95); }
+.deshacer[data-fuera="1"] { opacity: 0; pointer-events: none; }
+.deshacerAnillo { transform: rotate(-90deg); flex-shrink: 0; }
+.deshacerArco { stroke-dasharray: 50.3; stroke-dashoffset: 0; animation: deshacerArco var(--t, 5s) linear 400ms forwards; }
+@keyframes deshacerArco { to { stroke-dashoffset: 50.3 } }
+.logroTarjeta { width: 100%; margin-top: 24px; padding: 4px 16px; border-radius: 22px; background: var(--p-s4); }
+.logroLinea { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 15px; border-bottom: 1px solid var(--p-s6); }
+.logroLineaNombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--p-t85); }
+.logroCant { color: var(--toul-text-tertiary); }
+.logroValor { flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.logroValor[data-tono="verde"] { color: var(--toul-accent); }
+.logroValor[data-tono="ambar"] { color: var(--toul-warning); }
+.logroMas { padding: 10px 0; font-size: 14px; color: var(--toul-text-secondary); border-bottom: 1px solid var(--p-s6); }
+.logroFila { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 15px; color: var(--p-t60); }
+.logroTotal { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; font-size: 16px; font-weight: 600; color: var(--toul-text); }
+.logroTotal span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
+.logroBotones {
+    flex-shrink: 0; display: flex; flex-direction: column; gap: 10px;
+    padding: 16px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    animation: pin 520ms var(--p-sale) 700ms both;
+}
+.logroPar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+/* PC: el logro es una ventana al centro, encima de la caja */
+.logroVelo {
+    position: absolute; inset: 0; z-index: 60; background: var(--p-velo);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    animation: logroVelo 260ms ease both;
+}
+@keyframes logroVelo { from { opacity: 0 } to { opacity: 1 } }
+.logroVelo[data-sale="1"] { pointer-events: none; animation: logroVeloSale 220ms ease both; }
+.logroVelo[data-sale="1"] .logroVentana { animation: logroVentanaSale 220ms var(--p-sale) both; }
+@keyframes logroVeloSale { from { opacity: 1 } to { opacity: 0 } }
+@keyframes logroVentanaSale { from { opacity: 1; transform: none } to { opacity: 0; transform: scale(.97) } }
+.logroVentana {
+    position: relative; width: 480px; max-width: 100%; max-height: min(820px, 100%);
+    border-radius: 30px; background: var(--p-panel); overflow: hidden;
+    box-shadow: 0 30px 80px var(--p-sombra), inset 0 1px 0 var(--p-s6);
+    animation: logroVentana 420ms var(--p-capa) both;
+}
+@keyframes logroVentana { from { opacity: 0; transform: translateY(16px) scale(.96) } to { opacity: 1; transform: none } }
+.logroVentana .logro { height: auto; max-height: min(820px, calc(100vh - 48px)); }
+.logroVentana .logroScroll { padding: 40px 24px 0; }
+.logroVentana .logroBrillo { top: 40px; }
+.logroVentana .logroCirculo { width: 84px; height: 84px; }
+.logroVentana .logroMonto { font-size: 42px; }
+.logroVentana .logroBotones { padding: 16px 24px 24px; }
+.logroVentana .logroTarjeta { margin-top: 20px; }
+
+/* ── Comprobante: el papel cae dentro de la hoja ───────────────── */
+.papel {
+    background: var(--toul-text); color: var(--toul-bg);
+    border-radius: 18px; padding: 20px 18px;
+    box-shadow: 0 20px 50px var(--p-sombra);
+    opacity: 0; transform: rotate(-1.5deg) translateY(20px);
+    animation: papel 560ms var(--p-pildora) 160ms forwards;
+}
+@keyframes papel { to { opacity: 1; transform: none } }
+.papelCabeza { display: flex; align-items: center; gap: 10px; }
+.papelLogo {
+    width: 38px; height: 38px; border-radius: 12px; flex-shrink: 0;
+    background: var(--toul-bg); color: var(--toul-accent); font-weight: 800; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+}
+.papelTienda { font-size: 16px; font-weight: 700; }
+.papelGris { font-size: 12px; color: color-mix(in srgb, var(--toul-bg) 58%, var(--toul-text)); }
+.papelMeta { margin: 12px 0 8px; }
+.papelLinea { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 14px; border-bottom: 1px dashed color-mix(in srgb, var(--toul-bg) 14%, var(--toul-text)); }
+.papelLinea span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.papelLinea span:last-child { flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.papelFila { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0 0; font-size: 13px; color: color-mix(in srgb, var(--toul-bg) 72%, var(--toul-text)); }
+.papelFila span:last-child { font-variant-numeric: tabular-nums; }
+.papelTotal { display: flex; justify-content: space-between; padding-top: 10px; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.papelPie { margin-top: 14px; font-size: 10px; text-align: center; color: color-mix(in srgb, var(--toul-bg) 46%, var(--toul-text)); }
+.papelPie b { color: color-mix(in srgb, var(--toul-accent) 70%, var(--toul-bg)); }
+.comprobanteBotones { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); gap: 10px; margin-top: 18px; flex-shrink: 0; }
+.comprobanteBotones > * { padding: 0 12px; white-space: nowrap; min-width: 0; }
+.comprobanteOtros { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; flex-shrink: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+    .logroVelo, .logroVentana { animation-duration: 1ms !important; }
+    .confeti { display: none; }
+}

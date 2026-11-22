@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { animate, motion, PresenceContext, useReducedMotion } from 'framer-motion'
@@ -258,15 +258,20 @@ export function Conexion({ offline, className }: { offline: OfflineState; classN
 }
 
 /* ── La X: vuelve a Inicio con la gota (o el zoom en PC) al revés ── */
-export function SalirDeCaja({ className }: { className?: string }) {
+/** Salir de la caja a Inicio: la gota se recoge en el "+" (la X y "Salir" del logro) */
+export function useSalirDeCaja() {
     const router = useRouter()
     // Inicio queda listo de antemano: la gota se recoge sin esperar
     useEffect(() => { router.prefetch('/') }, [router])
+    return useCallback(() => { void cerrarCaja(() => router.push('/')) }, [router])
+}
+
+export function SalirDeCaja({ className }: { className?: string }) {
+    const salir = useSalirDeCaja()
     return (
         <button type="button" aria-label="Salir de la caja" title="Salir de la caja" className={`${ui.xCaja} ${className ?? ''}`}
-            onClick={() => cerrarCaja(() => router.push('/'))}>
+            onClick={salir}>
             <IcoCerrar size={18} grosor={2.2} />
         </button>
     )
 }
-

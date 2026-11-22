@@ -1,6 +1,7 @@
 'use client'
 
-import type { CSSProperties, ReactNode } from 'react'
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { animate, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight, CalendarDays, Clock, PackageMinus, Receipt, type LucideIcon } from 'lucide-react'
 import AnimatedNumber from '@/components/ui/AnimatedNumber'
@@ -38,6 +39,9 @@ export interface MetricasInicio {
 export interface Conteo {
     cuenta: boolean
     clave: string
+    /** Lo que se acaba de vender en la caja: "Vendiste" sube desde lo que
+     *  había hasta lo nuevo, con un "+$X" al lado. 0: nada */
+    subida?: number
 }
 
 /** Contra el mismo tramo del periodo anterior. null: no hay con qué comparar */
@@ -64,6 +68,15 @@ const CSS = `
     transition: transform 140ms var(--toul-ease-emil), opacity 160ms var(--toul-ease-emil); }
 .rv-enlace:active { transform: scale(0.98); }
 .rv-enlace:focus-visible { outline: 2px solid var(--toul-border-2); outline-offset: 4px; }
+
+/* Al volver de la caja: el "+$X" aparece, se queda un rato y se apaga */
+.rv-vendiste-fila { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rv-mas { margin-top: 6px; padding: 6px 12px; border-radius: 99px; background: var(--toul-accent-dim); color: var(--toul-accent);
+    font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+    animation: rv-mas 6s var(--toul-ease-emil) 0.2s both; }
+@keyframes rv-mas { 0% { opacity: 0; transform: scale(0.85) } 6% { opacity: 1; transform: none } 88% { opacity: 1; transform: none } 100% { opacity: 0; transform: none } }
+@media (prefers-reduced-motion: reduce) { .rv-mas { animation-name: rv-mas-quieto; } }
+@keyframes rv-mas-quieto { 0%, 88% { opacity: 1 } 100% { opacity: 0 } }
 
 /* Va debajo de Vendiste, que ya deja su espacio arriba */
 .rv-linea-fina { height: 1px; background: var(--toul-border); margin: 2px 0 18px; }
@@ -150,10 +163,18 @@ export function Vendiste({ metrics, loading, period, conteo, tendencia, selector
             {loading ? (
                 <div style={{ marginTop: 10 }}><Skeleton width="200px" height="2.6rem" /></div>
             ) : (
-                <Link href={href} className="rv-enlace" aria-label="Ver el reporte de este periodo">
-                    <AnimatedNumber value={metrics.revenue} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
-                        className="rv-monto" style={{ ...BLOQUE, color: sinVentas ? CERO : 'var(--toul-text)' }} />
-                </Link>
+                <div className="rv-vendiste-fila">
+                    <Link href={href} className="rv-enlace" aria-label="Ver el reporte de este periodo">
+                        {conteo.subida ? (
+                            <SubeDesde value={metrics.revenue} subida={conteo.subida}
+                                className="rv-monto" style={{ ...BLOQUE, color: 'var(--toul-text)' }} />
+                        ) : (
+                            <AnimatedNumber value={metrics.revenue} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
+                                className="rv-monto" style={{ ...BLOQUE, color: sinVentas ? CERO : 'var(--toul-text)' }} />
+                        )}
+                    </Link>
+                    {!!conteo.subida && <span className="rv-mas">+{formatPrecio(Math.round(conteo.subida))}</span>}
+                </div>
             )}
             {/* Sin ventas el monto va apagado y no hay tendencia: no hay nada que comparar */}
             {loading ? (
@@ -167,6 +188,34 @@ export function Vendiste({ metrics, loading, period, conteo, tendencia, selector
                 </p>
             )}
         </div>
+    )
+}
+
+/** Vendiste al volver de la caja: sube desde lo que había (lo de ahora
+ *  menos lo recién vendido) hasta lo nuevo, una sola vez */
+function SubeDesde({ value, subida, className, style }: { value: number; subida: number; className: string; style: CSSProperties }) {
+    const ref = useRef<HTMLSpanElement>(null)
+    const reduce = useReducedMotion()
+    const hecho = useRef(false)
+    useLayoutEffect(() => {
+        const node = ref.current
+        if (!node) return
+        if (hecho.current || reduce) { node.textContent = formatPrecio(Math.round(value)); return }
+        const desde = Math.max(0, value - subida)
+        node.textContent = formatPrecio(Math.round(desde))
+        const controls = animate(desde, value, {
+            duration: 0.9, delay: 0.25, ease: [0.23, 1, 0.32, 1],
+            onUpdate: v => { node.textContent = formatPrecio(Math.round(v)) },
+            onComplete: () => { hecho.current = true },
+        })
+        return () => { controls.stop(); node.textContent = formatPrecio(Math.round(value)) }
+    }, [value, subida, reduce])
+    return (
+        <span className={className} style={{ display: 'inline-grid', ...style }}>
+            {/* Reserva el ancho del valor final */}
+            <span aria-hidden style={{ gridArea: '1 / 1', visibility: 'hidden' }}>{formatPrecio(Math.round(value))}</span>
+            <span ref={ref} style={{ gridArea: '1 / 1' }}>{formatPrecio(Math.round(value))}</span>
+        </span>
     )
 }
 

@@ -9,13 +9,12 @@ import { useCobro, vibrar } from '@/lib/pos/useCobro'
 import { useListaProductos, type Entrada } from '@/lib/pos/useListaProductos'
 import { Avisos, Capa, alQuitarseGota, avisar, raizPos, retrasoCascada, retrasoEntradaCaja, useMontado } from '@/components/pos/ui'
 import s from '@/components/pos/ui/pos.module.css'
-import { CAJA_CSS, Conexion, SalirDeCaja, SinPresencia } from './piezas'
+import { CAJA_CSS, Conexion, SalirDeCaja, SinPresencia, useSalirDeCaja } from './piezas'
 import { Productos } from './Productos'
 import { BarraCobro, PanelVenta } from './PanelVenta'
 import { Presentaciones } from './Presentaciones'
 import { Cobro } from './Cobro'
 import { VentaLista } from './VentaLista'
-import { Hoja } from './Hoja'
 
 /**
  * Nueva venta (diseno/pos/SPEC.md).
@@ -51,7 +50,13 @@ export function Caja() {
     })
 
     const { venta, nuevaVenta, enviando, limpiarError, boton, accionar } = cobro
-    if (!venta && mostrarVenta) setMostrarVenta(false)
+    // Se deshizo: los productos vuelven a la venta, sin el pago encima
+    if (!venta && mostrarVenta) {
+        setMostrarVenta(false)
+        setHojaCobro(false)
+        setPagoPc(false)
+        setVuelta(v => v + 1)
+    }
     const ventaVisible = !!venta && mostrarVenta
     const verRegistrada = useCallback(() => setMostrarVenta(true), [])
 
@@ -106,7 +111,8 @@ export function Caja() {
     const cerrarPresentaciones = useCallback(() => setPresentacion(null), [])
 
     // Si se vacía el carrito con el pago encima, vuelve a la venta
-    const pagando = pagoPc && (!cart.isEmpty || enviando) || !!venta
+    // (con la venta registrada, el panel vuelve a "Venta": el logro va encima)
+    const pagando = pagoPc && (!cart.isEmpty || enviando) || (!!venta && !ventaVisible)
 
     // ── Atajos ───────────────────────────────────────────────────
     useEffect(() => {
@@ -160,7 +166,12 @@ export function Caja() {
             inicioCascada={entrada.filas} enEspera={enGota} />
     )
 
-    const registrada = <VentaLista cobro={cobro} narrow={narrow} onNueva={empezarOtra} onVerVentas={verVentas} />
+    const salir = useSalirDeCaja()
+    // El logro se sigue viendo mientras se va
+    const { montado: logroMontado } = useMontado(ventaVisible, 300)
+    const registrada = (logroMontado || ventaVisible) && (
+        <VentaLista cobro={cobro} narrow={narrow} onNueva={empezarOtra} onSalir={ctx.role === 'admin' ? salir : null} />
+    )
 
     // ── Celular ──────────────────────────────────────────────────
     if (narrow) {
@@ -176,10 +187,9 @@ export function Caja() {
                         <Cobro cobro={cobro} narrow onCambiar={cambiar} onVolver={volverCelular} onRegistrada={verRegistrada} />
                     )}
                 </Capa>
-                {/* Registrada la venta, la hoja no tapa los productos: tocar uno empieza la siguiente (Fase 5 la cambia) */}
-                <Hoja open={ventaVisible} onClose={empezarOtra} narrow atraviesa>
+                <Capa tipo="encima" etiqueta="Venta registrada" estado={ventaVisible ? 'dentro' : 'fuera'}>
                     {registrada}
-                </Hoja>
+                </Capa>
                 <Avisos />
             </div>
         )
@@ -194,10 +204,15 @@ export function Caja() {
                 <section aria-label="Productos" style={{ minWidth: 0, height: '100%' }}>{productos}</section>
                 <PanelVenta cart={cart} total={payment.total} pagando={pagando} enviando={enviando} base={entrada.panel}
                     onCambiar={cambiar} onVaciar={vaciar} onCobrar={cobrarPc} onVolver={volverPc} onVerVentas={verVentas}
-                    volver={!venta} pago={<SinPresencia>{ventaVisible
-                        ? registrada
-                        : <Cobro cobro={cobro} narrow={false} onCambiar={cambiar} onRegistrada={verRegistrada} />}</SinPresencia>} />
+                    volver={!venta} pago={<SinPresencia>
+                        <Cobro cobro={cobro} narrow={false} onCambiar={cambiar} onRegistrada={verRegistrada} />
+                    </SinPresencia>} />
             </div>
+            {registrada && (
+                <div className={s.logroVelo} data-sale={ventaVisible ? undefined : '1'}>
+                    <div className={s.logroVentana} role="dialog" aria-modal="true" aria-label="Venta registrada">{registrada}</div>
+                </div>
+            )}
             <Presentaciones entrada={abierta} onCambiar={cambiar} onCerrar={cerrarPresentaciones} />
             <Avisos />
         </div>

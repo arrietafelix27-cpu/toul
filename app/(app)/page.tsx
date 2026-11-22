@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useCallback, type ReactNode } from 'react'
+import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getDateRange } from '@/lib/utils'
 import { Settings, AlertTriangle, RefreshCw } from 'lucide-react'
@@ -22,6 +22,7 @@ import { contraQue, diasEntre, periodoEnDireccion, rangoAnterior } from '@/lib/p
 import { lineaVentas, porcentajeTendencia, resumenInicio, resumir, type LineaInicio, type TramoLinea } from '@/lib/reports/calculos'
 import type { ReporteSQL } from '@/lib/reports/types'
 import type { AIInsight } from '@/lib/types'
+import { olvidarVendidoEnCaja, verVendidoEnCaja } from '@/lib/pos/comprobante'
 
 type Period = Periodo
 
@@ -55,7 +56,7 @@ export default function DashboardPage() {
     const [customRange, setCustomRange] = useState<{ from: string; to: string } | null>(null)
 
     // ─── MAIN METRICS FETCHING ──────────────────────────────────────────────
-    const { data: dashboardData, isLoading: metricsLoading, error: metricsError, mutate: retryMetrics } = useSWR(
+    const { data: dashboardData, isLoading: metricsLoading, isValidating: metricsValidando, error: metricsError, mutate: retryMetrics } = useSWR(
         storeId ? ['dashboard-v3', storeId, period, customRange] : null,
         async () => {
             const range = period === 'custom' && customRange ? customRange : getDateRange(period)
@@ -289,10 +290,20 @@ export default function DashboardPage() {
     const cambiarPeriodo = useCallback((p: Periodo) => { setPeriod(p); setPeriodoTocado(true) }, [])
     const cambiarRango = useCallback((r: Rango) => { setCustomRange(r); setPeriodoTocado(true) }, [])
     const dibujar = animar || periodoTocado
+    // Lo vendido en la caja desde la última vez: al llegar los números
+    // nuevos de hoy, "Vendiste" sube desde lo que había con un "+$X" (SPEC §7)
+    const [enCaja, setEnCaja] = useState<{ tienda: string | null; monto: number }>({ tienda: null, monto: 0 })
+    if (storeId && enCaja.tienda !== storeId) setEnCaja({ tienda: storeId, monto: verVendidoEnCaja(storeId) })
+    useEffect(() => { if (enCaja.monto > 0) olvidarVendidoEnCaja() }, [enCaja.monto])
+    const [subida, setSubida] = useState(0)
+    const numerosNuevos = !metricsValidando && dashboardData?.clave === claveDe('today', null)
+    if (enCaja.monto > 0 && subida === 0 && numerosNuevos) setSubida(enCaja.monto)
+
     const conteo = useMemo(() => ({
         cuenta: animar || periodoTocado,
         clave: claveDe(period, customRange),
-    }), [animar, periodoTocado, period, customRange])
+        subida: period === 'today' ? subida : 0,
+    }), [animar, periodoTocado, period, customRange, subida])
 
     const metrics: MetricasInicio = {
         revenue: dashboardData?.metrics.revenue || 0,

@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useSWRConfig } from 'swr'
-import toast from 'react-hot-toast'
 import { usePOSFlow } from '@/components/pos/POSFlowProvider'
 import { useCaja } from '@/components/isla/CajaContext'
 import { useCreditApproval, type CreditApprovalState } from '@/lib/isla/useCreditApproval'
@@ -12,7 +11,8 @@ import { listPendingSales, queueSale, removePendingSale } from '@/lib/isla/offli
 import type { ReceiptData } from '@/lib/isla/types'
 import type { CartItem, PaymentSplit } from '@/lib/types'
 import { revisarVenta, type Revision } from './permisos'
-import { mensajeComprobante, enlaceWhatsApp, cuandoSeVea } from './comprobante'
+import { mensajeComprobante, enlaceWhatsApp, cuandoSeVea, sumarVendidoEnCaja } from './comprobante'
+import { avisar } from '@/components/pos/ui/Aviso'
 
 /* ══════════════════════════════════════════════════════════════
    Cobrar: enviar la venta (o guardarla sin internet), pedir la
@@ -43,6 +43,8 @@ export interface VentaHecha {
     /** Fiado: lo que pagó al llevarse la mercancía y lo que queda */
     abono: number
     debe: number
+    /** Crédito: la fecha de pago ("AAAA-MM-DD"), o null sin fecha */
+    fechaPago: string | null
     cashReceived: number | null
     change: number
     receipt: ReceiptData
@@ -104,10 +106,20 @@ const SIN_REVISION: Revision = { fiado: false, descuento: false, bloqueo: null }
 /** SPEC §9: el crédito necesita señal (cliente, deuda y aprobación) */
 export const SIN_INTERNET_CREDITO = 'Las ventas a crédito requieren conexión a internet'
 
-// Lo que cambia con una venta: el stock y los clientes de la caja (vienen
-// juntos), las ventas de hoy y el turno. Antes se recargaba todo lo que
-// estuviera abierto (5 o 6 pedidos después de cada venta)
-const CAMBIAN_CON_VENTA = new Set(['/api/pos-data', 'caja-ventas', 'turno-vivo', 'turno-summary'])
+// Lo que cambia con una venta (y al deshacerla): el stock y los clientes
+// de la caja, las ventas de hoy y el turno, y lo que muestran Inicio,
+// Reportes, Inventario, Movimientos y Cuentas por cobrar. Solo se vuelve a
+// pedir lo que está en pantalla; lo demás queda marcado y se pide al
+// abrirlo, sin esperar a que venza su copia (SPEC §7)
+const CAMBIAN_CON_VENTA = new Set([
+    '/api/pos-data', 'caja-ventas', 'turno-vivo', 'turno-summary',
+    'dashboard-v3', 'primeros-pasos',
+    'reporte', 'reporte-meses', 'reporte-inventario',
+    'inventory-overview', 'inventory-lista', 'estado-stock', 'sale-items-signals', 'inv-producto', 'inv-presentacion',
+    'movimientos',
+    'cartera', 'clientes', 'cliente',
+    'sales', 'sales-totals',
+])
 const cambiaConVenta = (key: unknown) => {
     const nombre = Array.isArray(key) ? key[0] : key
     return typeof nombre === 'string' && CAMBIAN_CON_VENTA.has(nombre)
@@ -252,6 +264,7 @@ export function useCobro(): CobroState {
             customerPhone: payment.selectedCustomer?.phone ?? null,
             abono,
             debe: esFiado ? Math.max(0, payment.total - abono) : 0,
+            fechaPago: esFiado && payment.dueDate ? payment.dueDate : null,
             cashReceived,
             change: payment.change,
             receipt,
@@ -276,6 +289,8 @@ export function useCobro(): CobroState {
             if (autoPrint && isPro) tirillaAutomatica(saleId, hecha.receipt)
             cart.clearCart()
             payment.resetPayment()
+            // Inicio la muestra subiendo al salir (la guardada sin internet todavía no cuenta)
+            if (saleId) sumarVendidoEnCaja(storeId, hecha.total)
             globalMutate(cambiaConVenta)
         }
 
@@ -372,12 +387,13 @@ export function useCobro(): CobroState {
                     p_sale_id: venta.saleId ?? venta.clientSaleId,
                     p_reason: 'Deshecha al registrar',
                 })
-                if (err) { toast.error(err.message || 'No se pudo deshacer la venta'); return }
+                if (err) { avisar(err.message || 'No se pudo deshacer la venta', 'aviso'); return }
+                sumarVendidoEnCaja(storeId, -venta.total)
             }
             cart.restoreCart(venta.cartMap)
             setVenta(null)
             globalMutate(cambiaConVenta)
-            toast.success('Venta deshecha. Los productos volvieron a la venta.')
+            avisar('Venta anulada. Los productos volvieron a la venta.')
         } finally {
             setDeshaciendo(false)
         }

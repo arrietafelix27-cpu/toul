@@ -50,11 +50,11 @@ export function mensajeComprobante(d: DatosComprobante): string {
         lineas.push(`${d.fiado ? 'Abono con' : 'Pagó con'}: ${pagos.map(p => pagos.length > 1 ? `${p.metodo} ${pesos(p.monto)}` : p.metodo).join(', ')}`)
     }
     if (d.vuelto && d.vuelto > 0 && d.recibido) {
-        lineas.push(`Recibido en efectivo: ${pesos(d.recibido)} · Vuelto: ${pesos(d.vuelto)}`)
+        lineas.push(`Recibido en efectivo: ${pesos(d.recibido)} · Cambio: ${pesos(d.vuelto)}`)
     }
     if (d.fiado) {
         lineas.push(`Abono: ${pesos(d.fiado.abono)}`)
-        lineas.push(`*Queda debiendo: ${pesos(d.fiado.debe)}*`)
+        lineas.push(`*Saldo pendiente: ${pesos(d.fiado.debe)}*`)
     }
     if (d.mensajeFinal?.trim()) {
         lineas.push('')
@@ -77,13 +77,60 @@ export function enlaceWhatsApp(telefono: string | null | undefined, mensaje: str
     return numero ? `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}` : null
 }
 
-/** El botón de WhatsApp de "Venta registrada": con el celular del
- *  cliente va directo a su chat, y lo dice con su primer nombre */
-export function textoBotonWhatsApp(cliente: string | null | undefined, telefono: string | null | undefined): string {
-    const primerNombre = cliente?.trim().split(/\s+/)[0] ?? ''
-    return primerNombre && telefonoWhatsApp(telefono)
-        ? `Enviar a ${primerNombre} por WhatsApp`
-        : 'Enviar comprobante por WhatsApp'
+/** El primer nombre del cliente ("Andrés Pérez" → "Andrés") */
+export function primerNombre(cliente: string | null | undefined): string {
+    return cliente?.trim().split(/\s+/)[0] ?? ''
+}
+
+/** El botón principal del comprobante: con el celular del cliente va
+ *  directo a su chat y lo dice con su primer nombre; si no, null */
+export function textoEnviarA(cliente: string | null | undefined, telefono: string | null | undefined): string | null {
+    const nombre = primerNombre(cliente)
+    return nombre && telefonoWhatsApp(telefono) ? `Enviar a ${nombre}` : null
+}
+
+/** "#FD4F7E4C": el mismo número corto que muestra Ventas */
+export function codigoVenta(id: string): string {
+    return '#' + id.replace(/-/g, '').slice(0, 8).toUpperCase()
+}
+
+/* ── Lo vendido en la caja, para Inicio ───────────────────────────
+   Al salir de la caja, "Vendiste" sube desde lo que había hasta lo
+   nuevo, con un "+$X" al lado. La caja suma cada venta que entró al
+   servidor (y resta la que se deshace); Inicio lo toma una vez.
+   Solo vale un rato: si se vuelve a Inicio mucho después, no se anima. */
+const CLAVE_RECIENTE = 'toul:vendido-en-caja'
+const VIGENCIA_RECIENTE_MS = 30 * 60_000
+
+interface VendidoEnCaja { storeId: string; monto: number; hasta: number }
+
+function leerReciente(): VendidoEnCaja | null {
+    try {
+        const v = JSON.parse(sessionStorage.getItem(CLAVE_RECIENTE) ?? 'null') as VendidoEnCaja | null
+        return v && typeof v.monto === 'number' && typeof v.storeId === 'string' ? v : null
+    } catch { return null }
+}
+
+/** La caja suma una venta (o resta, con un monto negativo, la que se deshizo) */
+export function sumarVendidoEnCaja(storeId: string, monto: number, ahora = Date.now()) {
+    const previo = leerReciente()
+    const vigente = previo && previo.storeId === storeId && previo.hasta > ahora ? previo.monto : 0
+    const total = Math.max(0, Math.round(vigente + monto))
+    try {
+        if (total > 0) sessionStorage.setItem(CLAVE_RECIENTE, JSON.stringify({ storeId, monto: total, hasta: ahora + VIGENCIA_RECIENTE_MS }))
+        else sessionStorage.removeItem(CLAVE_RECIENTE)
+    } catch { /* sin almacenamiento: Inicio no anima, nada más */ }
+}
+
+/** Inicio: lo vendido en la caja desde la última vez (0 si nada). No lo borra */
+export function verVendidoEnCaja(storeId: string, ahora = Date.now()): number {
+    const v = leerReciente()
+    return v && v.storeId === storeId && v.hasta > ahora ? v.monto : 0
+}
+
+/** Inicio ya lo mostró */
+export function olvidarVendidoEnCaja() {
+    try { sessionStorage.removeItem(CLAVE_RECIENTE) } catch { /* nada */ }
 }
 
 /* ── Tirilla automática ────────────────────────────────────────────

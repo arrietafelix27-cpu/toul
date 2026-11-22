@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { repartir, sugerenciasEfectivo, vuelto, esEfectivo, tipoDeMetodo, fechaEnDias, fechaPagoValida, diasHasta, type MetodoElegido } from './pagos.ts'
 import { leerPermisos, revisarVenta, descuentoPermitido, permisosDe, PERMISOS_POR_DEFECTO, PERMISOS_ADMIN } from './permisos.ts'
-import { mensajeComprobante, enlaceWhatsApp, telefonoWhatsApp, textoBotonWhatsApp, tirillaAutomaticaInicial, cuandoSeVea } from './comprobante.ts'
+import { mensajeComprobante, enlaceWhatsApp, telefonoWhatsApp, textoEnviarA, codigoVenta, tirillaAutomaticaInicial, cuandoSeVea } from './comprobante.ts'
 
 const efectivo: MetodoElegido = { methodId: 'e', methodName: 'Efectivo', methodColor: '', escrito: null }
 const nequi = (escrito: number | null): MetodoElegido => ({ methodId: 'n', methodName: 'Nequi', methodColor: '', escrito })
@@ -99,7 +99,7 @@ test('Comprobante de WhatsApp', () => {
     assert.match(texto, /Descuento: −\$20\.000/)
     assert.match(texto, /\*Total: \$1\.000\.000\*/)
     assert.match(texto, /Pagó con: Efectivo \$600\.000, Nequi \$400\.000/)
-    assert.match(texto, /Vuelto: \$50\.000/)
+    assert.match(texto, /Cambio: \$50\.000/)
     assert.match(texto, /¡Gracias por tu compra!$/)
 
     const fiado = mensajeComprobante({
@@ -108,7 +108,7 @@ test('Comprobante de WhatsApp', () => {
         fiado: { abono: 100000, debe: 200000 }, cliente: 'Marta',
     })
     assert.match(fiado, /Abono: \$100\.000/)
-    assert.match(fiado, /\*Queda debiendo: \$200\.000\*/)
+    assert.match(fiado, /\*Saldo pendiente: \$200\.000\*/)
     assert.doesNotMatch(fiado, /Subtotal/, 'sin descuento no repite el subtotal')
 })
 
@@ -121,12 +121,13 @@ test('WhatsApp directo al cliente cuando tiene un número que sirve', () => {
     assert.equal(enlaceWhatsApp('', 'Hola'), null)
 })
 
-test('El botón de WhatsApp dice a quién va', () => {
-    assert.equal(textoBotonWhatsApp('Marta Gómez', '300 123 4567'), 'Enviar a Marta por WhatsApp')
-    assert.equal(textoBotonWhatsApp('  Ana  ', '3001234567'), 'Enviar a Ana por WhatsApp')
-    assert.equal(textoBotonWhatsApp('Marta', null), 'Enviar comprobante por WhatsApp', 'sin celular, al menú de compartir')
-    assert.equal(textoBotonWhatsApp('Marta', '6012345'), 'Enviar comprobante por WhatsApp', 'un número que no sirve')
-    assert.equal(textoBotonWhatsApp(null, '3001234567'), 'Enviar comprobante por WhatsApp', 'sin nombre')
+test('El botón del comprobante dice a quién va', () => {
+    assert.equal(textoEnviarA('Marta Gómez', '300 123 4567'), 'Enviar a Marta')
+    assert.equal(textoEnviarA('  Ana  ', '3001234567'), 'Enviar a Ana')
+    assert.equal(textoEnviarA('Marta', null), null, 'sin celular: compartir la imagen')
+    assert.equal(textoEnviarA('Marta', '6012345'), null, 'un número que no sirve')
+    assert.equal(textoEnviarA(null, '3001234567'), null, 'sin nombre')
+    assert.equal(codigoVenta('fd4f7e4c-1234-4abc-8def-0123456789ab'), '#FD4F7E4C')
 })
 
 test('Tirilla automática: lo que eligió el equipo; si nunca eligió, solo en el computador', () => {
