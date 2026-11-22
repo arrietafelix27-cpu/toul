@@ -46,6 +46,8 @@ export function BotonConfirmar({ estado, texto, razon, onConfirmar, onTerminado 
         setPrevio(estado)
         // Falló el registro: vuelve a ser botón
         if (previo === 'enviando' && (estado === 'listo' || estado === 'bloqueado')) setFase('idle')
+        // Registrada sin pasar por "enviando" (guardada sin internet con Enter): igual muestra los puntos y estalla
+        if (estado === 'hecho' && fase === 'idle') setFase('ld')
     }
     // Si quien cobra empieza a enviar sin el toque (por ejemplo con Enter), también se encoge
     if (estado === 'enviando' && fase === 'idle') setFase('ld')

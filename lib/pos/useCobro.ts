@@ -11,7 +11,6 @@ import { loadReceiptData, printReceipt } from '@/lib/isla/receipt'
 import { listPendingSales, queueSale, removePendingSale } from '@/lib/isla/offline'
 import type { ReceiptData } from '@/lib/isla/types'
 import type { CartItem, PaymentSplit } from '@/lib/types'
-import { formatCOP } from '@/lib/utils'
 import { revisarVenta, type Revision } from './permisos'
 import { mensajeComprobante, enlaceWhatsApp, cuandoSeVea } from './comprobante'
 
@@ -102,6 +101,9 @@ export interface CobroState {
 
 const SIN_REVISION: Revision = { fiado: false, descuento: false, bloqueo: null }
 
+/** SPEC §9: el crédito necesita señal (cliente, deuda y aprobación) */
+export const SIN_INTERNET_CREDITO = 'Las ventas a crédito requieren conexión a internet'
+
 // Lo que cambia con una venta: el stock y los clientes de la caja (vienen
 // juntos), las ventas de hoy y el turno. Antes se recargaba todo lo que
 // estuviera abierto (5 o 6 pedidos después de cada venta)
@@ -143,7 +145,7 @@ export function useCobro(): CobroState {
         total: payment.total,
         subtotal: cart.subtotal,
         discount: payment.discountAmount,
-        customerName: payment.selectedCustomer?.name || payment.customerSearch.trim(),
+        customerName: payment.selectedCustomer?.name ?? '',
         dueDate: payment.dueDate,
         initialPayment: esFiado ? payment.paymentTarget : 0,
         items: approvalItems,
@@ -152,14 +154,12 @@ export function useCobro(): CobroState {
     // ── Lo que no deja cobrar ─────────────────────────────────────
     const online = offline.online
     const bloqueo = revision.bloqueo
-        ?? (!online && esFiado ? 'Sin internet no se puede fiar. Cobra de contado o espera señal.' : null)
+        ?? (!online && esFiado ? SIN_INTERNET_CREDITO : null)
         ?? (!online && necesita ? 'Sin internet no se puede pedir aprobación' : null)
-        ?? (!esAdmin && permisos.crear_clientes === 'no' && esFiado && !payment.selectedCustomer
-            ? 'Elige un cliente que ya exista' : null)
     const razon = bloqueo ?? payment.blockedReason
 
     const boton = useMemo<BotonCobro>(() => {
-        const normal = esFiado ? 'Confirmar venta' : `Cobrar ${formatCOP(payment.total)}`
+        const normal = esFiado ? 'Registrar crédito' : 'Confirmar venta'
         if (enviando) return { texto: 'Registrando…', accion: null, deshabilitado: true, razon: null, espera: true }
         if (necesita && aprobacion.status !== 'approved') {
             if (aprobacion.status === 'pending') return { texto: 'Esperando aprobación · Cancelar', accion: 'cancelar', deshabilitado: false, razon: null, espera: true }
@@ -167,7 +167,7 @@ export function useCobro(): CobroState {
             return { texto: 'Pedir aprobación', accion: 'pedir', deshabilitado: !!razon, razon, espera: false }
         }
         return { texto: normal, accion: 'cobrar', deshabilitado: !!razon, razon, espera: false }
-    }, [esFiado, payment.total, enviando, necesita, aprobacion.status, razon])
+    }, [esFiado, enviando, necesita, aprobacion.status, razon])
 
     // La tirilla sale con la venta como quedó en el servidor; sin ella,
     // con lo que hay en el equipo
@@ -214,7 +214,7 @@ export function useCobro(): CobroState {
         const clientSaleId = nuevoNumeroDeVenta()
         const soldAt = new Date().toISOString()
         const payments = payment.paymentTarget > 0 ? payment.paymentSplits.filter(s => s.amount > 0) : []
-        const customerName = payment.selectedCustomer?.name || payment.customerSearch.trim() || null
+        const customerName = payment.selectedCustomer?.name ?? null
         const abono = esFiado ? payment.paymentTarget : payment.total
         const cashReceived = payment.cashDue > 0 && payment.cashReceived !== null ? payment.cashReceived : null
 
@@ -272,7 +272,6 @@ export function useCobro(): CobroState {
             setEnviando(false)
             setVenta(hecha)
             aprobacion.reset()
-            payment.rememberMethod()
             vibrar([12, 50, 18])
             if (autoPrint && isPro) tirillaAutomatica(saleId, hecha.receipt)
             cart.clearCart()
@@ -304,7 +303,7 @@ export function useCobro(): CobroState {
             // El fiado necesita señal (cliente, deuda y aprobación)
             if (esFiado) {
                 setEnviando(false)
-                setError('Sin internet no se puede fiar. Cobra de contado o espera señal.')
+                setError(SIN_INTERNET_CREDITO)
                 return
             }
             guardar()

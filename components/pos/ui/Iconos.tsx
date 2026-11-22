@@ -34,3 +34,5 @@ export const IcoDividir = (p: P) => <Svg grosor={1.9} size={18} {...p}><path d="
 export const IcoDescuento = (p: P) => <Svg grosor={1.9} size={18} {...p}><path d="M19 5 5 19" /><circle cx="7" cy="7" r="2.5" /><circle cx="17" cy="17" r="2.5" /></Svg>
 export const IcoCalendario = (p: P) => <Svg grosor={1.9} size={18} {...p}><rect x="3.5" y="5" width="17" height="15.5" rx="3" /><path d="M3.5 10h17M8 3v4M16 3v4" /></Svg>
 export const IcoBillete = (p: P) => <Svg grosor={1.9} size={18} {...p}><rect x="2.5" y="6" width="19" height="12" rx="3" /><circle cx="12" cy="12" r="2.6" /></Svg>
+/** Aviso: triángulo con signo de admiración (avisos en ámbar) */
+export const IcoAlerta = (p: P) => <Svg grosor={2.2} size={15} {...p}><path d="M10.3 4.2 2.6 17.6A2 2 0 0 0 4.3 20.6h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z" /><path d="M12 9.5v4.2M12 17h.01" /></Svg>

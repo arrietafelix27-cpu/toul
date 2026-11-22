@@ -1,65 +1,111 @@
 'use client'
 
-import { useMemo, useState, type RefObject } from 'react'
-import { Search, UserPlus } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import type { Customer } from '@/lib/types'
 import type { POSDataState } from '@/lib/pos/usePOSData'
 import type { POSPaymentState } from '@/lib/pos/usePOSPayment'
-import { buscarClientes, clienteConTelefono, normalizar, pareceTelefono } from '@/lib/pos/clientes'
-import { Iniciales } from './piezas'
+import { buscarClientes, clienteConTelefono, normalizar, pareceTelefono, soloDigitos } from '@/lib/pos/clientes'
+import { BotonFantasma, BotonPrincipal, BotonSecundario, CampoBusqueda, CampoTexto, Hoja, IcoMas, Nota, avisar } from '@/components/pos/ui'
+import s from '@/components/pos/ui/pos.module.css'
+import { formatCOP } from '@/lib/utils'
 
-/** Cliente de la venta: buscar por nombre o teléfono, y "+ Crear" si no está */
-export function Cliente({ data, payment, puedeCrear, esFiado, buscarRef }: {
+/** Cuántos se pintan sin buscar (los demás aparecen al escribir) */
+const SIN_BUSCAR = 120
+
+const iniciales = (nombre: string) => {
+    const p = nombre.trim().split(/\s+/).filter(Boolean)
+    return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() || '·'
+}
+const deuda = (c: Customer) => Math.max(0, Math.round(Number(c.total_debt) || 0))
+
+/** El WhatsApp sirve si tiene 10 dígitos (con o sin el +57) */
+function whatsappValido(texto: string) {
+    let d = soloDigitos(texto)
+    if (d.length === 12 && d.startsWith('57')) d = d.slice(2)
+    return d.length === 10
+}
+
+/**
+ * Hoja de Cliente (SPEC §6), 86 % de alto.
+ * Buscar por nombre o teléfono; tocar uno lo elige y cierra.
+ * "Crear cliente" abre el formulario en la misma hoja. Nombres y
+ * teléfonos no se repiten: si ya existe, "Usar este". El servidor lo
+ * vuelve a revisar al crear.
+ * El cliente de la venta es solo el que se elige aquí: un nombre escrito
+ * sin elegir nunca crea ni busca clientes al registrar la venta.
+ */
+export function HojaCliente({ abierta, onCerrar, data, payment, puedeCrear }: {
+    abierta: boolean
+    onCerrar: () => void
     data: POSDataState
     payment: POSPaymentState
     /** El vendedor sin permiso solo puede elegir clientes que ya existen */
     puedeCrear: boolean
-    esFiado: boolean
-    /** El buscador: se activa al elegir Crédito */
-    buscarRef?: RefObject<HTMLInputElement | null>
 }) {
+    const [q, setQ] = useState('')
     const [creando, setCreando] = useState(false)
-    const [otroDato, setOtroDato] = useState('')
+    const [nombre, setNombre] = useState('')
+    const [telefono, setTelefono] = useState('')
     const [guardando, setGuardando] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    // El que ya tenía ese teléfono, según el servidor
+    // El que ya existía, según el servidor
     const [existente, setExistente] = useState<Customer | null>(null)
 
-    const q = payment.customerSearch
     const elegido = payment.selectedCustomer
     // Mientras llegan los clientes no se ofrece crear: podría estar repetido
     const cargando = data.customersLoading
-    const resultados = useMemo(() => buscarClientes(data.customers, q, 6), [data.customers, q])
-
-    // Si lo que se escribió es un teléfono, se pide el nombre; si es un nombre, el teléfono
     const porTelefono = pareceTelefono(q)
-    const nombre = porTelefono ? otroDato.trim() : q.trim()
-    const telefono = porTelefono ? q.trim() : otroDato.trim()
-    // Mismo nombre sin importar mayúsculas, espacios ni tildes: es la misma persona
-    const mismoNombre = useMemo(() => {
-        const n = normalizar(nombre)
-        return n ? data.customers.find(c => normalizar(c.name) === n) : undefined
-    }, [data.customers, nombre])
-    const repetido = clienteConTelefono(data.customers, telefono) ?? existente ?? mismoNombre
 
-    const limpiar = () => { setCreando(false); setOtroDato(''); setError(null); setExistente(null) }
-    const elegir = (c: Customer) => { payment.setSelectedCustomer(c); payment.setCustomerSearch(''); limpiar() }
+    const lista = useMemo(
+        () => q.trim() ? buscarClientes(data.customers, q, 200) : data.customers.slice(0, SIN_BUSCAR),
+        [data.customers, q]
+    )
+
+    // Mismo nombre sin importar mayúsculas, espacios ni tildes: es la misma persona
+    const conNombre = (texto: string) => {
+        const n = normalizar(texto)
+        return n ? data.customers.find(c => normalizar(c.name) === n) : undefined
+    }
+    const nombreBuscado = !porTelefono ? conNombre(q) : undefined
+    const telefonoBuscado = porTelefono ? clienteConTelefono(data.customers, q) : undefined
+    const puedeOfrecer = puedeCrear && !!q.trim() && !cargando && !nombreBuscado && !telefonoBuscado
+
+    // En el formulario: repetido por nombre o por teléfono
+    const repetidoNombre = creando ? conNombre(nombre) : undefined
+    const repetidoTelefono = creando && soloDigitos(telefono).length >= 7 ? clienteConTelefono(data.customers, telefono) : undefined
+    const repetido = existente ?? repetidoNombre ?? repetidoTelefono
+
+    const limpiar = () => {
+        setQ(''); setCreando(false); setNombre(''); setTelefono(''); setError(null); setExistente(null)
+    }
+    const cerrar = () => { onCerrar(); setTimeout(limpiar, 500) }
+    const elegir = (c: Customer) => { payment.setSelectedCustomer(c); cerrar() }
+
+    const empezarCrear = () => {
+        if (porTelefono) { setNombre(''); setTelefono(q.trim()) }
+        else { setNombre(q.trim().replace(/\s+/g, ' ')); setTelefono('') }
+        setError(null); setExistente(null); setCreando(true)
+    }
 
     const crear = async () => {
-        if (!nombre || guardando || repetido || cargando) return
+        const n = nombre.trim().replace(/\s+/g, ' ')
+        if (!n || guardando || repetido || cargando) return
+        if (pareceTelefono(n)) { setError('El nombre no puede ser un número de teléfono'); return }
+        if (telefono.trim() && !whatsappValido(telefono)) { setError('El número de WhatsApp debe tener 10 dígitos'); return }
         setGuardando(true)
         setError(null)
         try {
             const res = await fetch('/api/customers', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: nombre, phone: telefono || null }),
+                body: JSON.stringify({ name: n, phone: telefono.trim() || null }),
             })
             const body = await res.json()
             if (res.status === 409 && body.existing) { setExistente(body.existing); return }
             if (!res.ok) { setError(body.error || 'No se pudo crear el cliente'); return }
-            elegir(body.customer)
+            avisar('Cliente creado')
             data.refreshCustomers()
+            elegir(body.customer)
         } catch {
             setError('Sin conexión. Intenta de nuevo.')
         } finally {
@@ -67,105 +113,87 @@ export function Cliente({ data, payment, puedeCrear, esFiado, buscarRef }: {
         }
     }
 
-    if (elegido) {
-        return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Iniciales nombre={elegido.name} />
-                <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: 'var(--toul-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{elegido.name}</span>
-                    <span style={{ display: 'block', fontSize: 13, color: 'var(--toul-text-subtle)' }}>{elegido.phone || 'Sin teléfono'}</span>
-                </span>
-                <button type="button" onClick={() => { payment.setSelectedCustomer(null); limpiar() }} className="cj-btn cj-link">Cambiar</button>
-            </div>
-        )
-    }
-
-    const sinResultados = !!q.trim() && resultados.length === 0 && !cargando
+    const avisoRepetido = (c: Customer, porNumero: boolean) => porNumero
+        ? `Ya existe ${c.name} con ese número.`
+        : `Ya existe “${c.name}”. Para crear otro, agrega su apellido.`
 
     return (
-        <div>
-            <div style={{ position: 'relative' }}>
-                <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--toul-text-dim)', pointerEvents: 'none' }} />
-                <input
-                    ref={buscarRef}
-                    type="text" autoComplete="off" spellCheck={false} enterKeyHint="search" data-enter="propio"
-                    aria-label="Buscar cliente por nombre o teléfono"
-                    placeholder="Nombre o teléfono"
-                    value={q}
-                    onChange={e => { payment.setCustomerSearch(e.target.value); setExistente(null); setError(null) }}
-                    onKeyDown={e => {
-                        if (e.key !== 'Enter') return
-                        e.preventDefault()
-                        if (resultados[0]) elegir(resultados[0])
-                        else if (puedeCrear && q.trim() && !mismoNombre && !cargando) setCreando(true)
-                    }}
-                    className="cj-campo" style={{ paddingLeft: 40 }}
-                />
-            </div>
+        <Hoja abierta={abierta} onCerrar={cerrar} titulo="Cliente" alta llena>
+            <CampoBusqueda etiqueta="Nombre o teléfono" valor={q} data-enter="propio"
+                onCambiar={v => { setQ(v); setCreando(false); setError(null); setExistente(null) }}
+                onKeyDown={e => {
+                    if (e.key !== 'Enter') return
+                    e.preventDefault()
+                    if (lista[0] && q.trim()) elegir(lista[0])
+                    else if (puedeOfrecer) empezarCrear()
+                }} />
 
-            {q.trim() && resultados.length > 0 && (
-                <div role="listbox" aria-label="Clientes" style={{ marginTop: 6 }}>
-                    {resultados.map(c => (
-                        <button key={c.id} type="button" role="option" aria-selected={false} onClick={() => elegir(c)} className="cj-btn cj-press-suave"
-                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, minHeight: 52, padding: '6px 4px', background: 'transparent', textAlign: 'left', borderBottom: '1px solid var(--toul-divider)' }}>
-                            <Iniciales nombre={c.name} tamaño={34} />
-                            <span style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 550, color: 'var(--toul-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
-                            {c.phone && <span className="cj-num" style={{ fontSize: 13, color: 'var(--toul-text-subtle)', flexShrink: 0 }}>{c.phone}</span>}
-                        </button>
-                    ))}
+            {creando ? (
+                <div className={s.crearCliente}>
+                    <CampoTexto etiqueta="Nombre" placeholder="Nombre y apellido" valor={nombre} autoFocus={!porTelefono}
+                        autoComplete="off" autoCapitalize="words" data-enter="propio"
+                        onCambiar={v => { setNombre(v); setError(null); setExistente(null) }}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void crear() } }} />
+                    <CampoTexto etiqueta="WhatsApp" placeholder="Opcional" valor={telefono} autoFocus={porTelefono}
+                        type="tel" inputMode="tel" autoComplete="off" data-enter="propio"
+                        onCambiar={v => { setTelefono(v); setError(null); setExistente(null) }}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void crear() } }} />
+                    {repetido && (
+                        <Nota accion={{ texto: 'Usar este', onClick: () => elegir(repetido) }}>
+                            {avisoRepetido(repetido, conNombre(nombre)?.id !== repetido.id)}
+                        </Nota>
+                    )}
+                    {error && <div role="alert" className={s.errorTexto}>{error}</div>}
+                    <div className={s.hojaPar} style={{ marginTop: 4 }}>
+                        <BotonSecundario onClick={() => { setCreando(false); setError(null); setExistente(null) }}>Cancelar</BotonSecundario>
+                        <BotonPrincipal onClick={() => void crear()} disabled={!nombre.trim() || guardando || !!repetido}>
+                            {guardando ? 'Creando…' : 'Crear cliente'}
+                        </BotonPrincipal>
+                    </div>
                 </div>
-            )}
-
-            {/* Si ya existe con ese nombre, se elige de la lista: no se ofrece crearlo otra vez */}
-            {q.trim() && cargando && resultados.length === 0 && (
-                <p style={{ fontSize: 13, color: 'var(--toul-text-subtle)', margin: '8px 2px 0' }}>Cargando clientes…</p>
-            )}
-
-            {q.trim() && puedeCrear && !creando && !cargando && !(mismoNombre && !porTelefono) && (
-                <button type="button" onClick={() => setCreando(true)} className="cj-btn cj-link" style={{ marginTop: 10, color: sinResultados ? 'var(--toul-text)' : undefined }}>
-                    <UserPlus size={15} /> Crear {porTelefono ? 'cliente con este número' : `"${q.trim()}"`}
-                </button>
-            )}
-
-            {sinResultados && !puedeCrear && (
-                <p style={{ fontSize: 13, color: esFiado ? 'var(--toul-warning)' : 'var(--toul-text-subtle)', margin: '8px 2px 0' }}>
-                    {esFiado ? 'No está. Para fiar elige un cliente que ya exista.' : 'No está. La venta queda con ese nombre.'}
-                </p>
-            )}
-
-            {creando && puedeCrear && (
-                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input
-                        type={porTelefono ? 'text' : 'tel'} inputMode={porTelefono ? 'text' : 'numeric'} autoComplete="off" autoFocus data-enter="propio"
-                        aria-label={porTelefono ? 'Nombre del cliente' : 'Teléfono (opcional)'}
-                        placeholder={porTelefono ? 'Nombre del cliente' : 'Teléfono (opcional)'}
-                        value={otroDato}
-                        onChange={e => { setOtroDato(e.target.value); setExistente(null); setError(null) }}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void crear() } }}
-                        className="cj-campo"
-                    />
-                    {repetido ? (
-                        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--toul-warning)' }}>
-                                Ya existe {repetido.name}{repetido.phone ? ` · ${repetido.phone}` : ''}
+            ) : (<>
+                {nombreBuscado && (
+                    <Nota accion={{ texto: 'Usar este', onClick: () => elegir(nombreBuscado) }}>
+                        {avisoRepetido(nombreBuscado, false)}
+                    </Nota>
+                )}
+                {elegido && !q.trim() && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+                        <BotonFantasma onClick={() => { payment.setSelectedCustomer(null); cerrar() }}>Quitar cliente</BotonFantasma>
+                    </div>
+                )}
+                <div className={s.clientes} role="listbox" aria-label="Clientes">
+                    {puedeOfrecer && (
+                        <button type="button" className={`${s.cliente} ${s.clienteCrear}`} onClick={empezarCrear}>
+                            <span className={`${s.avatar} ${s.avatarVerde}`}><IcoMas /></span>
+                            <span className={s.clienteNombre}>
+                                {porTelefono ? `Crear cliente con el número ${q.trim()}` : `Crear cliente “${q.trim()}”`}
                             </span>
-                            <button type="button" onClick={() => elegir(repetido)} className="cj-btn cj-chip" data-on="1">Usar este</button>
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <button type="button" onClick={() => void crear()} disabled={!nombre || guardando} className="cj-btn cj-press-suave"
-                                style={{
-                                    flex: 1, height: 44, borderRadius: 13, fontSize: 14.5, fontWeight: 600,
-                                    background: nombre ? 'var(--toul-text)' : 'var(--toul-surface)', color: nombre ? 'var(--toul-bg)' : 'var(--toul-text-dim)',
-                                }}>
-                                {guardando ? 'Creando…' : 'Crear y elegir'}
+                        </button>
+                    )}
+                    {lista.map((c, i) => {
+                        const debe = deuda(c)
+                        const on = elegido?.id === c.id
+                        return (
+                            <button key={c.id} type="button" role="option" aria-selected={on} className={s.cliente}
+                                data-on={on ? '1' : undefined} style={{ ['--k' as string]: Math.min(i + 1, 12) }}
+                                onClick={() => elegir(c)}>
+                                <span className={s.avatar} aria-hidden="true">{iniciales(c.name)}</span>
+                                <span className={s.clienteNombre}>
+                                    {c.name}
+                                    {c.phone && <span className={s.clienteSub}>{c.phone}</span>}
+                                </span>
+                                {debe > 0 && <span className={s.clienteDeuda}>{formatCOP(debe)}</span>}
                             </button>
-                            <button type="button" onClick={limpiar} className="cj-btn cj-chip" style={{ height: 44 }}>Cancelar</button>
+                        )
+                    })}
+                    {lista.length === 0 && !puedeOfrecer && (
+                        <div className={s.clientesVacio}>
+                            {cargando ? 'Cargando clientes…' : q.trim() ? 'Sin resultados' : 'Todavía no hay clientes'}
                         </div>
                     )}
-                    {error && <p role="alert" style={{ fontSize: 13, color: 'var(--toul-error)', margin: 0 }}>{error}</p>}
                 </div>
-            )}
-        </div>
+            </>)}
+        </Hoja>
     )
 }

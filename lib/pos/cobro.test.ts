@@ -1,7 +1,7 @@
 // npm run test:calculos
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { repartir, sugerenciasEfectivo, vuelto, esEfectivo, tipoDeMetodo, type MetodoElegido } from './pagos.ts'
+import { repartir, sugerenciasEfectivo, vuelto, esEfectivo, tipoDeMetodo, fechaEnDias, fechaPagoValida, diasHasta, type MetodoElegido } from './pagos.ts'
 import { leerPermisos, revisarVenta, descuentoPermitido, permisosDe, PERMISOS_POR_DEFECTO, PERMISOS_ADMIN } from './permisos.ts'
 import { mensajeComprobante, enlaceWhatsApp, telefonoWhatsApp, textoBotonWhatsApp, tirillaAutomaticaInicial, cuandoSeVea } from './comprobante.ts'
 
@@ -30,12 +30,26 @@ test('Si lo escrito pasa el total, avisa cuánto', () => {
     assert.equal(repartir([efectivo, nequi(100000)], 100000).exceso, 0)
 })
 
-test('Billetes sugeridos: el siguiente de $10.000, $50.000 y $100.000', () => {
-    assert.deepEqual(sugerenciasEfectivo(43500), [50000, 100000])
-    assert.deepEqual(sugerenciasEfectivo(120000), [130000, 150000, 200000])
-    assert.deepEqual(sugerenciasEfectivo(100000), [110000, 150000, 200000], 'lo exacto ya es "Exacto"')
-    assert.deepEqual(sugerenciasEfectivo(7000), [10000, 50000, 100000])
+test('Billetes sugeridos: el siguiente de $10.000, $20.000, $50.000 y $100.000 (máximo 4)', () => {
+    assert.deepEqual(sugerenciasEfectivo(43500), [50000, 60000, 100000])
+    assert.deepEqual(sugerenciasEfectivo(120000), [130000, 140000, 150000, 200000])
+    assert.deepEqual(sugerenciasEfectivo(100000), [110000, 120000, 150000, 200000], 'lo exacto ya es "Exacto"')
+    assert.deepEqual(sugerenciasEfectivo(7000), [10000, 20000, 50000, 100000])
     assert.deepEqual(sugerenciasEfectivo(0), [])
+})
+
+test('Fecha de pago: solo de mañana en adelante, o sin fecha', () => {
+    const hoy = new Date(2026, 10, 21, 23, 30) // sábado 21 de noviembre, de noche
+    assert.equal(fechaEnDias(15, hoy), '2026-12-06')
+    assert.equal(fechaEnDias(1, new Date(2026, 11, 31)), '2027-01-01', 'cambia de año')
+    assert.equal(fechaPagoValida('', hoy), true, 'sin fecha')
+    assert.equal(fechaPagoValida('2026-11-22', hoy), true, 'mañana')
+    assert.equal(fechaPagoValida('2026-11-21', hoy), false, 'hoy no')
+    assert.equal(fechaPagoValida('2026-11-20', hoy), false, 'ayer no')
+    assert.equal(fechaPagoValida('0001-01-10', hoy), false, 'año imposible')
+    assert.equal(fechaPagoValida('2027-02-31', hoy), false, 'día que no existe')
+    assert.equal(fechaPagoValida('2027-2-3', hoy), false, 'mal escrita')
+    assert.equal(diasHasta('2026-12-06', hoy), 15)
 })
 
 test('Vuelto', () => {

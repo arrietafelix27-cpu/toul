@@ -2,9 +2,10 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import type { Customer, PaymentMethodConfig, PaymentSplit, CartItem } from '@/lib/types'
-import { useSessionContext } from '@/lib/isla/useSession'
-import { pareceTelefono } from './clientes'
-import { repartir, esEfectivo, vuelto as calcularVuelto, type MetodoElegido } from './pagos'
+import { repartir, esEfectivo, vuelto as calcularVuelto, fechaEnDias, fechaPagoValida, type MetodoElegido } from './pagos'
+
+/** Plazo con el que arranca una venta a crédito */
+export const PLAZO_INICIAL = 15
 
 // ─── Hook ─────────────────────────────────────────────────────
 export interface POSPaymentState {
@@ -30,8 +31,10 @@ export interface POSPaymentState {
     selectedMethodIds: string[]
     paymentSplits: PaymentSplit[]
     toggleMethod: (method: PaymentMethodConfig) => void
-    /** Pagó todo con este método (quita los demás) */
+    /** El método principal (el que se lleva el resto). Si había un segundo distinto, se queda */
     chooseMethod: (method: PaymentMethodConfig) => void
+    /** Dividir pago: el segundo método (null lo quita) */
+    setSecondMethod: (method: PaymentMethodConfig | null) => void
     setMethodAmount: (methodId: string, amount: number | null) => void
     /** Lo escrito en los otros métodos (para mostrar el campo tal cual) */
     typedAmounts: Record<string, number | null>
@@ -51,8 +54,11 @@ export interface POSPaymentState {
     setSelectedCustomer: (c: Customer | null) => void
     customerSearch: string
     setCustomerSearch: (s: string) => void
+    /** "AAAA-MM-DD", o vacía = sin fecha. Arranca a 15 días */
     dueDate: string
     setDueDate: (d: string) => void
+    /** La fecha de pago sirve (vacía, o de mañana en adelante) */
+    dueDateValid: boolean
     /** Abono del fiado: sin abono, la mitad del total u otro valor (el que va en initialPayment) */
     abonoMode: 'sin' | 'mitad' | 'otro'
     setAbonoMode: (m: 'sin' | 'mitad' | 'otro') => void
@@ -67,8 +73,6 @@ export interface POSPaymentState {
     // Submit
     buildSaleBody: (payload: SalePayload) => Record<string, unknown>
     submitSale: (payload: SalePayload) => Promise<SubmitResult>
-    /** El método con el que se cobró: queda elegido para la próxima venta */
-    rememberMethod: () => void
 
     // Reset
     resetPayment: () => void
@@ -97,23 +101,13 @@ export interface SalePayload {
     soldAt?: string
 }
 
-const LAST_METHOD_KEY = 'toul-caja-ultimo-metodo:'
-
-const leerUltimo = (storeId: string | null) => {
-    if (!storeId) return null
-    try { return localStorage.getItem(LAST_METHOD_KEY + storeId) } catch { return null }
-}
-
 export function usePOSPayment(
     subtotal: number,
     cartIsEmpty: boolean,
     methods: PaymentMethodConfig[],
 ): POSPaymentState {
-    const { data: sesion } = useSessionContext()
-    const storeId = sesion?.storeId ?? null
-
     // Sale type
-    const [saleType, setSaleType] = useState<'contado' | 'credito'>('contado')
+    const [saleType, setTipo] = useState<'contado' | 'credito'>('contado')
 
     // Discount
     const [discountType, setDiscountType] = useState<'%' | '$'>('$')
@@ -132,7 +126,10 @@ export function usePOSPayment(
     // Credit fields
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
     const [customerSearch, setCustomerSearch] = useState('')
-    const [dueDate, setDueDate] = useState('')
+    // null = nadie la ha tocado: el plazo de siempre (15 días desde hoy)
+    const [fechaElegida, setDueDate] = useState<string | null>(null)
+    const dueDate = fechaElegida ?? fechaEnDias(PLAZO_INICIAL)
+    const dueDateValid = fechaPagoValida(dueDate)
     const [initialPayment, setInitialPayment] = useState('')
     const [abonoMode, setAbonoMode] = useState<'sin' | 'mitad' | 'otro'>('sin')
 
@@ -143,16 +140,12 @@ export function usePOSPayment(
     const paymentTarget = Math.round(isCredit ? abono : total)
 
     // ── Métodos elegidos ──────────────────────────────────────────
-    // null = nadie ha tocado nada: queda elegido el último método usado
-    const [chosen, setChosen] = useState<MetodoElegido[] | null>(null)
-    const [ultimo, setUltimo] = useState<{ storeId: string | null; id: string | null }>({ storeId: null, id: null })
-    const ultimoId = ultimo.storeId === storeId ? ultimo.id : leerUltimo(storeId)
-
-    const elegidos = useMemo<MetodoElegido[]>(() => {
-        if (chosen) return chosen.filter(c => methods.some(m => m.id === c.methodId))
-        const m = methods.find(x => x.id === ultimoId) ?? methods[0]
-        return m ? [{ methodId: m.id, methodName: m.name, methodColor: m.color, escrito: null }] : []
-    }, [chosen, methods, ultimoId])
+    // Ningún método viene elegido: la persona siempre dice cómo le pagaron
+    const [chosen, setChosen] = useState<MetodoElegido[]>([])
+    const elegidos = useMemo<MetodoElegido[]>(
+        () => chosen.filter(c => methods.some(m => m.id === c.methodId)),
+        [chosen, methods]
+    )
 
     const reparto = useMemo(() => repartir(elegidos, paymentTarget), [elegidos, paymentTarget])
     const paymentSplits = reparto.splits
@@ -177,8 +170,20 @@ export function usePOSPayment(
     }, [elegidos])
 
     const chooseMethod = useCallback((method: PaymentMethodConfig) => {
-        setChosen([{ methodId: method.id, methodName: method.name, methodColor: method.color, escrito: null }])
-    }, [])
+        setChosen(() => [
+            { methodId: method.id, methodName: method.name, methodColor: method.color, escrito: null },
+            ...elegidos.slice(1, 2).filter(e => e.methodId !== method.id),
+        ])
+    }, [elegidos])
+
+    const setSecondMethod = useCallback((method: PaymentMethodConfig | null) => {
+        setChosen(() => {
+            const [primero, segundo] = elegidos
+            if (!primero) return elegidos
+            if (!method || method.id === primero.methodId) return [primero]
+            return [primero, { methodId: method.id, methodName: method.name, methodColor: method.color, escrito: segundo?.escrito ?? null }]
+        })
+    }, [elegidos])
 
     const setMethodAmount = useCallback((methodId: string, amount: number | null) => {
         setChosen(() => elegidos.map(e => e.methodId === methodId ? { ...e, escrito: amount } : e))
@@ -186,6 +191,15 @@ export function usePOSPayment(
 
     // ── Efectivo recibido y vuelto ────────────────────────────────
     const [cashReceived, setCashReceived] = useState<number | null>(null)
+
+    // Contado y abono se pagan aparte: al cambiar el tipo de venta no
+    // queda ningún método ni monto recibido elegido de antes
+    const setSaleType = useCallback((tipo: 'contado' | 'credito') => {
+        if (tipo === saleType) return
+        setTipo(tipo)
+        setChosen([])
+        setCashReceived(null)
+    }, [saleType])
     const cashDue = useMemo(() => paymentSplits.reduce((sum, s) => {
         const m = methods.find(x => x.id === s.methodId)
         return m && esEfectivo(m) ? sum + s.amount : sum
@@ -194,16 +208,17 @@ export function usePOSPayment(
     const shortCash = cashDue > 0 && cashReceived !== null && cashReceived < cashDue
 
     // ── Validación ────────────────────────────────────────────────
-    const hasCustomer = !!selectedCustomer || (!!customerSearch.trim() && !pareceTelefono(customerSearch))
+    // El cliente es solo el que se eligió de la lista (o se creó): nunca un nombre escrito a medias
+    const hasCustomer = !!selectedCustomer
     const blockedReason = useMemo(() => {
         if (cartIsEmpty) return 'Agrega productos a la venta'
-        // Un fiado a nombre de "300 123 4567" no le sirve a nadie
-        if (isCredit && !hasCustomer) return 'Elige el cliente para fiar'
-        if (paymentTarget > 0 && paymentSplits.length === 0) return 'Elige cómo te pagaron'
-        if (overpaid > 0) return 'Los montos escritos pasan el total'
-        if (shortCash) return 'Lo recibido en efectivo no alcanza'
+        if (isCredit && !hasCustomer) return 'Selecciona un cliente'
+        if (isCredit && !dueDateValid) return 'Selecciona la fecha de pago'
+        if (paymentTarget > 0 && paymentSplits.length === 0) return 'Selecciona el método de pago'
+        if (overpaid > 0) return 'Revisa los montos del pago'
+        if (shortCash) return 'Monto recibido insuficiente'
         return null
-    }, [cartIsEmpty, isCredit, hasCustomer, paymentTarget, paymentSplits.length, overpaid, shortCash])
+    }, [cartIsEmpty, isCredit, hasCustomer, dueDateValid, paymentTarget, paymentSplits.length, overpaid, shortCash])
     const canConfirm = blockedReason === null
 
     // Armar el cuerpo de la venta (se usa también para guardarla sin internet)
@@ -215,7 +230,7 @@ export function usePOSPayment(
         total,
         isCredit,
         customerId: selectedCustomer?.id || null,
-        customerName: selectedCustomer ? selectedCustomer.name : (customerSearch.trim() || null),
+        customerName: selectedCustomer?.name ?? null,
         customerPhone: selectedCustomer?.phone || null,
         dueDate: isCredit ? dueDate : null,
         initialPayment: paymentTarget,
@@ -226,7 +241,7 @@ export function usePOSPayment(
         cashSessionId: payload.cashSessionId ?? null,
         clientSaleId: payload.clientSaleId ?? null,
         soldAt: payload.soldAt ?? new Date().toISOString(),
-    }), [paymentTarget, paymentSplits, discountAmount, total, isCredit, selectedCustomer, customerSearch, dueDate, cashDue, cashReceived])
+    }), [paymentTarget, paymentSplits, discountAmount, total, isCredit, selectedCustomer, dueDate, cashDue, cashReceived])
 
     // Submit
     const submitSale = useCallback(async (payload: SalePayload): Promise<SubmitResult> => {
@@ -253,24 +268,17 @@ export function usePOSPayment(
         }
     }, [buildSaleBody])
 
-    const rememberMethod = useCallback(() => {
-        const id = paymentSplits[0]?.methodId
-        if (!id || !storeId) return
-        try { localStorage.setItem(LAST_METHOD_KEY + storeId, id) } catch { /* sin almacenamiento */ }
-        setUltimo({ storeId, id })
-    }, [paymentSplits, storeId])
-
     // Reset
     const resetPayment = useCallback(() => {
-        setSaleType('contado')
+        setTipo('contado')
         setDiscountType('$')
         setDiscountValue('')
         setShowDiscount(false)
-        setChosen(null)
+        setChosen([])
         setCashReceived(null)
         setSelectedCustomer(null)
         setCustomerSearch('')
-        setDueDate('')
+        setDueDate(null)
         setInitialPayment('')
         setAbonoMode('sin')
     }, [])
@@ -280,28 +288,26 @@ export function usePOSPayment(
         discountType, setDiscountType, discountValue, discountAmount, setDiscountValue,
         showDiscount, setShowDiscount,
         total, paymentTarget,
-        selectedMethodIds, paymentSplits, toggleMethod, chooseMethod, setMethodAmount, typedAmounts, overpaid,
+        selectedMethodIds, paymentSplits, toggleMethod, chooseMethod, setSecondMethod, setMethodAmount, typedAmounts, overpaid,
         cashDue, cashReceived, setCashReceived, change,
         selectedCustomer, setSelectedCustomer, customerSearch, setCustomerSearch,
-        dueDate, setDueDate, abonoMode, setAbonoMode, initialPayment, setInitialPayment,
+        dueDate, setDueDate, dueDateValid, abonoMode, setAbonoMode, initialPayment, setInitialPayment,
         canConfirm, blockedReason,
         buildSaleBody,
         submitSale,
-        rememberMethod,
         resetPayment,
     }), [
-        saleType,
+        saleType, setSaleType,
         discountType, discountValue, discountAmount,
         showDiscount,
         total, paymentTarget,
-        selectedMethodIds, paymentSplits, toggleMethod, chooseMethod, setMethodAmount, typedAmounts, overpaid,
+        selectedMethodIds, paymentSplits, toggleMethod, chooseMethod, setSecondMethod, setMethodAmount, typedAmounts, overpaid,
         cashDue, cashReceived, change,
         selectedCustomer, customerSearch,
-        dueDate, abonoMode, initialPayment,
+        dueDate, dueDateValid, abonoMode, initialPayment,
         canConfirm, blockedReason,
         buildSaleBody,
         submitSale,
-        rememberMethod,
         resetPayment,
     ])
 }

@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getSessionContext } from '@/lib/isla/context'
-import { clienteConTelefono, soloDigitos } from '@/lib/pos/clientes'
+import { clienteConTelefono, normalizar, pareceTelefono, soloDigitos } from '@/lib/pos/clientes'
 
 export async function GET() {
     const supabase = await createClient()
@@ -21,36 +21,52 @@ export async function GET() {
     return NextResponse.json({ customers: customers || [] })
 }
 
+/** El WhatsApp: 10 dígitos (con o sin el +57 adelante). null si no sirve */
+function whatsapp(texto: string): string | null {
+    let d = soloDigitos(texto)
+    if (d.length === 12 && d.startsWith('57')) d = d.slice(2)
+    return d.length === 10 ? d : null
+}
+
 export async function POST(req: Request) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { name, phone } = await req.json()
-    if (!name?.trim()) return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 })
+    const nombre = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : ''
+    if (!nombre) return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 })
+    // Un cliente a nombre de "300 123 4567" no le sirve a nadie
+    if (pareceTelefono(nombre)) return NextResponse.json({ error: 'El nombre no puede ser un número de teléfono' }, { status: 400 })
+
+    const escrito = typeof phone === 'string' ? phone.trim() : ''
+    const telefono = escrito ? whatsapp(escrito) : null
+    if (escrito && !telefono) return NextResponse.json({ error: 'El número de WhatsApp debe tener 10 dígitos' }, { status: 400 })
 
     const context = await getSessionContext(supabase)
     if (!context) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
     const store = { id: context.storeId }
 
-    // El teléfono identifica a la persona: si ya está, no se crea otra
-    // vez (la deuda quedaría partida en dos clientes)
-    const telefono = typeof phone === 'string' ? phone.trim() : ''
-    if (soloDigitos(telefono).length > 0) {
-        const { data: conTelefono } = await supabase
-            .from('customers')
-            .select('*')
-            .eq('store_id', store.id)
-            .not('phone', 'is', null)
-        const existente = clienteConTelefono(conTelefono ?? [], telefono)
-        if (existente) {
-            return NextResponse.json({ error: `Ya existe ${existente.name} con ese teléfono`, existing: existente }, { status: 409 })
-        }
+    // Nombre y teléfono identifican a la persona: si ya está, no se crea
+    // otra vez (la deuda quedaría partida en dos clientes)
+    const { data: todos, error: errorLeer } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('store_id', store.id)
+    if (errorLeer) return NextResponse.json({ error: 'No se pudo revisar si el cliente ya existe. Intenta de nuevo.' }, { status: 500 })
+    const clave = normalizar(nombre)
+    const mismoNombre = (todos ?? []).find(c => normalizar(c.name) === clave)
+    if (mismoNombre) {
+        return NextResponse.json({ error: `Ya existe "${mismoNombre.name}"`, existing: mismoNombre }, { status: 409 })
+    }
+    const conTelefono = telefono ? clienteConTelefono(todos ?? [], telefono) : undefined
+    if (conTelefono) {
+        return NextResponse.json({ error: `Ya existe ${conTelefono.name} con ese número`, existing: conTelefono }, { status: 409 })
     }
 
     const { data: customer, error } = await supabase
         .from('customers')
-        .insert({ store_id: store.id, name: name.trim(), phone: telefono || null })
+        .insert({ store_id: store.id, name: nombre, phone: telefono })
         .select()
         .single()
 

@@ -7,7 +7,7 @@ import { useCaja } from '@/components/isla/CajaContext'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { useCobro, vibrar } from '@/lib/pos/useCobro'
 import { useListaProductos, type Entrada } from '@/lib/pos/useListaProductos'
-import { Avisos, alQuitarseGota, avisar, raizPos, retrasoCascada, retrasoEntradaCaja } from '@/components/pos/ui'
+import { Avisos, Capa, alQuitarseGota, avisar, raizPos, retrasoCascada, retrasoEntradaCaja, useMontado } from '@/components/pos/ui'
 import s from '@/components/pos/ui/pos.module.css'
 import { CAJA_CSS, Conexion, SalirDeCaja, SinPresencia } from './piezas'
 import { Productos } from './Productos'
@@ -19,8 +19,9 @@ import { Hoja } from './Hoja'
 
 /**
  * Nueva venta (diseno/pos/SPEC.md).
- * Celular: productos a pantalla completa, la barra del carrito abajo y el
- * cobro en una hoja.
+ * Celular: productos a pantalla completa y la barra del carrito abajo.
+ * "Cobrar" desliza el pago desde la derecha y corre los productos a la
+ * izquierda, oscurecidos (SPEC §5).
  * PC: productos a la izquierda y el panel "Venta" a la derecha; "Cobrar"
  * desliza el pago encima del panel.
  *
@@ -39,6 +40,10 @@ export function Caja() {
     const [presentacion, setPresentacion] = useState<string | null>(null)
     const [hojaCobro, setHojaCobro] = useState(false)
     const [pagoPc, setPagoPc] = useState(false)
+    // El botón de confirmar terminó de estallar: ahora sí "Venta registrada"
+    const [mostrarVenta, setMostrarVenta] = useState(false)
+    // Cada venta nueva estrena la capa del pago (sin deslizarse de vuelta)
+    const [vuelta, setVuelta] = useState(0)
     // Al abrir la caja, las filas y el panel esperan a la gota (o al zoom)
     const [entrada] = useState(() => {
         const r = retrasoCascada()
@@ -46,6 +51,9 @@ export function Caja() {
     })
 
     const { venta, nuevaVenta, enviando, limpiarError, boton, accionar } = cobro
+    if (!venta && mostrarVenta) setMostrarVenta(false)
+    const ventaVisible = !!venta && mostrarVenta
+    const verRegistrada = useCallback(() => setMostrarVenta(true), [])
 
     // Mientras corre la gota no se arma la lista (lo más pesado de la caja):
     // la gota nunca espera a que se pinten los productos. Entran al terminar
@@ -67,7 +75,7 @@ export function Caja() {
         if (quedo < n) {
             avisar(key.startsWith('combo:') && falta
                 ? `Para otro combo falta ${data.unitName(falta)}`
-                : `Ya tienes en la venta todo el stock de ${nombre}`)
+                : `Ya tienes en la venta todo el stock de ${nombre}`, 'aviso')
         }
         if (quedo > antes) vibrar(8)
     }, [venta, nuevaVenta, cart, data])
@@ -83,6 +91,8 @@ export function Caja() {
         nuevaVenta()
         setHojaCobro(false)
         setPagoPc(false)
+        setMostrarVenta(false)
+        setVuelta(v => v + 1)
         // La venta nueva empieza viendo la lista desde arriba
         listaRef.current?.scrollTo({ top: 0 })
         if (!narrow) setTimeout(() => buscadorRef.current?.focus({ preventScroll: true }), 50)
@@ -120,8 +130,10 @@ export function Caja() {
             if (ev.key !== 'Enter') return
             if (tag === 'BUTTON' || tag === 'A' || tag === 'TEXTAREA' || tag === 'SELECT') return
             if (t?.dataset.enter === 'propio') return
+            // Dentro de una hoja (abono, descuento…) Enter no cobra
+            if (t?.closest('[role="dialog"]')) return
             if (presentacion) { ev.preventDefault(); setPresentacion(null); return }
-            if (venta) { ev.preventDefault(); empezarOtra(); return }
+            if (venta) { if (ventaVisible) { ev.preventDefault(); empezarOtra() } return }
             if (narrow && !hojaCobro) return
             if (!narrow && !pagando) { if (!cart.isEmpty) { ev.preventDefault(); setPagoPc(true) } return }
             // Enter cobra o pide la aprobación; nunca cancela una que se está esperando
@@ -129,14 +141,16 @@ export function Caja() {
         }
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
-    }, [presentacion, venta, empezarOtra, narrow, hojaCobro, pagando, enviando, volverPc, cart.isEmpty, boton.accion, accionar])
+    }, [presentacion, venta, ventaVisible, empezarOtra, narrow, hojaCobro, pagando, enviando, volverPc, cart.isEmpty, boton.accion, accionar])
 
-    const cerrarHoja = useCallback(() => {
-        if (enviando) return
-        if (venta) empezarOtra()
-        else { setHojaCobro(false); limpiarError() }
-    }, [enviando, venta, empezarOtra, limpiarError])
-    const hojaAbierta = hojaCobro || !!venta || (!!cobro.error && !enviando)
+    // Celular: el pago encima mientras hay algo que cobrar (vaciar el detalle vuelve a los productos)
+    const enPago = hojaCobro && (!cart.isEmpty || enviando || !!venta)
+    const { montado: pagoMontado } = useMontado(enPago, 460)
+    const volverCelular = useCallback(() => {
+        if (enviando || venta) return
+        setHojaCobro(false)
+        limpiarError()
+    }, [enviando, venta, limpiarError])
 
     const productos = (
         <Productos lista={lista} data={data} narrow={narrow} esAdmin={ctx.role === 'admin'}
@@ -146,20 +160,25 @@ export function Caja() {
             inicioCascada={entrada.filas} enEspera={enGota} />
     )
 
-    const pago = venta
-        ? <VentaLista cobro={cobro} narrow={narrow} onNueva={empezarOtra} onVerVentas={verVentas} />
-        : <Cobro cobro={cobro} narrow={narrow} />
+    const registrada = <VentaLista cobro={cobro} narrow={narrow} onNueva={empezarOtra} onVerVentas={verVentas} />
 
     // ── Celular ──────────────────────────────────────────────────
     if (narrow) {
         return (
             <div className={raizPos} style={{ position: 'relative', height: '100%' }}>
                 <style>{CAJA_CSS}</style>
-                {productos}
-                <BarraCobro cart={cart} total={payment.total} enviando={enviando} onCobrar={abrirHoja} />
-                {/* Registrada la venta, la hoja no tapa los productos: tocar uno empieza la siguiente */}
-                <Hoja open={hojaAbierta} onClose={cerrarHoja} narrow completa={!venta} atraviesa={!!venta} cerrable={!enviando}>
-                    {pago}
+                <Capa etiqueta="Productos" estado={enPago && !ventaVisible ? 'empujada' : 'normal'}>
+                    {productos}
+                    <BarraCobro cart={cart} total={payment.total} enviando={enviando} onCobrar={abrirHoja} />
+                </Capa>
+                <Capa key={vuelta} tipo="lateral" etiqueta="Pago" estado={ventaVisible ? 'ida' : enPago ? 'dentro' : 'fuera'}>
+                    {(pagoMontado || enPago) && (
+                        <Cobro cobro={cobro} narrow onCambiar={cambiar} onVolver={volverCelular} onRegistrada={verRegistrada} />
+                    )}
+                </Capa>
+                {/* Registrada la venta, la hoja no tapa los productos: tocar uno empieza la siguiente (Fase 5 la cambia) */}
+                <Hoja open={ventaVisible} onClose={empezarOtra} narrow atraviesa>
+                    {registrada}
                 </Hoja>
                 <Avisos />
             </div>
@@ -175,7 +194,9 @@ export function Caja() {
                 <section aria-label="Productos" style={{ minWidth: 0, height: '100%' }}>{productos}</section>
                 <PanelVenta cart={cart} total={payment.total} pagando={pagando} enviando={enviando} base={entrada.panel}
                     onCambiar={cambiar} onVaciar={vaciar} onCobrar={cobrarPc} onVolver={volverPc} onVerVentas={verVentas}
-                    volver={!venta} pago={<SinPresencia>{pago}</SinPresencia>} />
+                    volver={!venta} pago={<SinPresencia>{ventaVisible
+                        ? registrada
+                        : <Cobro cobro={cobro} narrow={false} onCambiar={cambiar} onRegistrada={verRegistrada} />}</SinPresencia>} />
             </div>
             <Presentaciones entrada={abierta} onCambiar={cambiar} onCerrar={cerrarPresentaciones} />
             <Avisos />

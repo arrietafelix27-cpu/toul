@@ -377,6 +377,7 @@
     animation: aviso 2.2s ease both;
 }
 .aviso svg { flex-shrink: 0; color: var(--toul-accent); }
+.aviso[data-tono="aviso"] svg { color: var(--toul-warning); }
 @keyframes aviso {
     0% { opacity: 0; transform: translate(-50%, 10px) }
     12% { opacity: 1; transform: translate(-50%, 0) }
@@ -740,7 +741,8 @@
 .barraTotal { display: inline-block; font-size: 20px; font-weight: 700; letter-spacing: -.5px; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .barraUnidades { font-size: 13px; color: var(--toul-text-secondary); }
 /* Con la barra a la vista, el aviso sale encima de ella */
-.barra[data-on="1"] ~ .aviso { bottom: calc(102px + env(safe-area-inset-bottom, 0px)); }
+.barra[data-on="1"] ~ .aviso,
+.raiz:has(.capa[data-estado="normal"] .barra[data-on="1"]) .aviso { bottom: calc(102px + env(safe-area-inset-bottom, 0px)); }
 
 /* ══ PC: productos a la izquierda, "Venta" a la derecha ══════════ */
 .pcRejilla { display: grid; grid-template-columns: minmax(0, 1fr) 440px; height: 100%; }
@@ -849,4 +851,162 @@
 
 @media (prefers-reduced-motion: reduce) {
     .renglonCuerpo { animation: none !important; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Fase 4 — Pago, hojas, descuento y crédito (SPEC §5 y §6)
+   ══════════════════════════════════════════════════════════════ */
+.pago { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.pagoCabeza { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(22px + env(safe-area-inset-top, 0px)) 20px 0; min-height: 42px; flex-shrink: 0; }
+.pagoScroll { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 20px 16px; scrollbar-width: none; overscroll-behavior: contain; }
+.pagoScroll::-webkit-scrollbar { display: none; }
+.pagoPc .pagoScroll { padding: 4px 28px 16px; }
+.pagoPie { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 20px calc(20px + env(safe-area-inset-bottom, 0px)); }
+.pagoPc .pagoPie { padding: 12px 28px 28px; }
+
+/* Total */
+.pagoArriba { text-align: center; padding-top: 6px; }
+.pagoEtiqueta { font-size: 15px; color: var(--toul-text-secondary); }
+.pagoTotal { display: inline-block; font-size: 52px; font-weight: 700; letter-spacing: -2.4px; line-height: 1.08; color: var(--toul-text); font-variant-numeric: tabular-nums; }
+.pagoPc .pagoTotal { font-size: 46px; letter-spacing: -2px; }
+.pagoTotal[data-rebote="0"] { animation: totalA 380ms var(--p-rebote); }
+.pagoTotal[data-rebote="1"] { animation: totalB 380ms var(--p-rebote); }
+.detallePildora {
+    margin-top: 8px; height: 34px; padding: 0 14px; border: none; border-radius: 99px;
+    background: var(--p-s7); color: var(--p-t75); font-size: 14px;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: transform 160ms var(--p-sale), background-color 200ms;
+}
+.detallePildora:active { transform: scale(.94); background: var(--p-s12); }
+.detallePildora svg { transition: transform 380ms var(--p-pildora); }
+.detallePildora[aria-expanded="true"] svg { transform: rotate(180deg); }
+.tachado { margin-top: 4px; font-size: 15px; color: var(--toul-text-tertiary); font-variant-numeric: tabular-nums; animation: asoma 380ms var(--p-sale) both; }
+.tachado b { font-weight: 500; color: var(--toul-accent); }
+.detalleLinea { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 15px; color: var(--toul-text); border-bottom: 1px solid var(--p-s6); }
+.detalleNombre { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detalleValor { width: 86px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Contado | A crédito: lo de abajo entra al cambiar */
+.cambia { animation: sube 420ms var(--p-sale) both; }
+
+/* Métodos (2×2) */
+.metodos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.metodo {
+    display: flex; align-items: center; gap: 10px; min-width: 0; height: 56px; padding: 0 14px; border-radius: 16px; border: none;
+    background: var(--p-s5); box-shadow: inset 0 0 0 1px var(--p-s6);
+    color: var(--toul-text); font-size: 15px; font-weight: 500; text-align: left;
+    transition: background-color 220ms, box-shadow 220ms, transform 160ms var(--p-sale);
+}
+.metodo:active { transform: scale(.96); }
+.metodo[data-on="1"] { background: var(--p-g10); box-shadow: inset 0 0 0 1.5px var(--p-g60); }
+.metodoNombre { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metodoPunto { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--p-t35); }
+.metodoCheck {
+    margin-left: auto; width: 20px; height: 20px; flex-shrink: 0; border-radius: 50%;
+    background: var(--toul-accent); color: var(--toul-on-accent);
+    display: flex; align-items: center; justify-content: center;
+    animation: ck 360ms var(--p-rebote) both;
+}
+.metodosNota { margin-top: 16px; font-size: 14px; color: var(--toul-text-secondary); text-align: center; }
+
+/* Recibido · Cambio / Falta */
+.recibido { margin-top: 14px; padding: 16px; border-radius: 22px; background: var(--p-s4); animation: asoma 380ms var(--p-sale) both; }
+.recibidoArriba { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; font-size: 15px; color: var(--p-t60); }
+.recibidoAbajo { display: flex; align-items: baseline; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--p-s7); font-size: 15px; color: var(--p-t60); }
+.recibidoMonto { display: inline-block; font-size: 22px; font-weight: 700; color: var(--toul-text-tertiary); font-variant-numeric: tabular-nums; }
+.recibidoMonto[data-tono="verde"] { color: var(--toul-accent); }
+.recibidoMonto[data-tono="ambar"] { color: var(--toul-warning); }
+.recibidoMonto[data-rebote="0"] { animation: totalA 380ms var(--p-rebote); }
+.recibidoMonto[data-rebote="1"] { animation: totalB 380ms var(--p-rebote); }
+
+/* Dividir pago (dentro del grupo de filas) */
+.dividir { margin: 6px 0 8px; padding: 16px; border-radius: 22px; background: var(--p-s4); animation: asoma 380ms var(--p-sale) both; }
+.dividirCabeza { display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; color: var(--toul-text); }
+.dividirFila { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--p-s7); font-size: 15px; color: var(--p-t65); }
+.dividirResto { font-size: 20px; font-weight: 700; color: var(--toul-text); font-variant-numeric: tabular-nums; }
+
+/* Saldo (crédito) y resumen del descuento */
+.saldo { margin-top: 16px; padding: 14px 16px; border-radius: 22px; background: var(--p-a6); }
+.saldoNeutro { background: var(--p-s4); }
+.saldoLinea { display: flex; justify-content: space-between; padding-bottom: 8px; font-size: 15px; color: var(--toul-text-secondary); font-variant-numeric: tabular-nums; animation: asoma 380ms var(--p-sale) both; }
+.saldoPrincipal { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 16px; font-weight: 600; color: var(--toul-text); }
+.saldoMonto { display: inline-block; font-size: 26px; font-weight: 700; color: var(--toul-warning); font-variant-numeric: tabular-nums; }
+.saldoNeutro .saldoMonto { font-size: 24px; color: var(--toul-text); }
+.saldoMonto[data-rebote="0"] { animation: totalA 380ms var(--p-rebote); }
+.saldoMonto[data-rebote="1"] { animation: totalB 380ms var(--p-rebote); }
+
+/* Mensajes bajo el botón (aprobación, error) */
+.pagoMensaje { max-width: 100%; font-size: 13px; text-align: center; color: var(--toul-text-secondary); animation: asoma 320ms var(--p-sale) both; }
+.pagoMensaje[data-tono="error"] { color: var(--toul-error); }
+.pagoMensaje[data-tono="verde"] { color: var(--toul-accent); }
+.pagoMensaje[data-tono="ambar"] { color: var(--p-a-texto); }
+
+/* Hojas: número grande y su pista */
+.hojaPista { text-align: center; font-size: 15px; color: var(--toul-text-secondary); font-variant-numeric: tabular-nums; }
+.hojaSuiche { display: flex; justify-content: center; margin-bottom: 6px; }
+.hojaPar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; flex-shrink: 0; }
+.hojaPar > button { width: 100%; }
+
+/* Fecha de pago */
+.fechaGrande { display: block; text-align: center; font-size: 28px; font-weight: 700; letter-spacing: -.6px; color: var(--toul-text); }
+.fechaGrande[data-rebote="0"] { animation: entraA 360ms var(--p-sale); }
+.fechaGrande[data-rebote="1"] { animation: entraB 360ms var(--p-sale); }
+.fechaGrande[data-tono="apagado"] { color: var(--toul-text-tertiary); }
+.cal { margin-top: 18px; padding: 14px; border-radius: 22px; background: var(--p-s4); flex-shrink: 0; }
+.calCabeza { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 10px; font-size: 16px; font-weight: 600; color: var(--toul-text); }
+.calNav {
+    width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--p-s7); color: var(--toul-text);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 160ms var(--p-sale), opacity 200ms;
+}
+.calNav:active { transform: scale(.86); }
+.calNav:disabled { opacity: .25; }
+.calNav:disabled:active { transform: none; }
+.calRejilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; text-align: center; }
+.calSemana { font-size: 12px; color: var(--toul-text-tertiary); padding: 4px 0; }
+.calMes[data-rebote="0"] { animation: calA 340ms var(--p-sale) both; }
+.calMes[data-rebote="1"] { animation: calB 340ms var(--p-sale) both; }
+@keyframes calA { from { opacity: 0; transform: translateX(var(--dx, 0px)) } to { opacity: 1; transform: none } }
+@keyframes calB { from { opacity: 0; transform: translateX(var(--dx, 0px)) } to { opacity: 1; transform: none } }
+.calDia {
+    height: 40px; border: none; border-radius: 12px; background: transparent; color: var(--toul-text); font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    transition: background-color 200ms, color 200ms, transform 160ms var(--p-sale);
+}
+.calDia:active { transform: scale(.86); }
+.calDia:disabled { color: var(--toul-text-faint); }
+.calDia:disabled:active { transform: none; }
+.calDia[data-hoy="1"] { box-shadow: inset 0 0 0 1px var(--p-s25); }
+.calDia[data-on="1"] { background: var(--toul-accent); color: var(--toul-on-accent); font-weight: 700; animation: ck 320ms var(--p-rebote); }
+
+/* Cliente */
+.clientes { flex: 1; min-height: 0; overflow-y: auto; margin-top: 8px; padding-bottom: 20px; scrollbar-width: none; overscroll-behavior: contain;
+    -webkit-mask-image: linear-gradient(#000 82%, transparent); mask-image: linear-gradient(#000 82%, transparent); }
+.clientes::-webkit-scrollbar { display: none; }
+.cliente {
+    width: 100%; height: 58px; padding: 0 12px; border: none; border-radius: 14px; background: transparent;
+    color: var(--toul-text); font-size: 16px; display: flex; align-items: center; gap: 12px; text-align: left;
+    transition: background-color 180ms, transform 160ms var(--p-sale);
+    animation: sube 320ms var(--p-sale) both; animation-delay: calc(var(--k, 0) * 24ms);
+}
+.cliente:active { transform: scale(.98); background: var(--p-s6); }
+.cliente[data-on="1"] { background: var(--p-g8); }
+.clienteCrear { color: var(--toul-accent); }
+.clienteNombre { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clienteSub { display: block; font-size: 13px; color: var(--toul-text-tertiary); }
+.clienteDeuda { font-size: 15px; font-weight: 600; color: var(--toul-warning); font-variant-numeric: tabular-nums; }
+.avatar {
+    width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; background: var(--p-s8); color: var(--toul-text);
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
+}
+.avatarVerde { background: var(--p-g12); color: var(--toul-accent); }
+.clientesVacio { padding: 24px 0; text-align: center; font-size: 15px; color: var(--toul-text-tertiary); }
+.crearCliente { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; animation: sube 420ms var(--p-sale) both; }
+.errorTexto { font-size: 13px; color: var(--toul-error); }
+
+@media (hover: hover) and (pointer: fine) {
+    .metodo:not([data-on="1"]):hover { background: var(--p-s7); }
+    .cliente:hover { background: var(--p-s5); }
+    .calDia:not(:disabled):not([data-on="1"]):hover { background: var(--p-s6); }
+    .detallePildora:hover, .calNav:not(:disabled):hover { background: var(--p-s12); }
 }
