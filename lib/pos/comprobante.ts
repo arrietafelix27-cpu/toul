@@ -46,7 +46,9 @@ export function mensajeComprobante(d: DatosComprobante): string {
     lineas.push(`*Total: ${pesos(d.total)}*`)
 
     const pagos = d.pagos.filter(p => p.monto > 0)
-    if (pagos.length > 0) {
+    if (!d.fiado && Math.round(d.total) <= 0) {
+        lineas.push('Sin cobro')
+    } else if (pagos.length > 0) {
         lineas.push(`${d.fiado ? 'Abono con' : 'Pagó con'}: ${pagos.map(p => pagos.length > 1 ? `${p.metodo} ${pesos(p.monto)}` : p.metodo).join(', ')}`)
     }
     if (d.vuelto && d.vuelto > 0 && d.recibido) {

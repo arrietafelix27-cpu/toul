@@ -199,8 +199,13 @@ function Contado({ payment, data, onAbrir }: { payment: POSPaymentState; data: P
     const resto = payment.paymentSplits[0]?.amount ?? 0
     const metodoDe = (id: string | null) => methods.find(m => m.id === id)
 
+    // El descuento cubre toda la venta: no hay método que elegir
+    const sinCobro = Math.round(payment.total) <= 0
+
     return (<>
-        {methods.length === 0 ? (
+        {sinCobro ? (
+            <div className={s.metodosNota}>Sin cobro: el descuento cubre toda la venta. El stock sale igual.</div>
+        ) : methods.length === 0 ? (
             // Mientras llegan, nunca "no hay métodos": eso sería falso
             <div className={s.metodosNota}>
                 {data.methodsLoading ? 'Cargando métodos de pago…' : 'No hay métodos de pago. El administrador los agrega en Ajustes.'}
@@ -225,7 +230,7 @@ function Contado({ payment, data, onAbrir }: { payment: POSPaymentState; data: P
 
         <GrupoFilas>
             <FilaCliente payment={payment} credito={false} onAbrir={onAbrir} />
-            {methods.length > 1 && (dividiendo ? (
+            {!sinCobro && methods.length > 1 && (dividiendo ? (
                 <div className={s.dividir}>
                     <div className={s.dividirCabeza}>
                         <span>Dividir pago</span>

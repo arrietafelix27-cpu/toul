@@ -82,7 +82,7 @@ test('Un descuento en pesos se mide como porcentaje de la venta', () => {
     // El 10% de $99.999 redondeado son $10.000: no pide aprobación por un peso
     assert.equal(revisarVenta({ permisos: p, esFiado: false, subtotal: 99999, descuento: 10000 }).descuento, false)
     assert.equal(revisarVenta({ permisos: p, esFiado: true, subtotal: 100000, descuento: 0 }).fiado, true)
-    assert.equal(revisarVenta({ permisos: { ...p, fiar: 'no' }, esFiado: true, subtotal: 1, descuento: 0 }).bloqueo, 'No tienes permiso para fiar')
+    assert.equal(revisarVenta({ permisos: { ...p, fiar: 'no' }, esFiado: true, subtotal: 1, descuento: 0 }).bloqueo, 'No tienes permiso para vender a crédito')
 })
 
 test('Comprobante de WhatsApp', () => {
@@ -110,6 +110,15 @@ test('Comprobante de WhatsApp', () => {
     assert.match(fiado, /Abono: \$100\.000/)
     assert.match(fiado, /\*Saldo pendiente: \$200\.000\*/)
     assert.doesNotMatch(fiado, /Subtotal/, 'sin descuento no repite el subtotal')
+
+    // Una muestra o un regalo: el descuento cubre todo
+    const regalo = mensajeComprobante({
+        tienda: 'T', fecha: '2026-11-04T20:42:00Z', items: [{ nombre: 'Eros', cantidad: 1, valor: 300000 }],
+        subtotal: 300000, descuento: 300000, total: 0, pagos: [],
+    })
+    assert.match(regalo, /\*Total: \$0\*/)
+    assert.match(regalo, /^Sin cobro$/m)
+    assert.doesNotMatch(regalo, /Pagó con/)
 })
 
 test('WhatsApp directo al cliente cuando tiene un número que sirve', () => {

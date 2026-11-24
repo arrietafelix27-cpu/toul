@@ -38,7 +38,7 @@ function resumen(v: VentaHecha): string {
     }
     const pagos = v.payments.filter(p => p.amount > 0).map(p => nombreMetodo(p.methodName))
     return [
-        pagos.join(' + '),
+        Math.round(v.total) <= 0 ? 'Sin cobro' : pagos.join(' + '),
         v.change > 0 ? `Cambio ${formatCOP(Math.round(v.change))}` : null,
         v.customerName,
     ].filter(Boolean).join(' · ')

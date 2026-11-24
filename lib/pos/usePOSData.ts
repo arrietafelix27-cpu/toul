@@ -65,8 +65,15 @@ function copiaGuardada(storeId: string, url: string) {
  */
 export function precargarDatosCaja(storeId: string) {
     for (const url of ['/api/pos-data', '/api/payment-methods', '/api/customers']) copiaGuardada(storeId, url)
+    precargas.set(storeId, Date.now())
     preload(['/api/pos-data', storeId], jsonFetcher).catch(() => { /* la caja lo vuelve a pedir */ })
 }
+
+/** Cuándo se precargó cada tienda. Lo precargado se usa una sola vez, al abrir
+ *  la caja: si ya tiene más de un minuto, la caja lo vuelve a pedir enseguida
+ *  (si no, abriría con el stock de cuando se cargó Inicio, hasta 2 minutos) */
+const precargas = new Map<string, number>()
+const PRECARGA_VIGENTE = 60_000
 
 // ─── Types ────────────────────────────────────────────────────
 export interface POSVariant {
@@ -167,6 +174,15 @@ export function usePOSData(enabled: boolean): POSDataState {
         jsonFetcher,
         { revalidateOnFocus: false, dedupingInterval: 30_000, refreshInterval: 120_000, fallbackData: copias?.prod }
     )
+
+    // La caja ya usó lo precargado en Inicio: si era de hace rato, pide lo de ahora
+    useEffect(() => {
+        if (!listo || !storeId) return
+        const en = precargas.get(storeId)
+        if (en === undefined) return
+        precargas.delete(storeId)
+        if (Date.now() - en > PRECARGA_VIGENTE) void mutateProd()
+    }, [listo, storeId, mutateProd])
 
     // Solo si no vinieron con los productos: una tienda nueva (sin métodos,
     // la ruta de métodos le crea los de siempre) o una copia guardada vieja

@@ -84,7 +84,7 @@ export interface Revision {
 export function revisarVenta({ permisos, esFiado, subtotal, descuento }: {
     permisos: PermisosVendedor; esFiado: boolean; subtotal: number; descuento: number
 }): Revision {
-    const bloqueo = esFiado && permisos.fiar === 'no' ? 'No tienes permiso para fiar' : null
+    const bloqueo = esFiado && permisos.fiar === 'no' ? 'No tienes permiso para vender a crédito' : null
     return {
         fiado: esFiado && permisos.fiar === 'aprobacion',
         descuento: Math.round(descuento) > descuentoPermitido(subtotal, permisos.descuento_max),

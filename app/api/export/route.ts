@@ -53,7 +53,7 @@ export async function GET(request: Request) {
             cliente: v.customer_name ?? '',
             total: Math.round(Number(v.total)),
             descuento: Math.round(Number(v.discount) || 0),
-            pago: v.is_credit ? 'Crédito' : (v.payment_method ?? ''),
+            pago: v.is_credit ? 'Crédito' : Math.round(Number(v.total)) <= 0 ? 'Sin cobro' : (v.payment_method ?? ''),
             vendio: v.seller_name ?? '',
         })), [
             { campo: 'numero', titulo: 'N° de venta' },

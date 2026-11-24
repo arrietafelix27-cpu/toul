@@ -172,7 +172,8 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, onDevolver
                                 <div className="flex justify-between">
                                     <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Método</span>
                                     <span className="text-sm font-medium" style={{ color: 'var(--toul-text)' }}>
-                                        {methodLabel(sale.payment_method)}
+                                        {/* Una muestra o un regalo no tuvo pago: la base guarda "efectivo" por defecto */}
+                                        {!sale.is_credit && Math.round(Number(sale.total)) <= 0 ? 'Sin cobro' : methodLabel(sale.payment_method)}
                                     </span>
                                 </div>
                             )}

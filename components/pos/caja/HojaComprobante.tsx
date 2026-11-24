@@ -58,6 +58,8 @@ export function papelDe(venta: VentaHecha, tienda: string): Papel {
             })
         }
         filas.push({ texto: 'Saldo pendiente', valor: formatCOP(Math.round(venta.debe)) })
+    } else if (Math.round(venta.total) <= 0) {
+        filas.push({ texto: 'Método de pago', valor: 'Sin cobro' })
     } else {
         if (pagos.length === 1) filas.push({ texto: 'Método de pago', valor: nombreMetodo(pagos[0].methodName) })
         else pagos.forEach(p => filas.push({ texto: nombreMetodo(p.methodName), valor: formatCOP(Math.round(p.amount)) }))

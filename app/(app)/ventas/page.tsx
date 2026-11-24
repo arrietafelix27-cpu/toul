@@ -170,6 +170,9 @@ function Ventas() {
 
     // El nombre como está en Ajustes, con mayúscula inicial al mostrarlo
     const methodLabel = (raw: string) => nombreMetodo(methodNames?.[raw?.toLowerCase()] ?? raw)
+    // Una muestra o un regalo (descuento del 100 %) no tuvo pago: la base guarda "efectivo" por defecto
+    const metodoDeVenta = (v: { payment_method: string; total: number; is_credit?: boolean | null }) =>
+        !v.is_credit && Math.round(Number(v.total)) <= 0 ? 'Sin cobro' : methodLabel(v.payment_method)
 
     // Desde la ficha del cliente ("Abrir en Ventas") se llega con ?venta=<id>:
     // abre de una. La dirección se limpia solo cuando la venta ya abrió: si
@@ -588,7 +591,7 @@ function Ventas() {
                                         {sale.is_credit && <span className="vt-2" style={{ color: 'var(--toul-accent)', fontWeight: 600 }}>A crédito</span>}
                                     </span>
                                     <span>
-                                        <span className="vt-1" style={{ fontSize: 13.5, color: 'var(--toul-text-muted)' }}>{methodLabel(sale.payment_method)}</span>
+                                        <span className="vt-1" style={{ fontSize: 13.5, color: 'var(--toul-text-muted)' }}>{metodoDeVenta(sale)}</span>
                                         {sale.discount > 0 && <span className="vt-2" style={{ color: 'var(--toul-warning)' }}>Dto. {formatCOP(sale.discount)}</span>}
                                     </span>
                                     <span className="vt-num">
@@ -624,7 +627,7 @@ function Ventas() {
                                     <div className="flex-1 min-w-0">
                                         <p className="font-semibold text-sm truncate" style={{ color: 'var(--toul-text)' }}>{summary}{more}</p>
                                         <p className="text-xs" style={{ color: 'var(--toul-text-muted)' }}>
-                                            {formatDateTime(sale.created_at)} · {methodLabel(sale.payment_method)}
+                                            {formatDateTime(sale.created_at)} · {metodoDeVenta(sale)}
                                             <span style={{ color: 'var(--toul-text-faint)' }}> · #{sale.id.slice(0, 8).toUpperCase()}</span>
                                             {PUNTO_FISICO && sale.seller_name && sale.seller_name !== 'Administrador' && <span> · {sale.seller_name}</span>}
                                             {sale.is_credit && <span style={{ color: 'var(--toul-accent)', fontWeight: 600 }}> · Crédito</span>}
@@ -635,7 +638,7 @@ function Ventas() {
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                         <p className="font-bold text-sm" style={{ color: 'var(--toul-text)' }}>{formatCOP(sale.total)}</p>
-                                        <p className="text-xs" style={{ color: 'var(--toul-accent)' }}>+{formatCOP(profit)}</p>
+                                        <p className="text-xs" style={{ color: profit >= 0 ? 'var(--toul-accent)' : 'var(--toul-error)' }}>{profit >= 0 ? '+' : '−'}{formatCOP(Math.abs(profit))}</p>
                                     </div>
                                 </motion.button>
                             )

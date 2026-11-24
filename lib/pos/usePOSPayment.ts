@@ -212,13 +212,15 @@ export function usePOSPayment(
     const hasCustomer = !!selectedCustomer
     const blockedReason = useMemo(() => {
         if (cartIsEmpty) return 'Agrega productos a la venta'
+        // Con el descuento cubriendo todo no hay nada que deber
+        if (isCredit && Math.round(total) <= 0) return 'Una venta sin cobro no puede ser a crédito'
         if (isCredit && !hasCustomer) return 'Selecciona un cliente'
         if (isCredit && !dueDateValid) return 'Selecciona la fecha de pago'
         if (paymentTarget > 0 && paymentSplits.length === 0) return 'Selecciona el método de pago'
         if (overpaid > 0) return 'Revisa los montos del pago'
         if (shortCash) return 'Monto recibido insuficiente'
         return null
-    }, [cartIsEmpty, isCredit, hasCustomer, dueDateValid, paymentTarget, paymentSplits.length, overpaid, shortCash])
+    }, [cartIsEmpty, isCredit, total, hasCustomer, dueDateValid, paymentTarget, paymentSplits.length, overpaid, shortCash])
     const canConfirm = blockedReason === null
 
     // Armar el cuerpo de la venta (se usa también para guardarla sin internet)

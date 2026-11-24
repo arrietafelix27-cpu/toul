@@ -59,8 +59,8 @@ function receiptHtml(r: ReceiptData): string {
   ${line('TOTAL', formatCOP(r.total), true)}
   <div class="sep"></div>
   ${r.isCredit ? line('Venta a crédito', '') : ''}
-  ${payments}
-  ${r.change && r.change > 0 && r.cashReceived ? line('Recibido en efectivo', formatCOP(r.cashReceived)) + line('Vuelto', formatCOP(r.change)) : ''}
+  ${!r.isCredit && Math.round(r.total) <= 0 ? line('Sin cobro', '') : payments}
+  ${r.change && r.change > 0 && r.cashReceived ? line('Recibido en efectivo', formatCOP(r.cashReceived)) + line('Cambio', formatCOP(r.change)) : ''}
   ${r.isCredit ? line('Saldo pendiente', formatCOP(pending), true) : ''}
   <div class="sep"></div>
   <div class="center">${escape(r.footer || '¡Gracias por tu compra!')}</div>
@@ -220,7 +220,7 @@ export function printCashClose(meta: { storeName: string; openedBy: string; open
   ${s.creditCount ? line('A crédito', String(s.creditCount)) : ''}
   ${s.voidCount ? line(`Anuladas (${s.voidCount})`, formatCOP(s.voidTotal)) : ''}
   ${s.returnCount ? line(`Devoluciones (${s.returnCount})`, `-${formatCOP(s.returnTotal ?? 0)}`) : ''}
-  ${s.changeCount ? line(`Vueltos entregados (${s.changeCount})`, formatCOP(s.changeTotal ?? 0)) : ''}
+  ${s.changeCount ? line(`Cambios entregados (${s.changeCount})`, formatCOP(s.changeTotal ?? 0)) : ''}
   <div class="sign">Firma responsable</div>
 </body></html>`
     imprimirHtml(html, 'Cierre de caja')

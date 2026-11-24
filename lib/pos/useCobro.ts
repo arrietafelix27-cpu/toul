@@ -169,9 +169,11 @@ export function useCobro(): CobroState {
         ?? (!online && esFiado ? SIN_INTERNET_CREDITO : null)
         ?? (!online && necesita ? 'Sin internet no se puede pedir aprobación' : null)
     const razon = bloqueo ?? payment.blockedReason
+    const sinCobro = !esFiado && !cart.isEmpty && Math.round(payment.total) <= 0
 
     const boton = useMemo<BotonCobro>(() => {
-        const normal = esFiado ? 'Registrar crédito' : 'Confirmar venta'
+        // Una muestra o un regalo (descuento del 100 %): se registra sin método y saca el stock
+        const normal = esFiado ? 'Registrar crédito' : sinCobro ? 'Registrar sin cobro' : 'Confirmar venta'
         if (enviando) return { texto: 'Registrando…', accion: null, deshabilitado: true, razon: null, espera: true }
         if (necesita && aprobacion.status !== 'approved') {
             if (aprobacion.status === 'pending') return { texto: 'Esperando aprobación · Cancelar', accion: 'cancelar', deshabilitado: false, razon: null, espera: true }
@@ -179,7 +181,7 @@ export function useCobro(): CobroState {
             return { texto: 'Pedir aprobación', accion: 'pedir', deshabilitado: !!razon, razon, espera: false }
         }
         return { texto: normal, accion: 'cobrar', deshabilitado: !!razon, razon, espera: false }
-    }, [esFiado, enviando, necesita, aprobacion.status, razon])
+    }, [esFiado, sinCobro, enviando, necesita, aprobacion.status, razon])
 
     // La tirilla sale con la venta como quedó en el servidor; sin ella,
     // con lo que hay en el equipo
