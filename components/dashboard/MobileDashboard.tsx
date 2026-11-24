@@ -6,7 +6,7 @@ import { Vendiste, type MetricasInicio, type Conteo, type Tendencia } from './Re
 import { AccionesRapidas, ObservacionAI } from './AccionesRapidas'
 import { ProductsPanel, type ProductsData } from './ProductsPanel'
 import { PendingPanel, type PendingData } from './PendingPanel'
-import { ENTRADA_INICIO_CSS, entrada } from '@/lib/motion'
+import { ENTRADA_INICIO_CSS, entrada, type FaseLlegada } from '@/lib/motion'
 import type { AIInsight } from '@/lib/types'
 
 /* ══════════════════════════════════════════════════════════════
@@ -31,7 +31,7 @@ const CSS = ENTRADA_INICIO_CSS + `
 export default function MobileDashboard({
     storeName, saludo, period, setPeriod, rango, setRango,
     metrics, products, pending, insight, loading, primeraCarga, insightsLoading,
-    animar, conteo, tendencia, hrefReporte, nuevo, grafica, abajo,
+    animar, conteo, tendencia, hrefReporte, nuevo, grafica, abajo, llegada = null,
 }: {
     storeName: string
     saludo: string
@@ -59,34 +59,36 @@ export default function MobileDashboard({
     grafica: ReactNode
     /** Debajo de la gráfica: Ganaste y las filas (gastos, lo fiado, cómo vas en la semana) */
     abajo: ReactNode
+    /** Al volver de la caja con una venta: la cascada que espera a la gota */
+    llegada?: FaseLlegada
 }) {
     return (
         <div className="md-raiz">
             <style>{CSS}</style>
 
             <div className="md-contenido">
-                <p {...entrada(0, animar, 'md-saludo')} suppressHydrationWarning>
+                <p {...entrada(0, animar, 'md-saludo', undefined, llegada)} suppressHydrationWarning>
                     {saludo}, {storeName || 'Mi negocio'}
                 </p>
-                <div {...entrada(1, animar)}>
+                <div {...entrada(1, animar, undefined, undefined, llegada)}>
                     <SelectorPeriodo variante="movil" period={period} setPeriod={setPeriod} rango={rango} setRango={setRango} />
                 </div>
-                <div {...entrada(2, animar, undefined, { marginTop: 18 })}>
+                <div {...entrada(2, animar, undefined, { marginTop: 18 }, llegada)}>
                     <Vendiste metrics={metrics} loading={loading} period={period} conteo={conteo} tendencia={tendencia}
                         href={hrefReporte} nuevo={nuevo} />
                 </div>
-                {grafica && <div {...entrada(3, animar, 'md-grafica')}>{grafica}</div>}
-                {abajo && <div {...entrada(4, animar)}>{abajo}</div>}
-                <div {...entrada(5, animar, undefined, { marginTop: 32 })}>
+                {grafica && <div {...entrada(3, animar, 'md-grafica', undefined, llegada)}>{grafica}</div>}
+                {abajo && <div {...entrada(4, animar, undefined, undefined, llegada)}>{abajo}</div>}
+                <div {...entrada(5, animar, undefined, { marginTop: 32 }, llegada)}>
                     <AccionesRapidas variante="movil" />
                 </div>
-                <div {...entrada(6, animar, undefined, { marginTop: 22 })}>
+                <div {...entrada(6, animar, undefined, { marginTop: 22 }, llegada)}>
                     <ObservacionAI insight={insight} loading={insightsLoading || primeraCarga} />
                 </div>
-                <div {...entrada(7, animar, undefined, { marginTop: 36 })}>
+                <div {...entrada(7, animar, undefined, { marginTop: 36 }, llegada)}>
                     <ProductsPanel products={products} loading={loading} variante="movil" animar={animar} />
                 </div>
-                <div {...entrada(8, animar, undefined, { marginTop: 40 })}>
+                <div {...entrada(8, animar, undefined, { marginTop: 40 }, llegada)}>
                     <PendingPanel pending={pending} storeName={storeName} variante="movil" loading={primeraCarga} cuenta={animar} />
                 </div>
             </div>

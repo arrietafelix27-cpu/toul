@@ -130,6 +130,9 @@ export const inicio = {
     grafica: { trazo: 1.2, relleno: 0.5 },
     /** Lo que tardan los montos en contar */
     cuenta: 1.1,
+    /** Al volver de la caja con una venta (SPEC §7): la cascada (ms) y
+     *  "Vendiste"/"Ganaste" que suben desde lo que había */
+    llegada: { duracion: 380, escalon: 50, distancia: 10, sube: 900 },
 }
 
 /* CSS y no JavaScript: el Inicio carga muchas cosas a la vez y una
@@ -145,11 +148,32 @@ export const ENTRADA_INICIO_CSS = `
 @media (prefers-reduced-motion: reduce) {
     .in-entra { animation-name: in-aparece; animation-duration: 0.2s; }
 }
+/* Al volver de la caja con una venta: los bloques esperan escondidos a que
+   la gota se recoja en el "+" y entran en cascada (${inicio.llegada.duracion} ms,
+   ${inicio.llegada.escalon} ms entre uno y otro, ${inicio.llegada.distancia} px) */
+.ll-b[data-ll="espera"] { opacity: 0; transform: translateY(${inicio.llegada.distancia}px); }
+.ll-b[data-ll="entra"] { animation: ll-entra ${inicio.llegada.duracion}ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+    animation-delay: calc(var(--ll-i, 0) * ${inicio.llegada.escalon}ms); }
+@keyframes ll-entra { from { opacity: 0; transform: translateY(${inicio.llegada.distancia}px); } }
+@media (prefers-reduced-motion: reduce) {
+    .ll-b[data-ll] { opacity: 1; transform: none; animation: none; }
+}
 `
 
+/** La llegada desde la caja: 'espera' mientras la gota se recoge, 'entra' al terminar */
+export type FaseLlegada = 'espera' | 'entra' | null
+
 /** Lo que necesita una sección para entrar en su turno de la cascada,
- *  sumado a la clase y el estilo que ya tenga */
-export function entrada(turno: number, animar: boolean, clase?: string, estilo?: CSSProperties): { className?: string; style?: CSSProperties } {
+ *  sumado a la clase y el estilo que ya tenga. Con `llegada` (volver de
+ *  la caja con una venta) entra con esa cascada y no con la de la app */
+export function entrada(turno: number, animar: boolean, clase?: string, estilo?: CSSProperties, llegada: FaseLlegada = null): { className?: string; style?: CSSProperties; 'data-ll'?: string } {
+    if (llegada) {
+        return {
+            className: clase ? `${clase} ll-b` : 'll-b',
+            style: { ...estilo, '--ll-i': turno } as CSSProperties,
+            'data-ll': llegada,
+        }
+    }
     if (!animar) return { className: clase, style: estilo }
     return {
         className: clase ? `${clase} in-entra` : 'in-entra',

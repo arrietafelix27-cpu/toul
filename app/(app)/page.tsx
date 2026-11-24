@@ -12,12 +12,13 @@ import { InsightsRow } from '@/components/dashboard/InsightsRow'
 import MobileDashboard from '@/components/dashboard/MobileDashboard'
 import { PrimerosPasos } from '@/components/dashboard/PrimerosPasos'
 import { SelectorPeriodo, type Periodo, type Rango } from '@/components/dashboard/Desplegable'
-import { Vendiste, Ganaste, LineaFina, FilasInicio, rotuloGastos, ICONO_FIADO, ICONO_GASTOS, ICONO_PERDIDA, ICONO_SEMANA, type FilaInicio, type LlevasHoy, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
+import { Vendiste, Ganaste, LineaFina, FilasInicio, rotuloGastos, ICONO_FIADO, ICONO_GASTOS, ICONO_PERDIDA, ICONO_SEMANA, type Conteo, type FilaInicio, type LlevasHoy, type MetricasInicio, type Tendencia } from '@/components/dashboard/ResumenHoy'
 
 // Hooks & Motion
 import { useStore } from '@/lib/hooks/useData'
 import { SinInternet } from '@/components/ui/SinInternet'
-import { ENTRADA_INICIO_CSS, entrada, useEntradaInicio } from '@/lib/motion'
+import { ENTRADA_INICIO_CSS, entrada, useEntradaInicio, type FaseLlegada } from '@/lib/motion'
+import { alTerminarLlegada, llegandoConVenta } from '@/components/pos/ui/gota'
 import { contraQue, diasEntre, periodoEnDireccion, rangoAnterior } from '@/lib/periodos'
 import { lineaVentas, porcentajeTendencia, resumenInicio, resumir, type LineaInicio, type TramoLinea } from '@/lib/reports/calculos'
 import type { ReporteSQL } from '@/lib/reports/types'
@@ -292,18 +293,52 @@ export default function DashboardPage() {
     const dibujar = animar || periodoTocado
     // Lo vendido en la caja desde la última vez: al llegar los números
     // nuevos de hoy, "Vendiste" sube desde lo que había con un "+$X" (SPEC §7)
-    const [enCaja, setEnCaja] = useState<{ tienda: string | null; monto: number }>({ tienda: null, monto: 0 })
-    if (storeId && enCaja.tienda !== storeId) setEnCaja({ tienda: storeId, monto: verVendidoEnCaja(storeId) })
+    // "Ganaste" sube desde lo que mostraba Inicio antes de entrar a la caja
+    // (su copia guardada); sin copia, aparece de una con lo nuevo
+    const [enCaja, setEnCaja] = useState<{ tienda: string | null; monto: number; ganasteAntes: number | null }>({ tienda: null, monto: 0, ganasteAntes: null })
+    if (storeId && enCaja.tienda !== storeId) {
+        const monto = verVendidoEnCaja(storeId)
+        const copia = monto > 0 && dashboardData?.clave === claveDe('today', null) ? dashboardData.resumen : null
+        setEnCaja({ tienda: storeId, monto, ganasteAntes: copia ? copia.ganaste : null })
+    }
     useEffect(() => { if (enCaja.monto > 0) olvidarVendidoEnCaja() }, [enCaja.monto])
     const [subida, setSubida] = useState(0)
-    const numerosNuevos = !metricsValidando && dashboardData?.clave === claveDe('today', null)
+    // Nuevos de verdad: los que llegaron al pedirlos otra vez, nunca la copia
+    // guardada de antes de la caja (con ella la cuenta arrancaría y saltaría)
+    const [yaPidio, setYaPidio] = useState(false)
+    if (metricsValidando && !yaPidio) setYaPidio(true)
+    const numerosNuevos = yaPidio && !metricsValidando && dashboardData?.clave === claveDe('today', null)
     if (enCaja.monto > 0 && subida === 0 && numerosNuevos) setSubida(enCaja.monto)
 
-    const conteo = useMemo(() => ({
+    // Volviendo de la caja con una venta: todo espera escondido a que la gota
+    // se recoja en el "+" y entra en cascada; los montos cuentan desde ahí
+    const [llegada, setLlegada] = useState<FaseLlegada>(() => llegandoConVenta() ? 'espera' : null)
+    const [arranca, setArranca] = useState<number | null>(null)
+    useEffect(() => {
+        if (llegada !== 'espera') return
+        let listo = false
+        const entrar = () => {
+            if (listo) return
+            listo = true
+            setArranca(performance.now())
+            setLlegada('entra')
+        }
+        const soltar = alTerminarLlegada(entrar)
+        // Ya terminó antes de alcanzar a escuchar
+        if (!llegandoConVenta()) entrar()
+        // Nunca escondido: si el aviso no llega, entra igual
+        const tope = setTimeout(entrar, 2000)
+        return () => { soltar(); clearTimeout(tope) }
+    }, [llegada])
+
+    const conteo = useMemo<Conteo>(() => ({
         cuenta: animar || periodoTocado,
         clave: claveDe(period, customRange),
         subida: period === 'today' ? subida : 0,
-    }), [animar, periodoTocado, period, customRange, subida])
+        ganasteDesde: period === 'today' && subida > 0 ? enCaja.ganasteAntes : null,
+        // Mientras la gota se recoge, los montos esperan (null); sin gota, ya
+        arranca: llegada === 'espera' ? null : arranca ?? 0,
+    }), [animar, periodoTocado, period, customRange, subida, enCaja.ganasteAntes, llegada, arranca])
 
     const metrics: MetricasInicio = {
         revenue: dashboardData?.metrics.revenue || 0,
@@ -439,6 +474,7 @@ export default function DashboardPage() {
                     nuevo={nuevo}
                     grafica={grafica('movil')}
                     abajo={abajo}
+                    llegada={llegada}
                 />
             </div>
 
@@ -451,7 +487,7 @@ export default function DashboardPage() {
                     <PrimerosPasos storeId={storeId} />
 
                     {/* Arriba el saludo en una línea */}
-                    <header {...entrada(0, animar, 'in-pc-arriba')}>
+                    <header {...entrada(0, animar, 'in-pc-arriba', undefined, llegada)}>
                         <h1 className="in-pc-saludo" suppressHydrationWarning>{greeting}, {storeName || 'Mi negocio'}</h1>
                         <Link href="/settings" className="in-pc-ajustes" aria-label="Ajustes">
                             <Settings size={20} strokeWidth={1.9} />
@@ -467,19 +503,19 @@ export default function DashboardPage() {
                         crece con la pantalla hasta 380 px */}
                     <section className="in-pc-cuerpo" aria-label="Resumen del periodo" data-nuevo={nuevo || undefined}>
                         {!nuevo && (
-                            <div {...entrada(1, animar, 'in-pc-grafica')}>
+                            <div {...entrada(1, animar, 'in-pc-grafica', undefined, llegada)}>
                                 {grafica('pc')}
                             </div>
                         )}
                         <div className="in-pc-resumen">
-                            <div {...entrada(2, animar)}>
+                            <div {...entrada(2, animar, undefined, undefined, llegada)}>
                                 <Vendiste metrics={metrics} loading={loading} period={period} conteo={conteo}
                                     tendencia={tendencia} href={hrefReporte} nuevo={nuevo}
                                     selector={<SelectorPeriodo variante="pc" forma="pildora" period={period} setPeriod={cambiarPeriodo}
                                         rango={customRange} setRango={cambiarRango} />} />
                             </div>
                             {abajo && (
-                                <div {...entrada(3, animar)}>
+                                <div {...entrada(3, animar, undefined, undefined, llegada)}>
                                     {ganaste && <LineaFina />}
                                     {abajo}
                                 </div>
@@ -500,6 +536,7 @@ export default function DashboardPage() {
                             insightsLoading={!!insightsLoading}
                             animar={animar}
                             turno={4}
+                            llegada={llegada}
                         />
                     </div>
                 </div>

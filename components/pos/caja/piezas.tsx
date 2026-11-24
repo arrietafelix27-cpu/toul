@@ -7,7 +7,7 @@ import { animate, PresenceContext, useReducedMotion } from 'framer-motion'
 import { formatCOP } from '@/lib/utils'
 import type { OfflineState } from '@/lib/isla/useOffline'
 import { cerrarCaja } from '@/components/pos/ui/gota'
-import { soltarVendidoEnCaja } from '@/lib/pos/comprobante'
+import { hayVendidoEnCaja, soltarVendidoEnCaja } from '@/lib/pos/comprobante'
 import { IcoCerrar } from '@/components/pos/ui/Iconos'
 import ui from '@/components/pos/ui/pos.module.css'
 
@@ -94,8 +94,9 @@ export function useSalirDeCaja() {
     useEffect(() => { router.prefetch('/') }, [router])
     return useCallback(() => {
         // Lo vendido aquí queda listo para que Inicio lo cuente
+        const conVenta = hayVendidoEnCaja()
         soltarVendidoEnCaja()
-        void cerrarCaja(() => router.push('/'))
+        void cerrarCaja(() => router.push('/'), conVenta)
     }, [router])
 }
 

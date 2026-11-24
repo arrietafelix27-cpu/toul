@@ -141,6 +141,12 @@ export function soltarVendidoEnCaja(ahora = Date.now()) {
     if (v && v.hasta === null) guardarReciente({ ...v, hasta: ahora + VIGENCIA_SALIDA_MS })
 }
 
+/** La caja, al salir: ¿se vendió algo desde que se abrió? */
+export function hayVendidoEnCaja(): boolean {
+    const v = leerReciente()
+    return !!v && v.hasta === null && v.monto > 0
+}
+
 /** Inicio: lo vendido en la caja al salir de ella (0 si nada). No lo borra */
 export function verVendidoEnCaja(storeId: string, ahora = Date.now()): number {
     const v = leerReciente()

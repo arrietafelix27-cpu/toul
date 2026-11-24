@@ -12,7 +12,7 @@ import { useStore } from '@/lib/hooks/useData'
 import { useCerrarSesion } from '@/lib/session/useCerrarSesion'
 import { FullscreenToggle } from './FullscreenToggle'
 import { BotonToulAI } from './BotonToulAI'
-import { abrirCaja, avisarInicioListo, precalentarGota } from '@/components/pos/ui/gota'
+import { abrirCaja, alTerminarLlegada, avisarInicioListo, precalentarGota } from '@/components/pos/ui/gota'
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 
@@ -410,6 +410,9 @@ const SIN_MENU = [
     /^\/products\/combo\/[^/]+\/edit$/,
 ]
 
+/** El latido del "+" al volver de vender: 1 → 1,12 → 1 con un poco de rebote */
+const PULSO = 'cubic-bezier(.34, 1.56, .64, 1)'
+
 export function BottomNav() {
     const pathname = usePathname()
     const router = useRouter()
@@ -417,6 +420,15 @@ export function BottomNav() {
     usePrecargaCaja()
     // Ya está el "+": si se viene de cerrar la caja, la gota se recoge en él
     useEffect(() => { avisarInicioListo() }, [])
+    // Y si se vendió, cuando la gota termina de entrar el "+" late una vez
+    const mas = useRef<HTMLButtonElement>(null)
+    useEffect(() => alTerminarLlegada(() => {
+        mas.current?.animate([
+            { transform: 'scale(1)', easing: PULSO },
+            { transform: 'scale(1.12)', offset: 0.45, easing: PULSO },
+            { transform: 'scale(1)' },
+        ], { duration: 360 })
+    }), [])
     // Las aprobaciones son del punto físico: en pausa, ni se preguntan
     const { data: pendingApprovals = 0 } = usePendingApprovalsCount(PUNTO_FISICO)
 
@@ -445,6 +457,7 @@ export function BottomNav() {
                         return (
                             <div key="pos-center" className="flex items-center justify-center" style={{ width: 64 }}>
                                 <motion.button
+                                    ref={mas}
                                     data-gota-origen="celular"
                                     onClick={e => abrirCaja(e.currentTarget, () => router.push('/caja'))}
                                     whileTap={{ scale: 0.94 }}

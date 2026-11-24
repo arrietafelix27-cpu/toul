@@ -3,7 +3,7 @@
 import { ProductsPanel, type ProductsData } from './ProductsPanel'
 import { PendingPanel, type PendingData } from './PendingPanel'
 import { AccionesRapidas, ObservacionAI } from './AccionesRapidas'
-import { ENTRADA_INICIO_CSS, entrada } from '@/lib/motion'
+import { ENTRADA_INICIO_CSS, entrada, type FaseLlegada } from '@/lib/motion'
 import type { AIInsight } from '@/lib/types'
 
 /* ══════════════════════════════════════════════════════════════
@@ -39,7 +39,7 @@ const CSS = ENTRADA_INICIO_CSS + `
 }
 `
 
-export function InsightsRow({ products, pending, insight, storeName, loading, primeraCarga, insightsLoading, animar, turno }: {
+export function InsightsRow({ products, pending, insight, storeName, loading, primeraCarga, insightsLoading, animar, turno, llegada = null }: {
     products: ProductsData
     pending: PendingData
     insight: AIInsight | null
@@ -52,8 +52,10 @@ export function InsightsRow({ products, pending, insight, storeName, loading, pr
     animar: boolean
     /** En qué turno de la cascada del Inicio arranca esta fila */
     turno: number
+    /** Al volver de la caja con una venta: la cascada que espera a la gota */
+    llegada?: FaseLlegada
 }) {
-    const columna = (clase: string, n: number) => entrada(turno + n, animar, `ir-col ${clase}`)
+    const columna = (clase: string, n: number) => entrada(turno + n, animar, `ir-col ${clase}`, undefined, llegada)
 
     return (
         <div className="ir-raiz">

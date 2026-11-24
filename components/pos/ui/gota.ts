@@ -81,6 +81,10 @@ let entrada: number | null = null
 let entradaZoom: number | null = null
 /** Quien espera a que la gota se quite (la caja, para dejar su capa de encima) */
 const alQuitarse = new Set<() => void>()
+/** Se está volviendo a Inicio con una venta hecha: Inicio espera a la gota para entrar */
+let llegadaConVenta = false
+/** Quien espera a que la gota termine de recogerse en el "+" (Inicio y el "+") */
+const alLlegar = new Set<() => void>()
 
 const quieto = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const pausa = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
@@ -342,11 +346,14 @@ function origenSupuesto(): { rect: DOMRect; pc: boolean } {
 
 /**
  * Cierra la caja: la gota tapa la caja, se vuelve a Inicio y se recoge
- * en el "+". `navegar` cambia de página.
+ * en el "+". `navegar` cambia de página. `conVenta`: se vendió algo en la
+ * caja; al terminar de recogerse, el "+" late e Inicio entra en cascada.
  */
-export async function cerrarCaja(navegar: () => void) {
+export async function cerrarCaja(navegar: () => void, conVenta = false) {
     if (activa) return
     activa = true
+    // Con "reducir movimiento" no hay llegada: Inicio aparece de una
+    llegadaConVenta = conVenta && !quieto()
     try {
         if (quieto()) { await fundido(navegar, 'inicio'); return }
 
@@ -382,7 +389,22 @@ export async function cerrarCaja(navegar: () => void) {
         g.raiz.remove()
     } finally {
         activa = false
+        // Siempre se avisa (aunque algo falle): Inicio nunca se queda escondido
+        if (llegadaConVenta) {
+            llegadaConVenta = false
+            alLlegar.forEach(f => f())
+        }
     }
+}
+
+/** Inicio al montarse: ¿viene de la caja con una venta y la gota se está recogiendo? */
+export function llegandoConVenta() { return llegadaConVenta }
+
+/** La gota (o el zoom del PC) terminó de recogerse después de vender.
+ *  Devuelve cómo dejar de escuchar */
+export function alTerminarLlegada(f: () => void) {
+    alLlegar.add(f)
+    return () => { alLlegar.delete(f) }
 }
 
 type ConTransicion = Document & {

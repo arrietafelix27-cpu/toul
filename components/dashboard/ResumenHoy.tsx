@@ -1,12 +1,13 @@
 'use client'
 
-import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react'
-import { animate, useReducedMotion } from 'framer-motion'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight, CalendarDays, Clock, PackageMinus, Receipt, type LucideIcon } from 'lucide-react'
 import AnimatedNumber from '@/components/ui/AnimatedNumber'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { formatPrecio } from '@/lib/utils'
+import { inicio } from '@/lib/motion'
 import type { ResumenInicio } from '@/lib/reports/calculos'
 import type { Periodo } from './Desplegable'
 
@@ -42,7 +43,18 @@ export interface Conteo {
     /** Lo que se acaba de vender en la caja: "Vendiste" sube desde lo que
      *  había hasta lo nuevo, con un "+$X" al lado. 0: nada */
     subida?: number
+    /** Con una venta recién hecha: "Ganaste" sube desde este valor (el que
+     *  mostraba Inicio antes de la caja). null: aparece de una */
+    ganasteDesde?: number | null
+    /** Cuándo empieza la llegada desde la caja (performance.now). null: la
+     *  gota todavía se está recogiendo y los montos esperan */
+    arranca?: number | null
 }
+
+/** Los montos cuentan cuando su bloque entra en la cascada de la llegada
+ *  (Vendiste es el turno 2 y Ganaste el 4, cada uno 50 ms después) */
+const turnoDe = (conteo: Conteo, turno: number) =>
+    conteo.arranca == null ? null : conteo.arranca + turno * inicio.llegada.escalon
 
 /** Contra el mismo tramo del periodo anterior. null: no hay con qué comparar */
 export interface Tendencia {
@@ -71,12 +83,18 @@ const CSS = `
 
 /* Al volver de la caja: el "+$X" aparece, se queda un rato y se apaga */
 .rv-vendiste-fila { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* "+$X": salta (0,6 → 1 con rebote) cuando empieza la cuenta y se va solo a los 5,4 s */
 .rv-mas { margin-top: 6px; padding: 6px 12px; border-radius: 99px; background: var(--toul-accent-dim); color: var(--toul-accent);
     font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
-    animation: rv-mas 6s var(--toul-ease-emil) 0.2s both; }
-@keyframes rv-mas { 0% { opacity: 0; transform: scale(0.85) } 6% { opacity: 1; transform: none } 88% { opacity: 1; transform: none } 100% { opacity: 0; transform: none } }
-@media (prefers-reduced-motion: reduce) { .rv-mas { animation-name: rv-mas-quieto; } }
-@keyframes rv-mas-quieto { 0%, 88% { opacity: 1 } 100% { opacity: 0 } }
+    animation: rv-mas-salta 420ms cubic-bezier(.34, 1.56, .64, 1) var(--rv-dl, 0ms) backwards,
+        rv-mas-fuera 360ms ease calc(var(--rv-dl, 0ms) + 5.4s) forwards; }
+@keyframes rv-mas-salta { from { opacity: 0; transform: scale(0.6) } }
+@keyframes rv-mas-fuera { to { opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .rv-mas { animation: rv-mas-fuera 360ms ease 5.4s forwards; } }
+/* El brillo verde que late una vez detrás del monto al terminar de contar */
+.rv-sube { position: relative; isolation: isolate; }
+.rv-luz { position: absolute; inset: -45% -16%; z-index: -1; border-radius: 50%; pointer-events: none; opacity: 0;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--toul-accent) 32%, transparent), transparent); }
 
 /* Va debajo de Vendiste, que ya deja su espacio arriba */
 .rv-linea-fina { height: 1px; background: var(--toul-border); margin: 2px 0 18px; }
@@ -166,14 +184,14 @@ export function Vendiste({ metrics, loading, period, conteo, tendencia, selector
                 <div className="rv-vendiste-fila">
                     <Link href={href} className="rv-enlace" aria-label="Ver el reporte de este periodo">
                         {conteo.subida ? (
-                            <SubeDesde value={metrics.revenue} subida={conteo.subida}
+                            <SubeDesde value={metrics.revenue} desde={Math.max(0, metrics.revenue - conteo.subida)} empieza={turnoDe(conteo, 2)} brillo
                                 className="rv-monto" style={{ ...BLOQUE, color: 'var(--toul-text)' }} />
                         ) : (
                             <AnimatedNumber value={metrics.revenue} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
                                 className="rv-monto" style={{ ...BLOQUE, color: sinVentas ? CERO : 'var(--toul-text)' }} />
                         )}
                     </Link>
-                    {!!conteo.subida && <span className="rv-mas">+{formatPrecio(Math.round(conteo.subida))}</span>}
+                    {!!conteo.subida && turnoDe(conteo, 2) != null && <ChipSubida monto={conteo.subida} empieza={turnoDe(conteo, 2)!} />}
                 </div>
             )}
             {/* Sin ventas el monto va apagado y no hay tendencia: no hay nada que comparar */}
@@ -191,30 +209,65 @@ export function Vendiste({ metrics, loading, period, conteo, tendencia, selector
     )
 }
 
-/** Vendiste al volver de la caja: sube desde lo que había (lo de ahora
- *  menos lo recién vendido) hasta lo nuevo, una sola vez */
-function SubeDesde({ value, subida, className, style }: { value: number; subida: number; className: string; style: CSSProperties }) {
-    const ref = useRef<HTMLSpanElement>(null)
+/**
+ * Un monto que sube desde lo que había hasta lo nuevo, una sola vez (al
+ * volver de la caja con una venta). Lleva el reloj del navegador (una
+ * animación que no cambia nada visible): así la cuenta va al compás de la
+ * cascada y del "+$X". Con `brillo`, al terminar late un brillo verde detrás.
+ * `empieza` (performance.now): cuándo arrancar; null = esperar a la gota.
+ */
+function SubeDesde({ value, desde, empieza, brillo = false, className, style }: {
+    value: number; desde: number; empieza: number | null; brillo?: boolean; className: string; style: CSSProperties
+}) {
+    const numero = useRef<HTMLSpanElement>(null)
+    const luz = useRef<HTMLSpanElement>(null)
     const reduce = useReducedMotion()
     const hecho = useRef(false)
     useLayoutEffect(() => {
-        const node = ref.current
+        const node = numero.current
         if (!node) return
-        if (hecho.current || reduce) { node.textContent = formatPrecio(Math.round(value)); return }
-        const desde = Math.max(0, value - subida)
+        const fin = Math.round(value)
+        if (hecho.current || reduce) { node.textContent = formatPrecio(fin); return }
         node.textContent = formatPrecio(Math.round(desde))
-        const controls = animate(desde, value, {
-            duration: 0.9, delay: 0.25, ease: [0.23, 1, 0.32, 1],
-            onUpdate: v => { node.textContent = formatPrecio(Math.round(v)) },
-            onComplete: () => { hecho.current = true },
+        if (empieza == null) return
+        const reloj = node.animate([{ opacity: 1 }, { opacity: 1 }], {
+            duration: inicio.llegada.sube, delay: Math.max(0, empieza - performance.now()),
         })
-        return () => { controls.stop(); node.textContent = formatPrecio(Math.round(value)) }
-    }, [value, subida, reduce])
+        let cuadro = 0
+        const pintar = () => {
+            const p = reloj.effect?.getComputedTiming().progress
+            // Sale rápido y llega suave (ease-out)
+            if (p != null) node.textContent = formatPrecio(Math.round(desde + (value - desde) * (1 - Math.pow(1 - p, 3))))
+            if (reloj.playState !== 'finished') cuadro = requestAnimationFrame(pintar)
+        }
+        cuadro = requestAnimationFrame(pintar)
+        reloj.finished.then(() => {
+            hecho.current = true
+            node.textContent = formatPrecio(fin)
+            if (brillo) luz.current?.animate([
+                { opacity: 0, transform: 'scale(0.8)' },
+                { opacity: 1, transform: 'scale(1)', offset: 0.35 },
+                { opacity: 0, transform: 'scale(1.08)' },
+            ], { duration: 900, easing: 'cubic-bezier(.23, 1, .32, 1)' })
+        }).catch(() => { /* se desmontó antes de terminar */ })
+        return () => { cancelAnimationFrame(cuadro); reloj.cancel(); node.textContent = formatPrecio(fin) }
+    }, [value, desde, empieza, reduce, brillo])
     return (
-        <span className={className} style={{ display: 'inline-grid', ...style }}>
+        <span className={`${className} rv-sube`} style={{ display: 'inline-grid', ...style }}>
+            {brillo && <span ref={luz} className="rv-luz" aria-hidden />}
             {/* Reserva el ancho del valor final */}
             <span aria-hidden style={{ gridArea: '1 / 1', visibility: 'hidden' }}>{formatPrecio(Math.round(value))}</span>
-            <span ref={ref} style={{ gridArea: '1 / 1' }}>{formatPrecio(Math.round(value))}</span>
+            <span ref={numero} style={{ gridArea: '1 / 1' }}>{formatPrecio(Math.round(value))}</span>
+        </span>
+    )
+}
+
+/** "+$X" al lado de Vendiste: salta justo cuando empieza la cuenta */
+function ChipSubida({ monto, empieza }: { monto: number; empieza: number }) {
+    const [retraso] = useState(() => Math.max(0, Math.round(empieza - performance.now())))
+    return (
+        <span className="rv-mas" style={{ '--rv-dl': `${retraso}ms` } as CSSProperties}>
+            +{formatPrecio(Math.round(monto))}
         </span>
     )
 }
@@ -229,6 +282,8 @@ export function Ganaste({ resumen, loading, conteo, href }: {
     href: string
 }) {
     const perdio = !!resumen && resumen.ganaste < 0
+    const sube = !!resumen && conteo.ganasteDesde != null && conteo.ganasteDesde >= 0 && resumen.ganaste >= 0
+        && Math.round(conteo.ganasteDesde) !== Math.round(resumen.ganaste)
     const color = !resumen ? 'var(--toul-text)' : perdio ? 'var(--toul-error)' : resumen.ganaste > 0 ? 'var(--toul-accent)' : 'var(--toul-text)'
     return (
         <div>
@@ -241,9 +296,15 @@ export function Ganaste({ resumen, loading, conteo, href }: {
                 </>
             ) : (<>
                 <Link href={href} className="rv-enlace" aria-label="Ver el reporte de este periodo">
-                    {/* Como en Reportes: al perder, la cifra va sin signo y en rojo */}
-                    <AnimatedNumber value={Math.abs(resumen.ganaste)} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
-                        className="rv-monto" style={{ ...BLOQUE, color }} />
+                    {/* Como en Reportes: al perder, la cifra va sin signo y en rojo.
+                        Recién vendido, sube desde lo de antes (solo si no se cruzó a pérdida) */}
+                    {sube ? (
+                        <SubeDesde value={resumen.ganaste} desde={conteo.ganasteDesde!} empieza={turnoDe(conteo, 4)} brillo
+                            className="rv-monto" style={{ ...BLOQUE, color }} />
+                    ) : (
+                        <AnimatedNumber value={Math.abs(resumen.ganaste)} formatter={formatPrecio} cuenta={conteo.cuenta} clave={conteo.clave}
+                            className="rv-monto" style={{ ...BLOQUE, color }} />
+                    )}
                 </Link>
                 {resumen.deLoVendido && <p className="rv-bajo">{resumen.deLoVendido}</p>}
             </>)}

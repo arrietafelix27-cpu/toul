@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { repartir, sugerenciasEfectivo, vuelto, esEfectivo, tipoDeMetodo, fechaEnDias, fechaPagoValida, diasHasta, type MetodoElegido } from './pagos.ts'
 import { leerPermisos, revisarVenta, descuentoPermitido, permisosDe, PERMISOS_POR_DEFECTO, PERMISOS_ADMIN } from './permisos.ts'
-import { mensajeComprobante, enlaceWhatsApp, telefonoWhatsApp, textoEnviarA, codigoVenta, tirillaAutomaticaInicial, cuandoSeVea, empezarVendidoEnCaja, sumarVendidoEnCaja, soltarVendidoEnCaja, verVendidoEnCaja, olvidarVendidoEnCaja } from './comprobante.ts'
+import { mensajeComprobante, enlaceWhatsApp, telefonoWhatsApp, textoEnviarA, codigoVenta, tirillaAutomaticaInicial, cuandoSeVea, empezarVendidoEnCaja, hayVendidoEnCaja, sumarVendidoEnCaja, soltarVendidoEnCaja, verVendidoEnCaja, olvidarVendidoEnCaja } from './comprobante.ts'
 
 const efectivo: MetodoElegido = { methodId: 'e', methodName: 'Efectivo', methodColor: '', escrito: null }
 const nequi = (escrito: number | null): MetodoElegido => ({ methodId: 'n', methodName: 'Nequi', methodColor: '', escrito })
@@ -196,13 +196,17 @@ test('Inicio solo cuenta lo vendido si se salió de la caja con Salir', () => {
         sumarVendidoEnCaja('t1', -500) // Deshacer
         // Sin Salir (atrás del navegador, otra pantalla): nada
         assert.equal(verVendidoEnCaja('t1', t), 0)
+        // Al salir hay venta: la gota avisa para el latido del "+" y la cascada
+        assert.equal(hayVendidoEnCaja(), true)
         soltarVendidoEnCaja(t)
+        assert.equal(hayVendidoEnCaja(), false, 'ya se soltó')
         assert.equal(verVendidoEnCaja('t1', t + 1_000), 900)
         assert.equal(verVendidoEnCaja('otra', t + 1_000), 0)
         // Pasado el minuto ya no se anima
         assert.equal(verVendidoEnCaja('t1', t + 61_000), 0)
         // Volver a abrir la caja empieza en cero
         empezarVendidoEnCaja()
+        assert.equal(hayVendidoEnCaja(), false, 'sin vender, Inicio llega como siempre')
         soltarVendidoEnCaja(t)
         assert.equal(verVendidoEnCaja('t1', t + 1_000), 0)
         // Inicio lo toma una vez
