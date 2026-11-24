@@ -219,7 +219,7 @@ export function SaleDetail({ sale, onClose, onChangeCustomer, onVoid, onDevolver
                             <div className="flex justify-between">
                                 <span className="text-sm" style={{ color: 'var(--toul-text-muted)' }}>Utilidad estimada</span>
                                 <span className="font-semibold text-sm" style={{ color: 'var(--toul-accent)' }}>
-                                    {formatCOP(Math.round(sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0) - gananciaDevuelta))}
+                                    {formatCOP(Math.round(sale.sale_items.reduce((s, i) => s + (i.unit_price - i.unit_cost) * i.quantity, 0) - Number(sale.discount ?? 0) - gananciaDevuelta))}
                                 </span>
                             </div>
                             {/* Quién vendió y la tirilla son del punto físico (en pausa) */}

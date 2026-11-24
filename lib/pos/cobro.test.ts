@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { repartir, sugerenciasEfectivo, vuelto, esEfectivo, tipoDeMetodo, fechaEnDias, fechaPagoValida, diasHasta, type MetodoElegido } from './pagos.ts'
 import { leerPermisos, revisarVenta, descuentoPermitido, permisosDe, PERMISOS_POR_DEFECTO, PERMISOS_ADMIN } from './permisos.ts'
-import { mensajeComprobante, enlaceWhatsApp, telefonoWhatsApp, textoEnviarA, codigoVenta, tirillaAutomaticaInicial, cuandoSeVea } from './comprobante.ts'
+import { mensajeComprobante, enlaceWhatsApp, telefonoWhatsApp, textoEnviarA, codigoVenta, tirillaAutomaticaInicial, cuandoSeVea, empezarVendidoEnCaja, sumarVendidoEnCaja, soltarVendidoEnCaja, verVendidoEnCaja, olvidarVendidoEnCaja } from './comprobante.ts'
 
 const efectivo: MetodoElegido = { methodId: 'e', methodName: 'Efectivo', methodColor: '', escrito: null }
 const nequi = (escrito: number | null): MetodoElegido => ({ methodId: 'n', methodName: 'Nequi', methodColor: '', escrito })
@@ -168,4 +168,40 @@ test('Con la caja en otra pestaña, la tirilla espera a que vuelva a verse', asy
     assert.equal(lista, false, 'al volver todavía espera que se pinte')
     await espera
     assert.ok(lista)
+})
+
+test('Inicio solo cuenta lo vendido si se salió de la caja con Salir', () => {
+    const datos = new Map<string, string>()
+    const g = globalThis as { sessionStorage?: unknown }
+    const antes = g.sessionStorage
+    g.sessionStorage = {
+        getItem: (k: string) => datos.get(k) ?? null,
+        setItem: (k: string, v: string) => { datos.set(k, v) },
+        removeItem: (k: string) => { datos.delete(k) },
+    }
+    try {
+        const t = 1_000_000
+        empezarVendidoEnCaja()
+        sumarVendidoEnCaja('t1', 500)
+        sumarVendidoEnCaja('t1', 900)
+        sumarVendidoEnCaja('t1', -500) // Deshacer
+        // Sin Salir (atrás del navegador, otra pantalla): nada
+        assert.equal(verVendidoEnCaja('t1', t), 0)
+        soltarVendidoEnCaja(t)
+        assert.equal(verVendidoEnCaja('t1', t + 1_000), 900)
+        assert.equal(verVendidoEnCaja('otra', t + 1_000), 0)
+        // Pasado el minuto ya no se anima
+        assert.equal(verVendidoEnCaja('t1', t + 61_000), 0)
+        // Volver a abrir la caja empieza en cero
+        empezarVendidoEnCaja()
+        soltarVendidoEnCaja(t)
+        assert.equal(verVendidoEnCaja('t1', t + 1_000), 0)
+        // Inicio lo toma una vez
+        sumarVendidoEnCaja('t1', 300)
+        soltarVendidoEnCaja(t)
+        olvidarVendidoEnCaja()
+        assert.equal(verVendidoEnCaja('t1', t + 1_000), 0)
+    } finally {
+        g.sessionStorage = antes
+    }
 })

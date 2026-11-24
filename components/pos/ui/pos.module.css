@@ -326,7 +326,7 @@
 .campo input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--toul-text); font-size: 16px; }
 .campo input::placeholder { color: var(--toul-text-tertiary); }
 /* El campo ya se marca entero al enfocarlo: sin el segundo anillo adentro */
-.pos .campo input:focus-visible { outline: none; }
+.pos .campo input:focus-visible, .pos .montoCampo input:focus-visible, .pos .montoGrande input:focus-visible { outline: none; }
 .campoLupa { color: var(--toul-text-subtle); flex-shrink: 0; }
 .campoEtiqueta { width: 80px; flex-shrink: 0; font-size: 15px; color: var(--toul-text-secondary); }
 .borrar {
@@ -892,7 +892,7 @@
 /* Métodos (2×2) */
 .metodos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
 .metodo {
-    display: flex; align-items: center; gap: 10px; min-width: 0; height: 56px; padding: 0 14px; border-radius: 16px; border: none;
+    display: flex; align-items: center; gap: 8px; min-width: 0; height: 56px; padding: 0 12px; border-radius: 16px; border: none;
     background: var(--p-s5); box-shadow: inset 0 0 0 1px var(--p-s6);
     color: var(--toul-text); font-size: 15px; font-weight: 500; text-align: left;
     transition: background-color 220ms, box-shadow 220ms, transform 160ms var(--p-sale);

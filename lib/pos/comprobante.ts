@@ -97,12 +97,15 @@ export function codigoVenta(id: string): string {
 /* ── Lo vendido en la caja, para Inicio ───────────────────────────
    Al salir de la caja, "Vendiste" sube desde lo que había hasta lo
    nuevo, con un "+$X" al lado. La caja suma cada venta que entró al
-   servidor (y resta la que se deshace); Inicio lo toma una vez.
-   Solo vale un rato: si se vuelve a Inicio mucho después, no se anima. */
+   servidor (y resta la que se deshace). La cuenta nace en cero cada
+   vez que se abre la caja y solo vale si se sale con Salir o la X,
+   que llevan directo a Inicio: si se sale por otro lado (atrás del
+   navegador, otra pantalla) se pudo anular algo antes de ver Inicio,
+   y un "+$X" viejo sería un número falso. Inicio lo toma una vez. */
 const CLAVE_RECIENTE = 'toul:vendido-en-caja'
-const VIGENCIA_RECIENTE_MS = 30 * 60_000
+const VIGENCIA_SALIDA_MS = 60_000
 
-interface VendidoEnCaja { storeId: string; monto: number; hasta: number }
+interface VendidoEnCaja { storeId: string; monto: number; hasta: number | null }
 
 function leerReciente(): VendidoEnCaja | null {
     try {
@@ -111,26 +114,40 @@ function leerReciente(): VendidoEnCaja | null {
     } catch { return null }
 }
 
-/** La caja suma una venta (o resta, con un monto negativo, la que se deshizo) */
-export function sumarVendidoEnCaja(storeId: string, monto: number, ahora = Date.now()) {
-    const previo = leerReciente()
-    const vigente = previo && previo.storeId === storeId && previo.hasta > ahora ? previo.monto : 0
-    const total = Math.max(0, Math.round(vigente + monto))
+function guardarReciente(v: VendidoEnCaja | null) {
     try {
-        if (total > 0) sessionStorage.setItem(CLAVE_RECIENTE, JSON.stringify({ storeId, monto: total, hasta: ahora + VIGENCIA_RECIENTE_MS }))
+        if (v && v.monto > 0) sessionStorage.setItem(CLAVE_RECIENTE, JSON.stringify(v))
         else sessionStorage.removeItem(CLAVE_RECIENTE)
     } catch { /* sin almacenamiento: Inicio no anima, nada más */ }
 }
 
-/** Inicio: lo vendido en la caja desde la última vez (0 si nada). No lo borra */
+/** Se abrió la caja: la cuenta empieza en cero */
+export function empezarVendidoEnCaja() {
+    guardarReciente(null)
+}
+
+/** La caja suma una venta (o resta, con un monto negativo, la que se deshizo) */
+export function sumarVendidoEnCaja(storeId: string, monto: number) {
+    const previo = leerReciente()
+    const vigente = previo && previo.storeId === storeId && previo.hasta === null ? previo.monto : 0
+    guardarReciente({ storeId, monto: Math.max(0, Math.round(vigente + monto)), hasta: null })
+}
+
+/** Salir o la X: lo vendido queda listo para Inicio por un minuto */
+export function soltarVendidoEnCaja(ahora = Date.now()) {
+    const v = leerReciente()
+    if (v && v.hasta === null) guardarReciente({ ...v, hasta: ahora + VIGENCIA_SALIDA_MS })
+}
+
+/** Inicio: lo vendido en la caja al salir de ella (0 si nada). No lo borra */
 export function verVendidoEnCaja(storeId: string, ahora = Date.now()): number {
     const v = leerReciente()
-    return v && v.storeId === storeId && v.hasta > ahora ? v.monto : 0
+    return v && v.storeId === storeId && v.hasta !== null && v.hasta > ahora ? v.monto : 0
 }
 
 /** Inicio ya lo mostró */
 export function olvidarVendidoEnCaja() {
-    try { sessionStorage.removeItem(CLAVE_RECIENTE) } catch { /* nada */ }
+    guardarReciente(null)
 }
 
 /* ── Tirilla automática ────────────────────────────────────────────

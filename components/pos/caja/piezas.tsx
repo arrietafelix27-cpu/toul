@@ -9,6 +9,7 @@ import { formatCOP } from '@/lib/utils'
 import { onlyDigits, withThousands } from '@/lib/format/text'
 import type { OfflineState } from '@/lib/isla/useOffline'
 import { cerrarCaja } from '@/components/pos/ui/gota'
+import { soltarVendidoEnCaja } from '@/lib/pos/comprobante'
 import { IcoCerrar } from '@/components/pos/ui/Iconos'
 import ui from '@/components/pos/ui/pos.module.css'
 
@@ -263,7 +264,11 @@ export function useSalirDeCaja() {
     const router = useRouter()
     // Inicio queda listo de antemano: la gota se recoge sin esperar
     useEffect(() => { router.prefetch('/') }, [router])
-    return useCallback(() => { void cerrarCaja(() => router.push('/')) }, [router])
+    return useCallback(() => {
+        // Lo vendido aquí queda listo para que Inicio lo cuente
+        soltarVendidoEnCaja()
+        void cerrarCaja(() => router.push('/'))
+    }, [router])
 }
 
 export function SalirDeCaja({ className }: { className?: string }) {

@@ -6,6 +6,7 @@ import { usePOSFlow } from '@/components/pos/POSFlowProvider'
 import { useCaja } from '@/components/isla/CajaContext'
 import { useIsMobile } from '@/lib/hooks/useIsMobile'
 import { useCobro, vibrar } from '@/lib/pos/useCobro'
+import { empezarVendidoEnCaja } from '@/lib/pos/comprobante'
 import { useListaProductos, type Entrada } from '@/lib/pos/useListaProductos'
 import { Avisos, Capa, alQuitarseGota, avisar, raizPos, retrasoCascada, retrasoEntradaCaja, useMontado } from '@/components/pos/ui'
 import s from '@/components/pos/ui/pos.module.css'
@@ -50,6 +51,8 @@ export function Caja() {
     })
 
     const { venta, nuevaVenta, enviando, limpiarError, boton, accionar } = cobro
+    // Cada vez que se abre la caja, lo vendido para Inicio empieza en cero
+    useEffect(() => { empezarVendidoEnCaja() }, [])
     // Se deshizo: los productos vuelven a la venta, sin el pago encima
     if (!venta && mostrarVenta) {
         setMostrarVenta(false)
